@@ -22,6 +22,9 @@ if get_option('enable-cuda')
   add_global_arguments('-arch=sm_86', language : 'cuda')
 endif
 
+assert(not (get_option('enable-cuda') and get_option('enable-kokkos')),
+       'The CUDA and Kokkos linear algebra backends are mutually exclusive')
+
 su2_cpp_args = []
 su2_deps     = [declare_dependency(include_directories: 'externals/CLI11')]
 
@@ -232,6 +235,16 @@ if get_option('enable-cuda')
   su2_deps += gpu_dep
 endif
 
+# Kokkos dependencies. The compiler used to build SU2 must match the Kokkos
+# backend (e.g. nvcc_wrapper for CUDA or icpx -fsycl for SYCL).
+if get_option('enable-kokkos')
+  assert(not get_option('enable-autodiff') and not get_option('enable-directdiff'),
+         'The initial Kokkos linear algebra backend supports passive/primal builds only')
+  su2_cpp_args += '-DHAVE_KOKKOS'
+  kokkos_dep = dependency('Kokkos', method : 'cmake', modules : ['Kokkos::kokkos'], required : true)
+  su2_deps += kokkos_dep
+endif
+
 # blas-type dependencies
 if get_option('enable-mkl')
 
@@ -386,10 +399,11 @@ message('''---------------------------------------------------------------------
          OpenBlas:       @8@
          PaStiX:         @9@
          Mixed Float:    @10@
-         libROM:         @11@
-         CoolProp:       @12@
-         MLPCpp:         @13@
-         Tracy Profiler: @14@
+         Kokkos:         @11@
+         libROM:         @12@
+         CoolProp:       @13@
+         MLPCpp:         @14@
+         Tracy Profiler: @15@
 
          Please be sure to add the $SU2_HOME and $SU2_RUN environment variables,
          and update your $PATH (and $PYTHONPATH if applicable) with $SU2_RUN
@@ -401,11 +415,12 @@ message('''---------------------------------------------------------------------
          export PATH=$PATH:$SU2_RUN
          export PYTHONPATH=$PYTHONPATH:$SU2_RUN
 
-         Use './ninja -C @15@ install' to compile and install SU2
+         Use './ninja -C @16@ install' to compile and install SU2
 '''.format(get_option('prefix')+'/bin', meson.project_source_root(), get_option('enable-tecio'), get_option('enable-cgns'),
            get_option('enable-autodiff'), get_option('enable-directdiff'), get_option('enable-pywrapper'), get_option('enable-mkl'),
-           get_option('enable-openblas'), get_option('enable-pastix'), get_option('enable-mixedprec'), get_option('enable-librom'), get_option('enable-coolprop'),
-           get_option('enable-mlpcpp'), get_option('tracy_enable'), meson.project_build_root().startswith(meson.project_source_root()) ? meson.project_build_root().split('/')[-1] : meson.project_build_root()))
+           get_option('enable-openblas'), get_option('enable-pastix'), get_option('enable-mixedprec'), get_option('enable-kokkos'),
+           get_option('enable-librom'), get_option('enable-coolprop'), get_option('enable-mlpcpp'), get_option('tracy_enable'),
+           meson.project_build_root().startswith(meson.project_source_root()) ? meson.project_build_root().split('/')[-1] : meson.project_build_root()))
 
 if get_option('enable-mpp')
   if get_option('install-mpp')

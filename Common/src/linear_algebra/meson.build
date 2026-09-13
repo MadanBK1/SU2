@@ -7,4 +7,6 @@ common_src += files(['CSysSolve_b.cpp',
 
   if get_option('enable-cuda')
     common_src += files(['CSysMatrixGPU.cu', 'CSysVectorGPU.cu',])
-endif
+  elif get_option('enable-kokkos')
+    common_src += files(['CSysMatrixKokkos.cpp', 'CSysVectorKokkos.cpp',])
+  endif

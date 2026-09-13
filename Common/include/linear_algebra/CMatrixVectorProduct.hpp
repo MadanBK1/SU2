@@ -95,7 +95,16 @@ class CSysMatrixVectorProduct final : public CMatrixVectorProduct<ScalarType> {
    * \param[out] v - CSysVector that is the result of the product
    */
   inline void operator()(const CSysVector<ScalarType>& u, CSysVector<ScalarType>& v) const override {
-    if (config->GetCUDA()) {
+    if (config->GetKokkos()) {
+#ifdef HAVE_KOKKOS
+      matrix.KokkosMatrixVectorProduct(u, v, geometry, config);
+#else
+      SU2_MPI::Error(
+          "\nError launching the Kokkos matrix-vector product.\nENABLE_KOKKOS is YES in the configuration, "
+          "but SU2 was not compiled with -Denable-kokkos=true.",
+          CURRENT_FUNCTION);
+#endif
+    } else if (config->GetCUDA()) {
 #ifdef HAVE_CUDA
       matrix.GPUMatrixVectorProduct(u, v, geometry, config);
 #else

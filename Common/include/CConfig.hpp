@@ -134,7 +134,8 @@ private:
   Sens_Remove_Sharp,        /*!< \brief Flag for removing or not the sharp edges from the sensitivity computation. */
   Hold_GridFixed,           /*!< \brief Flag hold fixed some part of the mesh during the deformation. */
   Axisymmetric,             /*!< \brief Flag for axisymmetric calculations */
-  Enable_Cuda,              /*!< \brief Flag for switching GPU computing*/
+  Enable_Cuda,              /*!< \brief Flag for switching CUDA computing. */
+  Enable_Kokkos,            /*!< \brief Flag for switching Kokkos linear algebra computing. */
   Integrated_HeatFlux;      /*!< \brief Flag for heat flux BC whether it deals with integrated values.*/
   su2double Buffet_k;       /*!< \brief Sharpness coefficient for buffet sensor.*/
   su2double Buffet_lambda;  /*!< \brief Offset parameter for buffet sensor.*/
@@ -6574,6 +6575,9 @@ public:
    * \return <code>TRUE</code> if cuda is enabled; otherwise <code>FALSE</code>.
    */
   bool GetCUDA(void) const { return Enable_Cuda; }
+
+  /*! \brief Get whether the Kokkos linear algebra backend is enabled at runtime. */
+  bool GetKokkos(void) const { return Enable_Kokkos; }
 
   /*!
    * \brief Subtract one to the index of the finest grid (full multigrid strategy).

@@ -1168,6 +1168,8 @@ void CConfig::SetConfig_Options() {
   addBoolOption("AXISYMMETRIC", Axisymmetric, false);
   /*\brief ENABLE_CUDA \n DESCRIPTION: GPU Acceleration \n DEFAULT: false \ingroup Config */
   addBoolOption("ENABLE_CUDA", Enable_Cuda, false);
+  /*\brief ENABLE_KOKKOS \n DESCRIPTION: Portable Kokkos acceleration for linear algebra \n DEFAULT: false \ingroup Config */
+  addBoolOption("ENABLE_KOKKOS", Enable_Kokkos, false);
   /* DESCRIPTION: Add the gravity force */
   addBoolOption("GRAVITY_FORCE", GravityForce, false);
   /* DESCRIPTION: Add the Vorticity Confinement term*/

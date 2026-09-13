@@ -72,7 +72,7 @@ CSysMatrix<ScalarType>::~CSysMatrix() {
   MemoryAllocation::aligned_free(matrix);
   MemoryAllocation::aligned_free(invM);
 
-  if (useCuda) {
+  if (useDevice) {
     GPUMemoryAllocation::gpu_free(d_matrix);
     GPUMemoryAllocation::gpu_free(d_row_ptr);
     GPUMemoryAllocation::gpu_free(d_col_ind);
@@ -149,9 +149,9 @@ void CSysMatrix<ScalarType>::Initialize(unsigned long npoint, unsigned long npoi
 
   allocAndInit(matrix, nnz * nVar * nEqn);
 
-  useCuda = config->GetCUDA();
+  useDevice = config->GetCUDA() || config->GetKokkos();
 
-  if (useCuda) {
+  if (useDevice) {
     /*--- Allocate GPU data. ---*/
     auto GPUAllocAndInit = [](ScalarType*& ptr, unsigned long num) {
       ptr = GPUMemoryAllocation::gpu_alloc<ScalarType, true>(num * sizeof(ScalarType));

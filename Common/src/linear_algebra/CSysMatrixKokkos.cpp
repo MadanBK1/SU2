@@ -1,0 +1,70 @@
+/*!
+ * \file CSysMatrixKokkos.cpp
+ * \brief Portable Kokkos implementation of the block-CSR matrix-vector product.
+ */
+
+#include <Kokkos_Core.hpp>
+
+#include "../../include/linear_algebra/CSysMatrix.hpp"
+
+namespace {
+template <class T>
+using DeviceView = Kokkos::View<T*, typename Kokkos::DefaultExecutionSpace::memory_space,
+                                Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+
+template <class T>
+using HostView = Kokkos::View<T*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+}  // namespace
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::HtDTransfer(bool trigger) const {
+  if (!trigger || nnz == 0) return;
+  const auto count = nnz * nVar * nEqn;
+  Kokkos::deep_copy(DeviceView<ScalarType>(d_matrix, count), HostView<const ScalarType>(matrix, count));
+}
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarType>& vec,
+                                                       CSysVector<ScalarType>& prod, CGeometry* geometry,
+                                                       const CConfig* config) const {
+#ifndef NDEBUG
+  if ((nEqn != vec.GetNVar()) || (nVar != prod.GetNVar()) || (nPoint != prod.GetNBlk()))
+    SU2_MPI::Error("Incompatible matrix and vector dimensions in Kokkos SpMV.", CURRENT_FUNCTION);
+#endif
+
+  HtDTransfer();
+  vec.HtDTransfer();
+
+  const auto values = d_matrix;
+  const auto row_offsets = d_row_ptr;
+  const auto columns = d_col_ind;
+  const auto input = vec.GetDevicePointer();
+  const auto output = prod.GetDevicePointer();
+  const auto block_rows = nPointDomain;
+  const auto block_size_out = nVar;
+  const auto block_size_in = nEqn;
+
+  using execution_space = Kokkos::DefaultExecutionSpace;
+  using range_policy = Kokkos::RangePolicy<execution_space, Kokkos::IndexType<unsigned long>>;
+  Kokkos::parallel_for(
+      "SU2::BlockCrsSpMV", range_policy(0, block_rows * block_size_out),
+      KOKKOS_LAMBDA(const unsigned long flat_row) {
+        const unsigned long row = flat_row / block_size_out;
+        const unsigned long block_row = flat_row % block_size_out;
+        ScalarType sum = 0.0;
+        for (unsigned long block = row_offsets[row]; block < row_offsets[row + 1]; ++block) {
+          const unsigned long value_offset = block * block_size_out * block_size_in + block_row * block_size_in;
+          const unsigned long vector_offset = columns[block] * block_size_in;
+          for (unsigned long block_col = 0; block_col < block_size_in; ++block_col)
+            sum += values[value_offset + block_col] * input[vector_offset + block_col];
+        }
+        output[flat_row] = sum;
+      });
+  Kokkos::fence("SU2::BlockCrsSpMV complete");
+
+  prod.DtHTransfer();
+  CSysMatrixComms::Initiate(prod, geometry, config);
+  CSysMatrixComms::Complete(prod, geometry, config);
+}
+
+template class CSysMatrix<su2mixedfloat>;

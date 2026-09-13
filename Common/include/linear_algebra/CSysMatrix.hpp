@@ -148,8 +148,7 @@ class CSysMatrix {
   ScalarType* d_matrix;           /*!< \brief Device Pointer to store the matrix values on the GPU. */
   const unsigned long* d_row_ptr; /*!< \brief Device Pointers to the first element in each row. */
   const unsigned long* d_col_ind; /*!< \brief Device Column index for each of the elements in val(). */
-  bool useCuda = false;           /*!< \brief Boolean that indicates whether user has enabled CUDA or not.
-                                     Mainly used to conditionally free GPU memory in the class destructor. */
+  bool useDevice = false;         /*!< \brief Whether a CUDA or Kokkos device backend is enabled. */
 
   ScalarType* ILU_matrix;           /*!< \brief Entries of the ILU sparse matrix. */
   unsigned long nnz_ilu;            /*!< \brief Number of possible nonzero entries in the matrix (ILU). */
@@ -885,6 +884,10 @@ class CSysMatrix {
    */
   void GPUMatrixVectorProduct(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod, CGeometry* geometry,
                               const CConfig* config) const;
+
+  /*! \brief Kokkos block-CSR sparse matrix-vector product. */
+  void KokkosMatrixVectorProduct(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
+                                 CGeometry* geometry, const CConfig* config) const;
 
   /*!
    * \brief Performs first step of the LU_SGS Preconditioner building

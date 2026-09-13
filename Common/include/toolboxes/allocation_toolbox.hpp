@@ -40,7 +40,12 @@
 #include "../linear_algebra/GPUComms.cuh"
 #endif
 
+#ifdef HAVE_KOKKOS
+#include <Kokkos_Core.hpp>
+#endif
+
 #include <cstring>
+#include <type_traits>
 
 #include <cassert>
 
@@ -98,6 +103,35 @@ inline void aligned_free(T* ptr) noexcept {
 }  // namespace MemoryAllocation
 
 namespace GPUMemoryAllocation {
+#if defined(HAVE_CUDA) && defined(HAVE_KOKKOS)
+#error "CUDA and Kokkos device allocation backends cannot be enabled together"
+#endif
+
+#ifdef HAVE_KOKKOS
+namespace detail {
+class KokkosRuntime {
+ private:
+  bool owns_runtime = false;
+
+ public:
+  KokkosRuntime() {
+    if (!Kokkos::is_initialized()) {
+      Kokkos::initialize();
+      owns_runtime = true;
+    }
+  }
+  ~KokkosRuntime() {
+    if (owns_runtime && Kokkos::is_initialized() && !Kokkos::is_finalized()) Kokkos::finalize();
+  }
+};
+
+inline void ensure_kokkos_initialized() {
+  static KokkosRuntime runtime;
+  (void)runtime;
+}
+}  // namespace detail
+#endif
+
 /*!
  * \brief Memory allocation for variables on the GPU.
  * \param[in] size in bytes.
@@ -111,6 +145,16 @@ inline T* gpu_alloc(size_t size) noexcept {
 #if defined(HAVE_CUDA)
   gpuErrChk(cudaMalloc((void**)(&ptr), size));
   if (ZeroInit) gpuErrChk(cudaMemset((void*)(ptr), 0.0, size));
+#elif defined(HAVE_KOKKOS)
+  detail::ensure_kokkos_initialized();
+  if (size > 0) {
+    using memory_space = typename Kokkos::DefaultExecutionSpace::memory_space;
+    ptr = Kokkos::kokkos_malloc<memory_space>("SU2 device allocation", size);
+    if constexpr (ZeroInit) {
+      using view_type = Kokkos::View<unsigned char*, memory_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+      Kokkos::deep_copy(view_type(static_cast<unsigned char*>(ptr), size), static_cast<unsigned char>(0));
+    }
+  }
 #else
   return 0;
 #endif
@@ -126,6 +170,9 @@ template <class T>
 inline void gpu_free(T* ptr) noexcept {
 #ifdef HAVE_CUDA
   gpuErrChk(cudaFree((void*)ptr));
+#elif defined(HAVE_KOKKOS)
+  using value_type = std::remove_const_t<T>;
+  if (ptr != nullptr) Kokkos::kokkos_free(const_cast<value_type*>(ptr));
 #endif
 }
 /*!
@@ -140,6 +187,17 @@ inline T* gpu_alloc_cpy(const T* src_ptr, size_t size) noexcept {
 #ifdef HAVE_CUDA
   gpuErrChk(cudaMalloc((void**)(&ptr), size));
   gpuErrChk(cudaMemcpy((void*)(ptr), (void*)src_ptr, size, cudaMemcpyHostToDevice));
+#elif defined(HAVE_KOKKOS)
+  detail::ensure_kokkos_initialized();
+  if (size > 0) {
+    using value_type = std::remove_const_t<T>;
+    using memory_space = typename Kokkos::DefaultExecutionSpace::memory_space;
+    ptr = Kokkos::kokkos_malloc<memory_space>("SU2 device copy", size);
+    const size_t count = size / sizeof(value_type);
+    using device_view = Kokkos::View<value_type*, memory_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+    using host_view = Kokkos::View<const value_type*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+    Kokkos::deep_copy(device_view(static_cast<value_type*>(ptr), count), host_view(src_ptr, count));
+  }
 #endif
 
   return static_cast<T*>(ptr);
