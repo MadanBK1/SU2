@@ -1,16 +1,20 @@
 # Kokkos linear algebra backend
 
 This initial backend replaces SU2's CUDA-specific block-CSR matrix-vector
-product with a portable Kokkos kernel. SU2's Krylov algorithms,
+product with a portable, hierarchical-parallel Kokkos kernel. SU2's Krylov algorithms,
 preconditioners, and MPI halo exchange remain unchanged and host-resident.
 
 ## Current scope
 
 - Passive/primal SU2 builds only.
 - Block-CSR matrix-vector products used by the iterative linear solvers.
-- Kokkos Serial, CUDA, or SYCL selected when Kokkos itself is built.
+- Bundled and pinned Kokkos 5.2.1 source in `subprojects/Kokkos`.
+- Kokkos Serial, CUDA, or SYCL selected from the SU2 Meson command.
 - Runtime selection with `ENABLE_KOKKOS= YES` in the SU2 configuration.
 - The existing CUDA backend and the Kokkos backend are mutually exclusive.
+- SU2's native OpenMP mode cannot yet be combined with this backend; use the
+  Kokkos CUDA/SYCL execution space for node parallelism and MPI between ranks.
+- Kokkos-enabled SU2 targets use C++20, as required by Kokkos 5.2.
 
 The matrix and vectors are copied for each matrix-vector product. This is a
 correctness milestone, not yet the final high-performance design. The next
@@ -19,21 +23,24 @@ the vector reductions and Jacobi preconditioner.
 
 ## Configure SU2
 
-Install Kokkos first, then make its CMake package visible:
+Kokkos is built as part of SU2; no separate Kokkos installation is required:
 
 ```bash
-export CMAKE_PREFIX_PATH=/path/to/kokkos-install:${CMAKE_PREFIX_PATH:-}
 export CXX=/path/to/compiler-for-the-selected-kokkos-backend
 
 python3 meson.py setup build-kokkos \
   -Denable-kokkos=true \
+  -Dkokkos-backend=serial \
+  -Dkokkos-arch=none \
   -Denable-autodiff=false \
   -Denable-directdiff=false
 ./ninja -C build-kokkos
 ```
 
-Use the same compiler for Kokkos and SU2. For CUDA this is normally Kokkos'
-`nvcc_wrapper`; for Intel PVC/SYCL use a supported `icpx -fsycl` toolchain.
+For GH200 use `-Dkokkos-backend=cuda -Dkokkos-arch=HOPPER90` and a CUDA-capable
+C++ compiler. For Intel PVC use `-Dkokkos-backend=sycl -Dkokkos-arch=INTEL_PVC`
+with a supported `icpx -fsycl` toolchain. The same compiler builds both Kokkos
+and SU2 because Kokkos is a bundled CMake subproject.
 
 ## Run
 
@@ -48,11 +55,11 @@ with an explicit error instead of silently using the host implementation.
 
 ## Validation performed
 
-The full SU2 executable was built with Kokkos 4.7.2 Serial and exercised on the
+The full SU2 executable was built with Kokkos 5.2.1 Serial and exercised on the
 implicit Euler NACA0012 QuickStart case using FGMRES and ILU(0). A five-iteration
 host/Kokkos comparison produced identical convergence-history files. Across
-the surface solution variables, the maximum absolute difference was
-`5.20e-08` and the maximum relative difference was `8.22e-11`.
+the compared surface solution variables, both the maximum absolute difference
+and maximum relative difference were zero for the Serial backend.
 
 CUDA, SYCL, MPI, and performance validation still need to be run on the target
 systems.

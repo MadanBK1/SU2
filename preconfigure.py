@@ -93,6 +93,7 @@ def run(
     own_fado=True,
     own_mlpcpp=True,
     own_eigen=True,
+    own_kokkos=True,
 ):
     # Set up the build environment, i.e. clone or download submodules
     init_submodules(
@@ -107,6 +108,7 @@ def run(
         own_fado=own_fado,
         own_mlpcpp=own_mlpcpp,
         own_eigen=own_eigen,
+        own_kokkos=own_kokkos,
     )
 
     if own_meson:
@@ -160,6 +162,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--no-eigen", help="do not download copy of Eigen", action="store_false"
     )
+    parser.add_argument(
+        "--no-kokkos", help="do not download the bundled Kokkos library", action="store_false"
+    )
     args = parser.parse_args()
 
     run(
@@ -173,4 +178,5 @@ if __name__ == "__main__":
         own_fado=args.no_fado,
         own_mlpcpp=args.no_mlpcpp,
         own_eigen=args.no_eigen,
+        own_kokkos=args.no_kokkos,
     )

@@ -235,13 +235,47 @@ if get_option('enable-cuda')
   su2_deps += gpu_dep
 endif
 
-# Kokkos dependencies. The compiler used to build SU2 must match the Kokkos
-# backend (e.g. nvcc_wrapper for CUDA or icpx -fsycl for SYCL).
+# Bundled Kokkos dependency. The compiler used to build SU2 must support the
+# selected backend (e.g. nvcc_wrapper for CUDA or icpx -fsycl for SYCL).
 if get_option('enable-kokkos')
   assert(not get_option('enable-autodiff') and not get_option('enable-directdiff'),
          'The initial Kokkos linear algebra backend supports passive/primal builds only')
-  su2_cpp_args += '-DHAVE_KOKKOS'
-  kokkos_dep = dependency('Kokkos', method : 'cmake', modules : ['Kokkos::kokkos'], required : true)
+  assert(not get_option('with-omp'),
+         'The initial Kokkos backend owns node-level parallelism and cannot be combined with SU2 OpenMP')
+  kokkos_backend = get_option('kokkos-backend')
+  kokkos_arch = get_option('kokkos-arch')
+  assert(kokkos_arch != 'HOPPER90' or kokkos_backend == 'cuda',
+         'HOPPER90 requires -Dkokkos-backend=cuda')
+  assert(kokkos_arch != 'INTEL_PVC' or kokkos_backend == 'sycl',
+         'INTEL_PVC requires -Dkokkos-backend=sycl')
+
+  cmake = import('cmake')
+  kokkos_opts = cmake.subproject_options()
+  kokkos_opts.set_override_option('warning_level', '0')
+  kokkos_opts.add_cmake_defines({
+    'BUILD_SHARED_LIBS': false,
+    'CMAKE_POSITION_INDEPENDENT_CODE': true,
+    'CMAKE_CXX_STANDARD': '20',
+    'Kokkos_ENABLE_TESTS': false,
+    'Kokkos_ENABLE_EXAMPLES': false,
+    'Kokkos_ENABLE_BENCHMARKS': false,
+    'Kokkos_ENABLE_SERIAL': true,
+    'Kokkos_ENABLE_OPENMP': false,
+    'Kokkos_ENABLE_CUDA': kokkos_backend == 'cuda',
+    'Kokkos_ENABLE_SYCL': kokkos_backend == 'sycl'
+  })
+  if kokkos_arch == 'HOPPER90'
+    kokkos_opts.add_cmake_defines({'Kokkos_ARCH_HOPPER90': true})
+  elif kokkos_arch == 'INTEL_PVC'
+    kokkos_opts.add_cmake_defines({'Kokkos_ARCH_INTEL_PVC': true})
+  endif
+
+  kokkos_subproj = cmake.subproject('Kokkos', options : kokkos_opts)
+  # Meson's CMake importer does not currently propagate the link interface of
+  # Kokkos' aggregate INTERFACE target. SU2 uses Kokkos Core APIs, so depend on
+  # the concrete core target to retain both its headers and static library.
+  kokkos_dep = kokkos_subproj.dependency('kokkoscore')
+  su2_cpp_args += ['-DHAVE_KOKKOS', '-std=c++20']
   su2_deps += kokkos_dep
 endif
 
@@ -400,10 +434,12 @@ message('''---------------------------------------------------------------------
          PaStiX:         @9@
          Mixed Float:    @10@
          Kokkos:         @11@
-         libROM:         @12@
-         CoolProp:       @13@
-         MLPCpp:         @14@
-         Tracy Profiler: @15@
+         Kokkos Backend: @12@
+         Kokkos Arch:    @13@
+         libROM:         @14@
+         CoolProp:       @15@
+         MLPCpp:         @16@
+         Tracy Profiler: @17@
 
          Please be sure to add the $SU2_HOME and $SU2_RUN environment variables,
          and update your $PATH (and $PYTHONPATH if applicable) with $SU2_RUN
@@ -415,11 +451,12 @@ message('''---------------------------------------------------------------------
          export PATH=$PATH:$SU2_RUN
          export PYTHONPATH=$PYTHONPATH:$SU2_RUN
 
-         Use './ninja -C @16@ install' to compile and install SU2
+         Use './ninja -C @18@ install' to compile and install SU2
 '''.format(get_option('prefix')+'/bin', meson.project_source_root(), get_option('enable-tecio'), get_option('enable-cgns'),
            get_option('enable-autodiff'), get_option('enable-directdiff'), get_option('enable-pywrapper'), get_option('enable-mkl'),
            get_option('enable-openblas'), get_option('enable-pastix'), get_option('enable-mixedprec'), get_option('enable-kokkos'),
-           get_option('enable-librom'), get_option('enable-coolprop'), get_option('enable-mlpcpp'), get_option('tracy_enable'),
+           get_option('kokkos-backend'), get_option('kokkos-arch'), get_option('enable-librom'), get_option('enable-coolprop'),
+           get_option('enable-mlpcpp'), get_option('tracy_enable'),
            meson.project_build_root().startswith(meson.project_source_root()) ? meson.project_build_root().split('/')[-1] : meson.project_build_root()))
 
 if get_option('enable-mpp')

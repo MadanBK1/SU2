@@ -45,20 +45,29 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
   const auto block_size_in = nEqn;
 
   using execution_space = Kokkos::DefaultExecutionSpace;
-  using range_policy = Kokkos::RangePolicy<execution_space, Kokkos::IndexType<unsigned long>>;
+  using team_policy = Kokkos::TeamPolicy<execution_space>;
+  using member_type = typename team_policy::member_type;
   Kokkos::parallel_for(
-      "SU2::BlockCrsSpMV", range_policy(0, block_rows * block_size_out),
-      KOKKOS_LAMBDA(const unsigned long flat_row) {
+      "SU2::BlockCrsSpMV", team_policy(block_rows * block_size_out, Kokkos::AUTO),
+      KOKKOS_LAMBDA(const member_type& team) {
+        const unsigned long flat_row = team.league_rank();
         const unsigned long row = flat_row / block_size_out;
         const unsigned long block_row = flat_row % block_size_out;
+        const unsigned long first_block = row_offsets[row];
+        const unsigned long work_count = (row_offsets[row + 1] - first_block) * block_size_in;
         ScalarType sum = 0.0;
-        for (unsigned long block = row_offsets[row]; block < row_offsets[row + 1]; ++block) {
-          const unsigned long value_offset = block * block_size_out * block_size_in + block_row * block_size_in;
-          const unsigned long vector_offset = columns[block] * block_size_in;
-          for (unsigned long block_col = 0; block_col < block_size_in; ++block_col)
-            sum += values[value_offset + block_col] * input[vector_offset + block_col];
-        }
-        output[flat_row] = sum;
+        Kokkos::parallel_reduce(
+            Kokkos::TeamThreadRange(team, work_count),
+            [=](const unsigned long work, ScalarType& local_sum) {
+              const unsigned long block = first_block + work / block_size_in;
+              const unsigned long block_col = work % block_size_in;
+              const unsigned long value_offset =
+                  block * block_size_out * block_size_in + block_row * block_size_in + block_col;
+              const unsigned long vector_offset = columns[block] * block_size_in + block_col;
+              local_sum += values[value_offset] * input[vector_offset];
+            },
+            sum);
+        Kokkos::single(Kokkos::PerTeam(team), [=]() { output[flat_row] = sum; });
       });
   Kokkos::fence("SU2::BlockCrsSpMV complete");
 
