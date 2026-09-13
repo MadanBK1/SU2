@@ -252,6 +252,14 @@ if get_option('enable-kokkos')
   cmake = import('cmake')
   kokkos_opts = cmake.subproject_options()
   kokkos_opts.set_override_option('warning_level', '0')
+  # preconfigure.py builds Ninja inside the SU2 tree, but CMake does not
+  # search the current directory when resolving the Ninja generator. Pass the
+  # bundled executable explicitly so Kokkos also configures on module-based
+  # HPC systems where Ninja is not installed globally.
+  kokkos_ninja = find_program('ninja',
+                              dirs: [meson.project_source_root(),
+                                     meson.project_source_root() / 'externals/ninja'],
+                              required: false)
   kokkos_opts.add_cmake_defines({
     'BUILD_SHARED_LIBS': false,
     'CMAKE_POSITION_INDEPENDENT_CODE': true,
@@ -264,6 +272,9 @@ if get_option('enable-kokkos')
     'Kokkos_ENABLE_CUDA': kokkos_backend == 'cuda',
     'Kokkos_ENABLE_SYCL': kokkos_backend == 'sycl'
   })
+  if kokkos_ninja.found()
+    kokkos_opts.add_cmake_defines({'CMAKE_MAKE_PROGRAM': kokkos_ninja.full_path()})
+  endif
   if kokkos_arch == 'HOPPER90'
     kokkos_opts.add_cmake_defines({'Kokkos_ARCH_HOPPER90': true})
   elif kokkos_arch == 'INTEL_PVC'
