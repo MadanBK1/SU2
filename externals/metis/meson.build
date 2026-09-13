@@ -1,9 +1,12 @@
 metis_c_args = ['-D_FILE_OFFSET_BITS=64', '-DNDEBUG', '-DNDEBUG2', '-DHAVE_GETLINE', '-DUSE_GKREGEX']
 
+metis_c_compiler = meson.get_compiler('c')
 metis_default_warnings = []
 if build_machine.system() != 'windows'
-  metis_default_warnings += ['-Wno-implicit-function-declaration']
-  if meson.get_compiler('cpp').get_id() != 'intel'
+  if metis_c_compiler.has_argument('-Wno-implicit-function-declaration')
+    metis_default_warnings += ['-Wno-implicit-function-declaration']
+  endif
+  if metis_c_compiler.get_id() != 'intel'
     desired_warnings = ['-Wno-unused-result',
                         '-Wno-unused-parameter',
                         '-Wno-unused-variable',
@@ -19,7 +22,7 @@ if build_machine.system() != 'windows'
                         '-Wno-error=absolute-value',
                         '-Wno-absolute-value']
     foreach flag : desired_warnings
-      if meson.get_compiler('cpp').has_argument(flag)
+      if metis_c_compiler.has_argument(flag)
         metis_default_warnings += flag
       endif
     endforeach
