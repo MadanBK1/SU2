@@ -1,0 +1,30 @@
+name: desul version check
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/desul-version-check.yml'
+      - 'tpls/desul-hash.txt'
+      - 'tpls/desul/**'
+
+permissions: read-all
+
+jobs:
+  desul-version-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - run: echo "ref=$(cat tpls/desul-hash.txt)" >> $GITHUB_ENV
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        repository: desul/desul
+        ref: ${{ env.ref }}
+        path: desul-atomics
+    - run: |
+        rm tpls/desul/include/desul/.clang-format
+        rm -r desul-atomics/atomics/performance_tests
+        rm -r desul-atomics/atomics/unit_tests
+        rm desul-atomics/atomics/CMakeLists.txt
+        rm desul-atomics/atomics/desul_atomicsConfig.cmake.in
+        rm desul-atomics/atomics/src/common.cpp
+        diff --unified=3 --recursive tpls/desul desul-atomics/atomics
