@@ -79,7 +79,7 @@ def init_submodules(
     github_repo_mlpcpp = "https://github.com/EvertBunschoten/MLPCpp"
     sha_version_eigen = "d71c30c47858effcbd39967097a2d99ee48db464"
     github_repo_eigen = "https://gitlab.com/libeigen/eigen.git"
-    sha_version_kokkos = "89f0b12e43583d02bd19739810ceadcedf1ccd56"
+    sha_version_kokkos = "8e15454876298832f013ebcaf08d53825b5bda40"
     github_repo_kokkos = "https://github.com/kokkos/kokkos"
     # The download paths for gitlab are different than github so we need this ad-hoc fix.
     # NOTE: Update the Eigen version in download_module when changing this.

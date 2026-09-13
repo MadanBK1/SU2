@@ -8,7 +8,7 @@ preconditioners, and MPI halo exchange remain unchanged and host-resident.
 
 - Passive/primal SU2 builds only.
 - Block-CSR matrix-vector products used by the iterative linear solvers.
-- Bundled and pinned Kokkos 5.2.1 source in `subprojects/Kokkos`.
+- Bundled and pinned Kokkos 5.2.2 source in `subprojects/Kokkos`.
 - Kokkos Serial, CUDA, or SYCL selected from the SU2 Meson command.
 - Runtime selection with `ENABLE_KOKKOS= YES` in the SU2 configuration.
 - The existing CUDA backend and the Kokkos backend are mutually exclusive.
@@ -55,7 +55,7 @@ with an explicit error instead of silently using the host implementation.
 
 ## Validation performed
 
-The full SU2 executable was built with Kokkos 5.2.1 Serial and exercised on the
+The full SU2 executable was built with Kokkos 5.2.2 Serial and exercised on the
 implicit Euler NACA0012 QuickStart case using FGMRES and ILU(0). A five-iteration
 host/Kokkos comparison produced identical convergence-history files. Across
 the compared surface solution variables, both the maximum absolute difference
