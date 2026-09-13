@@ -61,7 +61,8 @@ if get_option('cpu-arch') != ''
 endif
 
 # Fast math to allow pow(x, 2) -> x * x.
-if meson.get_compiler('cpp').has_argument('-fno-finite-math-only')
+if (meson.get_compiler('cpp').has_argument('-ffast-math') and
+    meson.get_compiler('cpp').has_argument('-fno-finite-math-only'))
   su2_cpp_args += ['-ffast-math', '-fno-finite-math-only']
 endif
 
