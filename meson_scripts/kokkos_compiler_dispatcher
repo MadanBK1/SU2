@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+# Preserve Kokkos' CMake compiler-launcher behavior after Meson imports the
+# CMake targets. Meson invokes this program as the C++ compiler. Ordinary
+# translation units go to the configured host compiler, while targets marked
+# with KOKKOS_DEPENDENCE are redirected through Kokkos' nvcc_wrapper.
+
+set -e
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+kokkos_dir="${script_dir}/../subprojects/Kokkos"
+host_compiler="${SU2_KOKKOS_HOST_COMPILER:-nvc++}"
+
+for arg in "$@"; do
+  if [[ "${arg}" == *KOKKOS_DEPENDENCE ]]; then
+    exec "${kokkos_dir}/bin/kokkos_launch_compiler" \
+      "${kokkos_dir}/bin/nvcc_wrapper" "$0" "$0" "$@"
+  fi
+done
+
+host_args=()
+if [[ -n "${SU2_KOKKOS_GCC_TOOLCHAIN:-}" ]]; then
+  host_args+=("--gcc-toolchain=${SU2_KOKKOS_GCC_TOOLCHAIN}")
+fi
+
+exec "${host_compiler}" "${host_args[@]}" "$@"
