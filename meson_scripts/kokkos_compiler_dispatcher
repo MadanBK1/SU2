@@ -11,12 +11,25 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 kokkos_dir="${script_dir}/../subprojects/Kokkos"
 host_compiler="${SU2_KOKKOS_HOST_COMPILER:-nvc++}"
 
+kokkos_dependence=0
+kokkos_args=()
 for arg in "$@"; do
   if [[ "${arg}" == *KOKKOS_DEPENDENCE ]]; then
-    exec "${kokkos_dir}/bin/kokkos_launch_compiler" \
-      "${kokkos_dir}/bin/nvcc_wrapper" "$0" "$0" "$@"
+    kokkos_dependence=1
+  fi
+
+  # CMake adds NVHPC's -fast preset for Release builds. Kokkos-dependent
+  # sources are compiled by nvcc_wrapper with a GNU host compiler, where that
+  # option is invalid. The imported command already contains -O3.
+  if [[ "${arg}" != "-fast" ]]; then
+    kokkos_args+=("${arg}")
   fi
 done
+
+if [[ "${kokkos_dependence}" -eq 1 ]]; then
+  exec "${kokkos_dir}/bin/kokkos_launch_compiler" \
+    "${kokkos_dir}/bin/nvcc_wrapper" "$0" "$0" "${kokkos_args[@]}"
+fi
 
 host_args=()
 if [[ -n "${SU2_KOKKOS_GCC_TOOLCHAIN:-}" ]]; then
