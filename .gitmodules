@@ -33,6 +33,3 @@
 [submodule "externals/eigen"]
 	path = externals/eigen
 	url = https://gitlab.com/libeigen/eigen.git
-[submodule "subprojects/Kokkos"]
-	path = subprojects/Kokkos
-	url = https://github.com/kokkos/kokkos.git

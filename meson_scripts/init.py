@@ -51,7 +51,6 @@ def init_submodules(
     own_fado=True,
     own_mlpcpp=True,
     own_eigen=True,
-    own_kokkos=True,
 ):
     cur_dir = sys.path[0]
 
@@ -79,8 +78,6 @@ def init_submodules(
     github_repo_mlpcpp = "https://github.com/EvertBunschoten/MLPCpp"
     sha_version_eigen = "d71c30c47858effcbd39967097a2d99ee48db464"
     github_repo_eigen = "https://gitlab.com/libeigen/eigen.git"
-    sha_version_kokkos = "8e15454876298832f013ebcaf08d53825b5bda40"
-    github_repo_kokkos = "https://github.com/kokkos/kokkos"
     # The download paths for gitlab are different than github so we need this ad-hoc fix.
     # NOTE: Update the Eigen version in download_module when changing this.
     download_eigen = (
@@ -98,7 +95,6 @@ def init_submodules(
     fado_name = "FADO"
     mlpcpp_name = "MLPCpp"
     eigen_name = "Eigen"
-    kokkos_name = "Kokkos"
 
     base_path = cur_dir + os.path.sep + "externals" + os.path.sep
     alt_name_medi = base_path + "medi"
@@ -112,7 +108,6 @@ def init_submodules(
     alt_name_mpp = cur_dir + os.path.sep + "subprojects" + os.path.sep + "Mutationpp"
     alt_name_coolprop = cur_dir + os.path.sep + "subprojects" + os.path.sep + "CoolProp"
     alt_name_mlpcpp = cur_dir + os.path.sep + "subprojects" + os.path.sep + "MLPCpp"
-    alt_name_kokkos = cur_dir + os.path.sep + "subprojects" + os.path.sep + "Kokkos"
 
     if method == "auto":
         is_git = is_git_directory(cur_dir)
@@ -148,8 +143,6 @@ def init_submodules(
             submodule_status(alt_name_mlpcpp, sha_version_mlpcpp)
         if own_eigen:
             submodule_status(alt_name_eigen, sha_version_eigen)
-        if own_kokkos:
-            submodule_status(alt_name_kokkos, sha_version_kokkos)
     # Otherwise download the zip file from git
     else:
         if own_codi:
@@ -198,8 +191,6 @@ def init_submodules(
                 sha_version_eigen,
                 download_eigen,
             )
-        if own_kokkos:
-            download_module(kokkos_name, alt_name_kokkos, github_repo_kokkos, sha_version_kokkos)
 
 
 def is_git_directory(path="."):
