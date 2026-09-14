@@ -7,6 +7,7 @@
 
 #include <limits>
 #include <type_traits>
+#include <unordered_map>
 
 #include "../../include/linear_algebra/CSysMatrix.hpp"
 #include "../../include/geometry/CGeometry.hpp"
@@ -18,6 +19,16 @@ using DeviceView = Kokkos::View<T*, typename Kokkos::DefaultExecutionSpace::memo
 
 template <class T>
 using HostView = Kokkos::View<T*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+
+struct HaloIndexCache {
+  const CGeometry* geometry = nullptr;
+  const unsigned long* host_send_indices = nullptr;
+  const unsigned long* host_recv_indices = nullptr;
+  unsigned long* device_send_indices = nullptr;
+  unsigned long* device_recv_indices = nullptr;
+  unsigned long send_points = 0;
+  unsigned long recv_points = 0;
+};
 
 /*!
  * \brief Exchange CSysVector halo entries through device-resident buffers.
@@ -55,13 +66,33 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
   value_view send_values(vector.GetKokkosMPISendBuffer(), send_value_count);
   value_view recv_values(vector.GetKokkosMPIRecvBuffer(), recv_value_count);
 
-  if (send_points > 0) {
-    Kokkos::deep_copy(send_indices,
-                      HostView<const unsigned long>(geometry->Local_Point_P2PSend, send_points));
+  /*--- Halo point maps are geometry metadata and do not change during Krylov iterations.
+   * Upload them only when a vector first participates in the exchange, when its
+   * device index allocation changes, or when the geometry/layout changes. ---*/
+  static std::unordered_map<const void*, HaloIndexCache> halo_index_cache;
+  auto& cache = halo_index_cache[static_cast<const void*>(&vector)];
+  const bool refresh_send =
+      cache.geometry != geometry || cache.host_send_indices != geometry->Local_Point_P2PSend ||
+      cache.device_send_indices != vector.GetKokkosMPISendIndices() || cache.send_points != send_points;
+  const bool refresh_recv =
+      cache.geometry != geometry || cache.host_recv_indices != geometry->Local_Point_P2PRecv ||
+      cache.device_recv_indices != vector.GetKokkosMPIRecvIndices() || cache.recv_points != recv_points;
+
+  if (refresh_send && send_points > 0) {
+    Kokkos::deep_copy(send_indices, HostView<const unsigned long>(geometry->Local_Point_P2PSend, send_points));
   }
-  if (recv_points > 0) {
-    Kokkos::deep_copy(recv_indices,
-                      HostView<const unsigned long>(geometry->Local_Point_P2PRecv, recv_points));
+  if (refresh_recv && recv_points > 0) {
+    Kokkos::deep_copy(recv_indices, HostView<const unsigned long>(geometry->Local_Point_P2PRecv, recv_points));
+  }
+
+  if (refresh_send || refresh_recv) {
+    cache.geometry = geometry;
+    cache.host_send_indices = geometry->Local_Point_P2PSend;
+    cache.host_recv_indices = geometry->Local_Point_P2PRecv;
+    cache.device_send_indices = vector.GetKokkosMPISendIndices();
+    cache.device_recv_indices = vector.GetKokkosMPIRecvIndices();
+    cache.send_points = send_points;
+    cache.recv_points = recv_points;
   }
 
   const auto mpi_datatype = std::is_same_v<ScalarType, float> ? MPI_FLOAT : MPI_DOUBLE;
@@ -88,6 +119,8 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
           const auto variable = i % n_var;
           send_values(i) = device_vector[send_indices(point) * n_var + variable];
         });
+    /*--- This fence also completes the preceding SpMV because both kernels use
+     * the default execution space and are ordered on the same execution stream. ---*/
     Kokkos::fence("SU2::Kokkos MPI send buffer ready");
   }
 
@@ -182,7 +215,6 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
             sum);
         Kokkos::single(Kokkos::PerTeam(team), [=]() { output[flat_row] = sum; });
       });
-  Kokkos::fence("SU2::BlockCrsSpMV complete");
 
   if (config->GetKokkosGPUAwareMPI()) {
     KokkosGPUAwareHaloExchange(prod, geometry);
