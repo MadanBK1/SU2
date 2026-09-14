@@ -216,9 +216,9 @@ bool CFileWriter::OpenMPIFile(string val_filename){
                        MPI_MODE_CREATE|MPI_MODE_EXCL|MPI_MODE_WRONLY,
                        MPI_INFO_NULL, &fhw);
   if (ierr != MPI_SUCCESS)  {
-    MPI_File_close(&fhw);
     if (rank == 0)
       MPI_File_delete(val_filename.c_str(), MPI_INFO_NULL);
+    SU2_MPI::Barrier(SU2_MPI::GetComm());
     ierr = MPI_File_open(SU2_MPI::GetComm(), val_filename.c_str(),
                          MPI_MODE_CREATE|MPI_MODE_EXCL|MPI_MODE_WRONLY,
                          MPI_INFO_NULL, &fhw);
