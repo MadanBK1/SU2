@@ -198,15 +198,15 @@ if get_option('enable-normal')
   su2_cfd_lib = static_library('SU2core',
                                su2_cfd_src,
                                install : false,
-		               dependencies : [su2_deps, common_dep],
+		               dependencies : [common_dep, su2_deps],
 		               cpp_args:  [default_warning_flags, su2_cpp_args])
   su2_cfd_dep = declare_dependency(link_with: su2_cfd_lib,
-                                   dependencies: [su2_deps, common_dep],
+                                   dependencies: [common_dep, su2_deps],
                                    include_directories: su2_cfd_include)
   su2_cfd = executable('SU2_CFD',
                        'SU2_CFD.cpp',
                        install : true,
-                       dependencies : [su2_cfd_dep, su2_deps, common_dep],
+                       dependencies : [su2_cfd_dep, common_dep, su2_deps],
                        cpp_args:  ['-fPIC'] + [default_warning_flags, su2_cpp_args] + profiling_args,
                        link_args: profiling_args)
 endif
