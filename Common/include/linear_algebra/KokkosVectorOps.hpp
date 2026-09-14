@@ -9,7 +9,6 @@
 
 #include <Kokkos_Core.hpp>
 #include <cmath>
-#include <limits>
 #include <type_traits>
 
 #include "CSysVector.hpp"
@@ -35,7 +34,7 @@ inline void AssertSameSize(const CSysVector<ScalarType>& x, const CSysVector<Sca
 }
 
 template <class ScalarType>
-inline MPI_Datatype MPIDatatype() {
+inline auto MPIDatatype() {
   static_assert(std::is_same_v<ScalarType, float> || std::is_same_v<ScalarType, double>,
                 "Kokkos linear vector reductions currently support float and double.");
   if constexpr (std::is_same_v<ScalarType, float>)
