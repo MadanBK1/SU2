@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage Kokkos device storage/upload for SU2 ILU factors and dependency levels.
 
-This patch intentionally does not change preconditioner execution.  CPU ILU
+This patch intentionally does not change preconditioner execution. CPU ILU
 factorization/application remains active; after each BuildILUPreconditioner()
 the completed factors and static CSR/level metadata are mirrored to device
 memory so the subsequent device triangular-solve patch can be compiled and
@@ -42,7 +42,7 @@ replacement = anchor + r'''
 #ifdef HAVE_KOKKOS
   /*--- KOKKOS ILU DEVICE STORAGE
    * Persistent mirrors of the completed host ILU factors and their sparse /
-   * level-scheduling metadata.  The structure is immutable after matrix
+   * level-scheduling metadata. The structure is immutable after matrix
    * initialization; only d_ILU_matrix is refreshed when ILU is rebuilt. ---*/
   ScalarType* d_ILU_matrix = nullptr;
   const unsigned long* d_row_ptr_ilu = nullptr;
@@ -54,7 +54,6 @@ replacement = anchor + r'''
 '''
 hpp = hpp.replace(anchor, replacement, 1)
 
-# Add public declaration near Kokkos SpMV declaration.
 anchor = '''  /*! \\brief Kokkos block-CSR sparse matrix-vector product. */
   void KokkosMatrixVectorProduct(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
                                  CGeometry* geometry, const CConfig* config) const;
@@ -94,29 +93,40 @@ replacement = anchor + r'''
 '''
 cpp = cpp.replace(anchor, replacement, 1)
 
-# Add synchronization at the end of BuildILUPreconditioner, before the next
-# template function.  Use the exact tail from the current SU2 implementation.
-anchor = '''    }
-  }
-}
+# Insert synchronization immediately before ComputeILUPreconditioner().
+# Do not depend on the exact number of blank lines between functions.
+next_marker = "template <class ScalarType>\nvoid CSysMatrix<ScalarType>::ComputeILUPreconditioner"
+next_pos = cpp.find(next_marker)
+if next_pos < 0:
+    sys.exit("ERROR: ComputeILUPreconditioner marker not found")
 
+build_pos = cpp.rfind("void CSysMatrix<ScalarType>::BuildILUPreconditioner()", 0, next_pos)
+if build_pos < 0:
+    sys.exit("ERROR: BuildILUPreconditioner marker not found before ComputeILUPreconditioner")
 
-template <class ScalarType>
-void CSysMatrix<ScalarType>::ComputeILUPreconditioner'''
-if cpp.count(anchor) != 1:
-    sys.exit(f"ERROR: BuildILUPreconditioner tail anchor count = {cpp.count(anchor)}")
-replacement = '''    }
-  }
+# Find the final closing brace of BuildILUPreconditioner by scanning from its
+# opening brace. This is insensitive to comments and blank-line formatting.
+open_pos = cpp.find("{", build_pos)
+if open_pos < 0:
+    sys.exit("ERROR: opening brace for BuildILUPreconditioner not found")
 
-#ifdef HAVE_KOKKOS
-  if (useDevice) SyncKokkosILUPreconditioner();
-#endif
-}
+depth = 0
+close_pos = None
+for i in range(open_pos, next_pos):
+    ch = cpp[i]
+    if ch == "{":
+        depth += 1
+    elif ch == "}":
+        depth -= 1
+        if depth == 0:
+            close_pos = i
+            break
 
+if close_pos is None:
+    sys.exit("ERROR: closing brace for BuildILUPreconditioner not found")
 
-template <class ScalarType>
-void CSysMatrix<ScalarType>::ComputeILUPreconditioner'''
-cpp = cpp.replace(anchor, replacement, 1)
+sync = '''\n#ifdef HAVE_KOKKOS\n  if (useDevice) SyncKokkosILUPreconditioner();\n#endif\n'''
+cpp = cpp[:close_pos] + sync + cpp[close_pos:]
 
 # ---------------------------------------------------------------------------
 # CSysMatrixKokkos.cpp: portable allocation and deep-copy implementation.
@@ -134,7 +144,7 @@ void CSysMatrix<ScalarType>::HtDTransfer(bool trigger) const {
 if kk.count(anchor) != 1:
     sys.exit(f"ERROR: CSysMatrixKokkos.cpp insertion anchor count = {kk.count(anchor)}")
 method = r'''/*--- KOKKOS ILU DEVICE STORAGE ------------------------------------------------
- * Keep CPU factorization semantics unchanged.  The completed factors are
+ * Keep CPU factorization semantics unchanged. The completed factors are
  * mirrored after each BuildILUPreconditioner(); sparse and level metadata are
  * allocated/copied only once because the matrix graph is immutable. ---*/
 template <class ScalarType>
