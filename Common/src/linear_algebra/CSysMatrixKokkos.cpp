@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "../../include/linear_algebra/CSysMatrix.hpp"
+#include "../../include/geometry/CGeometry.hpp"
 
 namespace {
 template <class T>
@@ -76,13 +77,13 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
 
     const auto source = geometry->Neighbors_P2PRecv[i_recv];
     SU2_MPI::Irecv(recv_values.data() + offset, static_cast<int>(count), mpi_datatype, source, source + 1,
-                   SU2_MPI::GetComm(), &geometry->template GetP2PRecvReq<ScalarType>()[i_recv]);
+                   SU2_MPI::GetComm(), &geometry->GetP2PRecvReq<ScalarType>()[i_recv]);
   }
 
   if (send_value_count > 0) {
     const auto device_vector = vector.GetDevicePointer();
     Kokkos::parallel_for(
-        "SU2::PackKokkosMPIHalo", range_policy(0, send_value_count), KOKKOS_LAMBDA(const unsigned long i) {
+        "SU2::PackKokkosMPIHalo", range_policy(0ul, send_value_count), KOKKOS_LAMBDA(const unsigned long i) {
           const auto point = i / n_var;
           const auto variable = i % n_var;
           send_values(i) = device_vector[send_indices(point) * n_var + variable];
@@ -100,17 +101,17 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
 
     SU2_MPI::Isend(send_values.data() + offset, static_cast<int>(count), mpi_datatype,
                    geometry->Neighbors_P2PSend[i_send], SU2_MPI::GetRank() + 1, SU2_MPI::GetComm(),
-                   &geometry->template GetP2PSendReq<ScalarType>()[i_send]);
+                   &geometry->GetP2PSendReq<ScalarType>()[i_send]);
   }
 
   if (geometry->nP2PRecv > 0) {
-    SU2_MPI::Waitall(geometry->nP2PRecv, geometry->template GetP2PRecvReq<ScalarType>(), MPI_STATUSES_IGNORE);
+    SU2_MPI::Waitall(geometry->nP2PRecv, geometry->GetP2PRecvReq<ScalarType>(), MPI_STATUSES_IGNORE);
   }
 
   if (recv_value_count > 0) {
     const auto device_vector = vector.GetDevicePointer();
     Kokkos::parallel_for(
-        "SU2::UnpackKokkosMPIHalo", range_policy(0, recv_value_count), KOKKOS_LAMBDA(const unsigned long i) {
+        "SU2::UnpackKokkosMPIHalo", range_policy(0ul, recv_value_count), KOKKOS_LAMBDA(const unsigned long i) {
           const auto point = i / n_var;
           const auto variable = i % n_var;
           device_vector[recv_indices(point) * n_var + variable] = recv_values(i);
@@ -119,7 +120,7 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
   }
 
   if (geometry->nP2PSend > 0) {
-    SU2_MPI::Waitall(geometry->nP2PSend, geometry->template GetP2PSendReq<ScalarType>(), MPI_STATUSES_IGNORE);
+    SU2_MPI::Waitall(geometry->nP2PSend, geometry->GetP2PSendReq<ScalarType>(), MPI_STATUSES_IGNORE);
   }
 #endif
 
