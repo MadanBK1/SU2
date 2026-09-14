@@ -140,6 +140,10 @@ CSysVector<ScalarType>::~CSysVector() {
   MemoryAllocation::aligned_free(vec_val);
 
   GPUMemoryAllocation::gpu_free(d_vec_val);
+
+#ifdef HAVE_KOKKOS
+  ReleaseKokkosMPIBuffers();
+#endif
 }
 
 /*--- Explicit instantiations ---*/
