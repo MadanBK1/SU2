@@ -245,6 +245,8 @@ if get_option('enable-kokkos')
          'The initial Kokkos backend owns node-level parallelism and cannot be combined with SU2 OpenMP')
   kokkos_backend = get_option('kokkos-backend')
   kokkos_arch = get_option('kokkos-arch')
+  assert(kokkos_arch != 'VOLTA70' or kokkos_backend == 'cuda',
+         'VOLTA70 requires -Dkokkos-backend=cuda')
   assert(kokkos_arch != 'HOPPER90' or kokkos_backend == 'cuda',
          'HOPPER90 requires -Dkokkos-backend=cuda')
   assert(kokkos_arch != 'INTEL_PVC' or kokkos_backend == 'sycl',
@@ -276,7 +278,9 @@ if get_option('enable-kokkos')
   if kokkos_ninja.found()
     kokkos_opts.add_cmake_defines({'CMAKE_MAKE_PROGRAM': kokkos_ninja.full_path()})
   endif
-  if kokkos_arch == 'HOPPER90'
+  if kokkos_arch == 'VOLTA70'
+    kokkos_opts.add_cmake_defines({'Kokkos_ARCH_VOLTA70': true})
+  elif kokkos_arch == 'HOPPER90'
     kokkos_opts.add_cmake_defines({'Kokkos_ARCH_HOPPER90': true})
   elif kokkos_arch == 'INTEL_PVC'
     kokkos_opts.add_cmake_defines({'Kokkos_ARCH_INTEL_PVC': true})
