@@ -201,6 +201,7 @@ if get_option('enable-normal')
 		               dependencies : [su2_deps, common_dep],
 		               cpp_args:  [default_warning_flags, su2_cpp_args])
   su2_cfd_dep = declare_dependency(link_with: su2_cfd_lib,
+                                   dependencies: [su2_deps, common_dep],
                                    include_directories: su2_cfd_include)
   su2_cfd = executable('SU2_CFD',
                        'SU2_CFD.cpp',
