@@ -37,6 +37,15 @@ for arg in "$@"; do
       ;;
   esac
 
+  # GCC-like Meson compilers use -MQ for the depfile target. Kokkos 5.2's
+  # nvcc_wrapper only recognizes -MT; an unrecognized -MQ is forwarded to
+  # GCC without the matching dependency mode and cc1plus rejects it. Ninja
+  # object paths do not require make-style quoting, so -MT is equivalent here.
+  if [[ "${arg}" == "-MQ" ]]; then
+    kokkos_args+=("-MT")
+    continue
+  fi
+
   # CMake adds NVHPC's -fast preset for Release builds. Kokkos-dependent
   # sources are compiled by nvcc_wrapper with a GNU host compiler, where that
   # option is invalid. The imported command already contains -O3.
