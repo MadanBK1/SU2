@@ -103,7 +103,7 @@ run_case gpu-aware "$OUT_ROOT/gpu-aware" || gpu_status=$?
 echo
 echo "========== RESULT COMPARISON =========="
 python3 - "$OUT_ROOT/host-staged/history.csv" "$OUT_ROOT/gpu-aware/history.csv" <<'PY'
-import csv, math, pathlib, sys
+import csv, pathlib, sys
 
 def last_row(path):
     p = pathlib.Path(path)
@@ -132,7 +132,8 @@ else:
 PY
 
 echo
-echo "========== GPU-AWARE MPI VALIDATION SUMMARY =========="necho "host-staged status: $host_status"
+echo "========== GPU-AWARE MPI VALIDATION SUMMARY =========="
+echo "host-staged status: $host_status"
 echo "gpu-aware   status: $gpu_status"
 
 if [[ $host_status -eq 0 && $gpu_status -eq 0 ]] && \
