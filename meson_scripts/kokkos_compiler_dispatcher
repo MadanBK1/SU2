@@ -12,11 +12,30 @@ kokkos_dir="${script_dir}/../subprojects/Kokkos"
 host_compiler="${SU2_KOKKOS_HOST_COMPILER:-nvc++}"
 
 kokkos_dependence=0
+has_kokkos_marker=0
+has_extended_lambda=0
+has_cuda_arch=0
+has_cxx_standard=0
 kokkos_args=()
 for arg in "$@"; do
-  if [[ "${arg}" == *KOKKOS_DEPENDENCE || "${arg}" == "-DHAVE_KOKKOS" ]]; then
+  if [[ "${arg}" == *KOKKOS_DEPENDENCE ]]; then
+    kokkos_dependence=1
+    has_kokkos_marker=1
+  elif [[ "${arg}" == "-DHAVE_KOKKOS" ]]; then
     kokkos_dependence=1
   fi
+
+  case "${arg}" in
+    -extended-lambda|--extended-lambda|-expt-extended-lambda|--expt-extended-lambda)
+      has_extended_lambda=1
+      ;;
+    -arch=*|--gpu-architecture=*)
+      has_cuda_arch=1
+      ;;
+    -std=*|--std=*)
+      has_cxx_standard=1
+      ;;
+  esac
 
   # CMake adds NVHPC's -fast preset for Release builds. Kokkos-dependent
   # sources are compiled by nvcc_wrapper with a GNU host compiler, where that
@@ -29,11 +48,23 @@ done
 if [[ "${kokkos_dependence}" -eq 1 ]]; then
   # kokkos_launch_compiler uses this marker to authorize redirection. SU2
   # targets carry HAVE_KOKKOS instead, so add the launcher's marker as well.
-  kokkos_args+=("-DKOKKOS_DEPENDENCE")
+  if [[ "${has_kokkos_marker}" -eq 0 ]]; then
+    kokkos_args+=("-DKOKKOS_DEPENDENCE")
+  fi
+  # Kokkos' CUDA options are private to its imported library targets and are
+  # not propagated to SU2 sources that instantiate KOKKOS_LAMBDA.
+  if [[ "${has_extended_lambda}" -eq 0 ]]; then
+    kokkos_args+=("-extended-lambda")
+  fi
+  if [[ "${has_cuda_arch}" -eq 0 ]]; then
+    kokkos_args+=("-arch=${SU2_KOKKOS_CUDA_ARCH:-sm_90}")
+  fi
   # Meson's CMake importer does not preserve CXX_STANDARD on the imported
-  # Kokkos targets. Kokkos 5 requires C++20, so enforce it after all imported
-  # arguments (and therefore override any older standard flag).
-  kokkos_args+=("-std=c++20")
+  # Kokkos targets. Kokkos 5 requires C++20, so enforce it when no standard
+  # was supplied by the parent target.
+  if [[ "${has_cxx_standard}" -eq 0 ]]; then
+    kokkos_args+=("-std=c++20")
+  fi
   exec "${kokkos_dir}/bin/kokkos_launch_compiler" \
     "${kokkos_dir}/bin/nvcc_wrapper" "$0" "$0" "${kokkos_args[@]}"
 fi
