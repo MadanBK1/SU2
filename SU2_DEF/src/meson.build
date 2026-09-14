@@ -19,6 +19,7 @@ if get_option('enable-normal')
                                cpp_args:  [default_warning_flags, su2_cpp_args])
 
   su2_def_dep = declare_dependency(link_with: su2_def_lib,
+                                   dependencies: [su2_deps, common_dep, su2_cfd_dep],
                                    include_directories: su2_def_include)
 
 endif
