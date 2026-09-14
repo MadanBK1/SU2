@@ -37,7 +37,6 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
   using index_view = Kokkos::View<unsigned long*, memory_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
   using value_view = Kokkos::View<ScalarType*, memory_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
   using range_policy = Kokkos::RangePolicy<execution_space, Kokkos::IndexType<unsigned long>>;
-  using mpi_wrapper = typename SelectMPIWrapper<ScalarType>::W;
 
   const auto n_var = vector.GetNVar();
   const auto send_points = geometry->nP2PSend > 0
@@ -76,8 +75,8 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
       SU2_MPI::Error("Kokkos GPU-aware MPI receive count exceeds MPI's int limit.", CURRENT_FUNCTION);
 
     const auto source = geometry->Neighbors_P2PRecv[i_recv];
-    mpi_wrapper::Irecv(recv_values.data() + offset, static_cast<int>(count), mpi_datatype, source, source + 1,
-                       SU2_MPI::GetComm(), &geometry->GetP2PRecvReq<ScalarType>()[i_recv]);
+    SU2_MPI::Irecv(recv_values.data() + offset, static_cast<int>(count), mpi_datatype, source, source + 1,
+                   SU2_MPI::GetComm(), &geometry->GetP2PRecvReq<ScalarType>()[i_recv]);
   }
 
   if (send_value_count > 0) {
@@ -99,13 +98,13 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
     if (count > static_cast<unsigned long>(std::numeric_limits<int>::max()))
       SU2_MPI::Error("Kokkos GPU-aware MPI send count exceeds MPI's int limit.", CURRENT_FUNCTION);
 
-    mpi_wrapper::Isend(send_values.data() + offset, static_cast<int>(count), mpi_datatype,
-                       geometry->Neighbors_P2PSend[i_send], SU2_MPI::GetRank() + 1, SU2_MPI::GetComm(),
-                       &geometry->GetP2PSendReq<ScalarType>()[i_send]);
+    SU2_MPI::Isend(send_values.data() + offset, static_cast<int>(count), mpi_datatype,
+                   geometry->Neighbors_P2PSend[i_send], SU2_MPI::GetRank() + 1, SU2_MPI::GetComm(),
+                   &geometry->GetP2PSendReq<ScalarType>()[i_send]);
   }
 
   if (geometry->nP2PRecv > 0) {
-    mpi_wrapper::Waitall(geometry->nP2PRecv, geometry->GetP2PRecvReq<ScalarType>(), MPI_STATUSES_IGNORE);
+    SU2_MPI::Waitall(geometry->nP2PRecv, geometry->GetP2PRecvReq<ScalarType>(), MPI_STATUSES_IGNORE);
   }
 
   if (recv_value_count > 0) {
@@ -120,7 +119,7 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
   }
 
   if (geometry->nP2PSend > 0) {
-    mpi_wrapper::Waitall(geometry->nP2PSend, geometry->GetP2PSendReq<ScalarType>(), MPI_STATUSES_IGNORE);
+    SU2_MPI::Waitall(geometry->nP2PSend, geometry->GetP2PSendReq<ScalarType>(), MPI_STATUSES_IGNORE);
   }
 #endif
 
