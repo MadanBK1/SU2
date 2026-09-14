@@ -27,6 +27,7 @@ if get_option('enable-normal')
                           cpp_args: [default_warning_flags, su2_cpp_args])
 
   common_dep = declare_dependency(link_with: common,
+                                  dependencies : su2_deps,
                                   include_directories : common_include)
 endif
 
