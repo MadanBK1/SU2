@@ -5,6 +5,11 @@ set -euo pipefail
 # This is intentionally separate from test_v100.sh: a successful multi-GPU run
 # does not by itself prove that MPI accepted CUDA device pointers.
 #
+# On the validated dev-amd20-v100 OpenMPI 4.1.5 stack, the default UCX PML
+# segfaults on CUDA device pointers even though OpenMPI reports CUDA support.
+# The OB1 + smcuda transport is CUDA-aware and is therefore forced for the
+# direct device-buffer case below.
+#
 # Required:
 #   export SU2_RUN=$HOME/SU2_RUN_8_5_KOKKOS_V100/bin
 #   export CASE_ROOT=$HOME/Tutorials/SU2_Tutorials/compressible_flow/Laminar_Flat_Plate
@@ -54,7 +59,7 @@ if command -v ompi_info >/dev/null 2>&1; then
   echo
   echo "OpenMPI CUDA-awareness metadata (informational):"
   ompi_info --parsable -l 9 --all 2>/dev/null | \
-    grep -Ei 'mpi_built_with_cuda_support|cuda_support|smcuda|accelerator' | head -n 40 || true
+    grep -Ei 'mpi_built_with_cuda_support|mpi_cuda_support|smcuda|accelerator' | head -n 50 || true
 fi
 
 echo
@@ -68,16 +73,26 @@ export KOKKOS_MAP_DEVICE_ID_BY=mpi_rank
 export KOKKOS_PRINT_CONFIGURATION=1
 
 run_case() {
-  local name="$1" dir="$2"
+  local name="$1" dir="$2" transport="$3"
   echo
   echo "========== $name =========="
   cd "$dir"
-  rm -f history.csv restart_flow.dat flow*.vtu surface_flow*.vtp
+  rm -f history.csv restart_flow.dat flow*.vtu surface_flow*.vtp timing.txt run.log
+
+  local -a mpi_transport=()
+  if [[ "$transport" == "ob1-smcuda" ]]; then
+    mpi_transport=(--mca pml ob1 --mca btl self,smcuda,tcp)
+    echo "MPI transport: OB1 + self,smcuda,tcp"
+  else
+    echo "MPI transport: OpenMPI default"
+  fi
 
   set +e
   /usr/bin/time -f "Elapsed=%e\nCPU=%P\nMemory=%M KB" \
     -o timing.txt \
-    mpirun --map-by slot --bind-to none -np "$NP" \
+    mpirun --map-by slot --bind-to none \
+      "${mpi_transport[@]}" \
+      -np "$NP" \
       -x CUDA_VISIBLE_DEVICES \
       -x KOKKOS_MAP_DEVICE_ID_BY \
       -x KOKKOS_PRINT_CONFIGURATION \
@@ -97,8 +112,8 @@ run_case() {
 
 host_status=0
 gpu_status=0
-run_case host-staged "$OUT_ROOT/host-staged" || host_status=$?
-run_case gpu-aware "$OUT_ROOT/gpu-aware" || gpu_status=$?
+run_case host-staged "$OUT_ROOT/host-staged" default || host_status=$?
+run_case gpu-aware "$OUT_ROOT/gpu-aware" ob1-smcuda || gpu_status=$?
 
 echo
 echo "========== RESULT COMPARISON =========="
@@ -139,11 +154,12 @@ echo "gpu-aware   status: $gpu_status"
 if [[ $host_status -eq 0 && $gpu_status -eq 0 ]] && \
    grep -q 'Exit Success (SU2_CFD)' "$OUT_ROOT/gpu-aware/run.log"; then
   echo "GPU-aware MPI device-buffer run: PASS"
-  echo "The KOKKOS_GPU_AWARE_MPI=YES branch completed with four MPI ranks / four V100 GPUs."
+  echo "Validated transport: OpenMPI OB1 + smcuda on four MPI ranks / four V100 GPUs."
+  echo "Note: the default UCX PML on this node is not CUDA-device-pointer safe in the standalone probe."
   exit 0
 fi
 
 echo "GPU-aware MPI device-buffer run: FAIL"
 echo "Inspect: $OUT_ROOT/gpu-aware/run.log"
-echo "A failure here can indicate either an SU2 GPU-aware path bug or an OpenMPI build/runtime without CUDA-device-pointer support."
+echo "The standalone CUDA-aware MPI probe already validated OB1 + smcuda; a failure here therefore points to the SU2 device halo path."
 exit 1
