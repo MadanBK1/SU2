@@ -78,6 +78,17 @@ class CSysVector : public VecExpr::CVecExpr<CSysVector<ScalarType>, ScalarType> 
 
   ScalarType* d_vec_val = nullptr; /*!< \brief Device Pointer to store the vector values on the GPU. */
 
+#ifdef HAVE_KOKKOS
+  ScalarType* d_kokkos_mpi_send = nullptr; /*!< \brief Persistent Kokkos device MPI send buffer. */
+  ScalarType* d_kokkos_mpi_recv = nullptr; /*!< \brief Persistent Kokkos device MPI receive buffer. */
+  unsigned long* d_kokkos_mpi_send_indices = nullptr; /*!< \brief Device indices used to pack MPI sends. */
+  unsigned long* d_kokkos_mpi_recv_indices = nullptr; /*!< \brief Device indices used to unpack MPI receives. */
+  unsigned long kokkos_mpi_send_capacity = 0; /*!< \brief Number of values available in the send buffer. */
+  unsigned long kokkos_mpi_recv_capacity = 0; /*!< \brief Number of values available in the receive buffer. */
+  unsigned long kokkos_mpi_send_index_capacity = 0; /*!< \brief Number of send indices allocated. */
+  unsigned long kokkos_mpi_recv_index_capacity = 0; /*!< \brief Number of receive indices allocated. */
+#endif
+
 #ifdef HAVE_OMP
   mutable std::unique_ptr<ScalarType[]>
       dot_scratch; /*!< \brief Stores partial sums for ordered reduction over OMP threads. */
@@ -173,6 +184,16 @@ class CSysVector : public VecExpr::CVecExpr<CSysVector<ScalarType>, ScalarType> 
     std::swap(omp_chunk_size, other.omp_chunk_size);
     std::swap(vec_val, other.vec_val);
     std::swap(d_vec_val, other.d_vec_val);
+#ifdef HAVE_KOKKOS
+    std::swap(d_kokkos_mpi_send, other.d_kokkos_mpi_send);
+    std::swap(d_kokkos_mpi_recv, other.d_kokkos_mpi_recv);
+    std::swap(d_kokkos_mpi_send_indices, other.d_kokkos_mpi_send_indices);
+    std::swap(d_kokkos_mpi_recv_indices, other.d_kokkos_mpi_recv_indices);
+    std::swap(kokkos_mpi_send_capacity, other.kokkos_mpi_send_capacity);
+    std::swap(kokkos_mpi_recv_capacity, other.kokkos_mpi_recv_capacity);
+    std::swap(kokkos_mpi_send_index_capacity, other.kokkos_mpi_send_index_capacity);
+    std::swap(kokkos_mpi_recv_index_capacity, other.kokkos_mpi_recv_index_capacity);
+#endif
     std::swap(nElm, other.nElm);
     std::swap(nElmDomain, other.nElmDomain);
     std::swap(nVar, other.nVar);
@@ -244,6 +265,19 @@ class CSysVector : public VecExpr::CVecExpr<CSysVector<ScalarType>, ScalarType> 
    * \brief return device pointer that points to the CSysVector values in GPU memory
    */
   inline ScalarType* GetDevicePointer() const { return d_vec_val; }
+
+#ifdef HAVE_KOKKOS
+  /*! \brief Allocate or grow persistent Kokkos device buffers for direct MPI halo exchange. */
+  void PrepareKokkosMPIBuffers(unsigned long sendPoints, unsigned long recvPoints);
+
+  /*! \brief Release persistent Kokkos device MPI buffers. */
+  void ReleaseKokkosMPIBuffers();
+
+  inline ScalarType* GetKokkosMPISendBuffer() const { return d_kokkos_mpi_send; }
+  inline ScalarType* GetKokkosMPIRecvBuffer() const { return d_kokkos_mpi_recv; }
+  inline unsigned long* GetKokkosMPISendIndices() const { return d_kokkos_mpi_send_indices; }
+  inline unsigned long* GetKokkosMPIRecvIndices() const { return d_kokkos_mpi_recv_indices; }
+#endif
 
   /*!
    * \brief return the number of local elements in the CSysVector
