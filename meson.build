@@ -171,8 +171,6 @@ if mpi
   # compile metis
   subdir('externals/metis')
 
-  # add metis dependency
-  su2_deps     += metis_dep
   su2_cpp_args += '-DHAVE_METIS'
 
   # compile parmetis
@@ -180,6 +178,8 @@ if mpi
 
   # add parmetis dependency
   su2_deps     += parmetis_dep
+  # ParMETIS calls METIS, so keep METIS after ParMETIS for static linking.
+  su2_deps     += metis_dep
   su2_cpp_args += '-DHAVE_PARMETIS'
 
   # add medi dependency
