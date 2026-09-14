@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Make enable_kokkos_device_ilu_apply.py robust to CSysMatrix.hpp formatting.
-
-The staged device-storage patch is already validated locally.  This helper only
-replaces the brittle exact-text match around SyncKokkosILUPreconditioner() in
-the device-ILU apply patcher with a token/line based insertion.
-"""
+"""Make enable_kokkos_device_ilu_apply.py robust to CSysMatrix.hpp formatting."""
 
 from pathlib import Path
 import sys
@@ -14,44 +9,32 @@ PATCHER = ROOT / "scripts/kokkos/enable_kokkos_device_ilu_apply.py"
 
 text = PATCHER.read_text()
 
-old = r'''anchor = '''#ifdef HAVE_KOKKOS
-  /*! \\brief Mirror completed ILU factors and dependency metadata to Kokkos device memory. */
-  void SyncKokkosILUPreconditioner();
-#endif
-'''
-if mh.count(anchor) != 1:
-    sys.exit(f"ERROR: CSysMatrix.hpp sync declaration anchor count = {mh.count(anchor)}")
-replacement = '''#ifdef HAVE_KOKKOS
-  /*! \\brief Mirror completed ILU factors and dependency metadata to Kokkos device memory. */
-  void SyncKokkosILUPreconditioner();
+start_marker = "# ---------------------------------------------------------------------------\n# CSysMatrix.hpp: declare device ILU application next to the sync method.\n# ---------------------------------------------------------------------------\n"
+end_marker = "# ---------------------------------------------------------------------------\n# CPreconditioner.hpp: generic device-resident hook and ILU override.\n# ---------------------------------------------------------------------------\n"
 
-  /*--- KOKKOS DEVICE ILU APPLY ---*/
-  /*! \\brief Apply the already-built ILU factors entirely in Kokkos device memory. */
-  void KokkosComputeILUPreconditioner(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
-                                      CGeometry* geometry, const CConfig* config) const;
-#endif
-'''
-mh = mh.replace(anchor, replacement, 1)
-'''
+if start_marker not in text or end_marker not in text:
+    sys.exit("ERROR: could not locate CSysMatrix.hpp patch section in device ILU patcher")
 
-new = r'''sync_decl = "  void SyncKokkosILUPreconditioner();"
+start = text.index(start_marker) + len(start_marker)
+end = text.index(end_marker, start)
+
+replacement = '''sync_decl = "  void SyncKokkosILUPreconditioner();"
 if mh.count(sync_decl) != 1:
     sys.exit(f"ERROR: expected exactly one SyncKokkosILUPreconditioner declaration, found {mh.count(sync_decl)}")
-replacement = sync_decl + '''
+
+sync_replacement = sync_decl + """
 
   /*--- KOKKOS DEVICE ILU APPLY ---*/
   /*! \\brief Apply the already-built ILU factors entirely in Kokkos device memory. */
   void KokkosComputeILUPreconditioner(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
-                                      CGeometry* geometry, const CConfig* config) const;'''
-mh = mh.replace(sync_decl, replacement, 1)
+                                      CGeometry* geometry, const CConfig* config) const;"""
+
+mh = mh.replace(sync_decl, sync_replacement, 1)
+
 '''
 
-if old not in text:
-    if "sync_decl = \"  void SyncKokkosILUPreconditioner();\"" in text:
-        print("Device ILU apply sync-anchor fix is already present.")
-        sys.exit(0)
-    sys.exit("ERROR: expected brittle sync-anchor block was not found in device ILU apply patcher")
+text = text[:start] + replacement + text[end:]
+PATCHER.write_text(text)
 
-PATCHER.write_text(text.replace(old, new, 1))
 print(f"Patched {PATCHER}")
-print("Device ILU apply patcher now locates SyncKokkosILUPreconditioner() independent of surrounding formatting.")
+print("Device ILU apply patcher now uses a token-based SyncKokkosILUPreconditioner anchor.")
