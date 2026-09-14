@@ -30,6 +30,17 @@ struct HaloIndexCache {
   unsigned long recv_points = 0;
 };
 
+/*--- Per-thread execution mode used only by an explicitly device-resident Krylov call.
+ * Default values preserve the original synchronized SpMV behavior. ---*/
+struct KokkosSpMVExecutionMode {
+  bool active = false;
+  bool matrix_on_device = false;
+  bool input_on_device = false;
+  bool output_to_host = true;
+};
+
+thread_local KokkosSpMVExecutionMode kokkos_spmv_mode;
+
 /*!
  * \brief Exchange CSysVector halo entries through device-resident buffers.
  *
@@ -39,7 +50,7 @@ struct HaloIndexCache {
  * the path and provide an MPI implementation capable of handling device USM.
  */
 template <class ScalarType>
-void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geometry) {
+void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geometry, bool output_to_host) {
 #ifdef HAVE_MPI
   static_assert(std::is_same_v<ScalarType, float> || std::is_same_v<ScalarType, double>,
                 "Kokkos GPU-aware MPI currently supports float and double vectors.");
@@ -157,10 +168,20 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
   }
 #endif
 
-  /*--- Host-resident Krylov and preconditioner operations still consume the result. ---*/
-  vector.DtHTransfer();
+  if (output_to_host) vector.DtHTransfer();
 }
 }  // namespace
+
+namespace KokkosSpMVControl {
+void Begin(bool matrix_on_device, bool input_on_device, bool output_to_host) {
+  kokkos_spmv_mode.active = true;
+  kokkos_spmv_mode.matrix_on_device = matrix_on_device;
+  kokkos_spmv_mode.input_on_device = input_on_device;
+  kokkos_spmv_mode.output_to_host = output_to_host;
+}
+
+void End() { kokkos_spmv_mode = KokkosSpMVExecutionMode{}; }
+}  // namespace KokkosSpMVControl
 
 template <class ScalarType>
 void CSysMatrix<ScalarType>::HtDTransfer(bool trigger) const {
@@ -178,8 +199,12 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
     SU2_MPI::Error("Incompatible matrix and vector dimensions in Kokkos SpMV.", CURRENT_FUNCTION);
 #endif
 
-  HtDTransfer();
-  vec.HtDTransfer();
+  const bool matrix_on_device = kokkos_spmv_mode.active && kokkos_spmv_mode.matrix_on_device;
+  const bool input_on_device = kokkos_spmv_mode.active && kokkos_spmv_mode.input_on_device;
+  const bool output_to_host = !kokkos_spmv_mode.active || kokkos_spmv_mode.output_to_host;
+
+  if (!matrix_on_device) HtDTransfer();
+  if (!input_on_device) vec.HtDTransfer();
 
   const auto values = d_matrix;
   const auto row_offsets = d_row_ptr;
@@ -217,8 +242,9 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
       });
 
   if (config->GetKokkosGPUAwareMPI()) {
-    KokkosGPUAwareHaloExchange(prod, geometry);
+    KokkosGPUAwareHaloExchange(prod, geometry, output_to_host);
   } else {
+    /*--- Host-staged communication intrinsically requires the product on host. ---*/
     prod.DtHTransfer();
     CSysMatrixComms::Initiate(prod, geometry, config);
     CSysMatrixComms::Complete(prod, geometry, config);
