@@ -5,6 +5,9 @@
 
 #include <Kokkos_Core.hpp>
 
+#include <limits>
+#include <type_traits>
+
 #include "../../include/linear_algebra/CSysMatrix.hpp"
 
 namespace {
@@ -14,6 +17,116 @@ using DeviceView = Kokkos::View<T*, typename Kokkos::DefaultExecutionSpace::memo
 
 template <class T>
 using HostView = Kokkos::View<T*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+
+/*!
+ * \brief Exchange CSysVector halo entries through device-resident buffers.
+ *
+ * The implementation intentionally uses only Kokkos memory and execution-space
+ * abstractions plus standard MPI calls. Consequently, the same source supports
+ * CUDA-aware MPI and SYCL/Level-Zero-aware MPI. The user must explicitly enable
+ * the path and provide an MPI implementation capable of handling device USM.
+ */
+template <class ScalarType>
+void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geometry) {
+#ifdef HAVE_MPI
+  static_assert(std::is_same_v<ScalarType, float> || std::is_same_v<ScalarType, double>,
+                "Kokkos GPU-aware MPI currently supports float and double vectors.");
+
+  using execution_space = Kokkos::DefaultExecutionSpace;
+  using memory_space = typename execution_space::memory_space;
+  using index_view = Kokkos::View<unsigned long*, memory_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using value_view = Kokkos::View<ScalarType*, memory_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using range_policy = Kokkos::RangePolicy<execution_space, Kokkos::IndexType<unsigned long>>;
+  using mpi_wrapper = typename SelectMPIWrapper<ScalarType>::W;
+
+  const auto n_var = vector.GetNVar();
+  const auto send_points = geometry->nP2PSend > 0
+                               ? static_cast<unsigned long>(geometry->nPoint_P2PSend[geometry->nP2PSend])
+                               : 0ul;
+  const auto recv_points = geometry->nP2PRecv > 0
+                               ? static_cast<unsigned long>(geometry->nPoint_P2PRecv[geometry->nP2PRecv])
+                               : 0ul;
+  const auto send_value_count = send_points * n_var;
+  const auto recv_value_count = recv_points * n_var;
+
+  vector.PrepareKokkosMPIBuffers(send_points, recv_points);
+  index_view send_indices(vector.GetKokkosMPISendIndices(), send_points);
+  index_view recv_indices(vector.GetKokkosMPIRecvIndices(), recv_points);
+  value_view send_values(vector.GetKokkosMPISendBuffer(), send_value_count);
+  value_view recv_values(vector.GetKokkosMPIRecvBuffer(), recv_value_count);
+
+  if (send_points > 0) {
+    Kokkos::deep_copy(send_indices,
+                      HostView<const unsigned long>(geometry->Local_Point_P2PSend, send_points));
+  }
+  if (recv_points > 0) {
+    Kokkos::deep_copy(recv_indices,
+                      HostView<const unsigned long>(geometry->Local_Point_P2PRecv, recv_points));
+  }
+
+  const auto mpi_datatype = std::is_same_v<ScalarType, float> ? MPI_FLOAT : MPI_DOUBLE;
+
+  /*--- Receives can be posted before packing the send buffer. ---*/
+  for (int i_recv = 0; i_recv < geometry->nP2PRecv; ++i_recv) {
+    const auto offset = static_cast<unsigned long>(geometry->nPoint_P2PRecv[i_recv]) * n_var;
+    const auto count = static_cast<unsigned long>(geometry->nPoint_P2PRecv[i_recv + 1] -
+                                                  geometry->nPoint_P2PRecv[i_recv]) *
+                       n_var;
+    if (count > static_cast<unsigned long>(std::numeric_limits<int>::max()))
+      SU2_MPI::Error("Kokkos GPU-aware MPI receive count exceeds MPI's int limit.", CURRENT_FUNCTION);
+
+    const auto source = geometry->Neighbors_P2PRecv[i_recv];
+    mpi_wrapper::Irecv(recv_values.data() + offset, static_cast<int>(count), mpi_datatype, source, source + 1,
+                       SU2_MPI::GetComm(), &geometry->GetP2PRecvReq<ScalarType>()[i_recv]);
+  }
+
+  if (send_value_count > 0) {
+    const auto device_vector = vector.GetDevicePointer();
+    Kokkos::parallel_for(
+        "SU2::PackKokkosMPIHalo", range_policy(0, send_value_count), KOKKOS_LAMBDA(const unsigned long i) {
+          const auto point = i / n_var;
+          const auto variable = i % n_var;
+          send_values(i) = device_vector[send_indices(point) * n_var + variable];
+        });
+    Kokkos::fence("SU2::Kokkos MPI send buffer ready");
+  }
+
+  for (int i_send = 0; i_send < geometry->nP2PSend; ++i_send) {
+    const auto offset = static_cast<unsigned long>(geometry->nPoint_P2PSend[i_send]) * n_var;
+    const auto count = static_cast<unsigned long>(geometry->nPoint_P2PSend[i_send + 1] -
+                                                  geometry->nPoint_P2PSend[i_send]) *
+                       n_var;
+    if (count > static_cast<unsigned long>(std::numeric_limits<int>::max()))
+      SU2_MPI::Error("Kokkos GPU-aware MPI send count exceeds MPI's int limit.", CURRENT_FUNCTION);
+
+    mpi_wrapper::Isend(send_values.data() + offset, static_cast<int>(count), mpi_datatype,
+                       geometry->Neighbors_P2PSend[i_send], SU2_MPI::GetRank() + 1, SU2_MPI::GetComm(),
+                       &geometry->GetP2PSendReq<ScalarType>()[i_send]);
+  }
+
+  if (geometry->nP2PRecv > 0) {
+    mpi_wrapper::Waitall(geometry->nP2PRecv, geometry->GetP2PRecvReq<ScalarType>(), MPI_STATUSES_IGNORE);
+  }
+
+  if (recv_value_count > 0) {
+    const auto device_vector = vector.GetDevicePointer();
+    Kokkos::parallel_for(
+        "SU2::UnpackKokkosMPIHalo", range_policy(0, recv_value_count), KOKKOS_LAMBDA(const unsigned long i) {
+          const auto point = i / n_var;
+          const auto variable = i % n_var;
+          device_vector[recv_indices(point) * n_var + variable] = recv_values(i);
+        });
+    Kokkos::fence("SU2::Kokkos MPI receive buffer consumed");
+  }
+
+  if (geometry->nP2PSend > 0) {
+    mpi_wrapper::Waitall(geometry->nP2PSend, geometry->GetP2PSendReq<ScalarType>(), MPI_STATUSES_IGNORE);
+  }
+#endif
+
+  /*--- Host-resident Krylov and preconditioner operations still consume the result. ---*/
+  vector.DtHTransfer();
+}
 }  // namespace
 
 template <class ScalarType>
@@ -71,9 +184,13 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
       });
   Kokkos::fence("SU2::BlockCrsSpMV complete");
 
-  prod.DtHTransfer();
-  CSysMatrixComms::Initiate(prod, geometry, config);
-  CSysMatrixComms::Complete(prod, geometry, config);
+  if (config->GetKokkosGPUAwareMPI()) {
+    KokkosGPUAwareHaloExchange(prod, geometry);
+  } else {
+    prod.DtHTransfer();
+    CSysMatrixComms::Initiate(prod, geometry, config);
+    CSysMatrixComms::Complete(prod, geometry, config);
+  }
 }
 
 template class CSysMatrix<su2mixedfloat>;
