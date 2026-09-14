@@ -9,17 +9,17 @@ if get_option('enable-normal')
   su2_def = executable('SU2_DEF',
                         su2_def_src,
                         install: true,
-                        dependencies: [su2_deps, common_dep, su2_cfd_dep],
+                        dependencies: [su2_cfd_dep, common_dep, su2_deps],
                         cpp_args :[default_warning_flags, su2_cpp_args])
 
   su2_def_lib = static_library('SU2core_DEF',
                                su2_def_src,
                                install : false,
-                               dependencies : [su2_deps, common_dep, su2_cfd_dep],
+                               dependencies : [su2_cfd_dep, common_dep, su2_deps],
                                cpp_args:  [default_warning_flags, su2_cpp_args])
 
   su2_def_dep = declare_dependency(link_with: su2_def_lib,
-                                   dependencies: [su2_deps, common_dep, su2_cfd_dep],
+                                   dependencies: [su2_cfd_dep, common_dep, su2_deps],
                                    include_directories: su2_def_include)
 
 endif
