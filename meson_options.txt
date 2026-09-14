@@ -13,7 +13,7 @@ option('enable-openblas', type : 'boolean', value : false, description: 'enable 
 option('enable-cuda', type : 'boolean', value : false, description: 'enable GPU acceleration using CUDA')
 option('enable-kokkos', type : 'boolean', value : false, description: 'enable portable linear algebra acceleration using Kokkos')
 option('kokkos-backend', type : 'combo', choices : ['serial', 'cuda', 'sycl'], value : 'serial', description: 'execution backend for the bundled Kokkos library')
-option('kokkos-arch', type : 'combo', choices : ['none', 'HOPPER90', 'INTEL_PVC'], value : 'none', description: 'target GPU architecture for the bundled Kokkos library')
+option('kokkos-arch', type : 'combo', choices : ['none', 'VOLTA70', 'HOPPER90', 'INTEL_PVC'], value : 'none', description: 'target GPU architecture for the bundled Kokkos library')
 option('blas-name', type : 'string', value : 'openblas', description: 'name of the BLAS/LAPACK dependency')
 option('enable-pastix', type : 'boolean', value : false, description: 'enable PaStiX support')
 option('custom-mpi',  type : 'boolean', value : false, description: 'enable MPI assuming the compiler and/or env vars give the correct include dirs and linker args.')
