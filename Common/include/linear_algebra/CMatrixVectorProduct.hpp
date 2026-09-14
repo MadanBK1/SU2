@@ -33,6 +33,20 @@
 #include "CSysVector.hpp"
 #include "CSysMatrix.hpp"
 
+#ifdef HAVE_KOKKOS
+/*!
+ * \brief Controls synchronization performed by the Kokkos SpMV for one call.
+ *
+ * Normal matrix-vector products do not touch this state and retain the legacy
+ * host-synchronized behavior. Kokkos Krylov solvers may opt into the device-
+ * resident path when both the matrix and vectors are already current on device.
+ */
+namespace KokkosSpMVControl {
+void Begin(bool matrix_on_device, bool input_on_device, bool output_to_host);
+void End();
+}  // namespace KokkosSpMVControl
+#endif
+
 /*!
  * \class CMatrixVectorProduct
  * \ingroup SpLinSys
@@ -57,6 +71,29 @@ class CMatrixVectorProduct {
  public:
   virtual ~CMatrixVectorProduct() = 0;
   virtual void operator()(const CSysVector<ScalarType>& u, CSysVector<ScalarType>& v) const = 0;
+
+  /*!
+   * \brief Whether this product supports a Kokkos device-resident application.
+   * \note Matrix-free and other generic products return false by default.
+   */
+  virtual bool SupportsKokkosDeviceResident() const { return false; }
+
+  /*!
+   * \brief Apply the product while allowing a Kokkos solver to suppress redundant synchronization.
+   * \param[in] u - Input vector.
+   * \param[out] v - Output vector.
+   * \param[in] matrix_on_device - Matrix values are already current on device.
+   * \param[in] input_on_device - Input vector values are already current on device.
+   * \param[in] output_to_host - Copy the completed output back to host before returning.
+   * \note The generic fallback preserves existing behavior.
+   */
+  virtual void KokkosDeviceResident(const CSysVector<ScalarType>& u, CSysVector<ScalarType>& v,
+                                    bool matrix_on_device, bool input_on_device, bool output_to_host) const {
+    (void)matrix_on_device;
+    (void)input_on_device;
+    (void)output_to_host;
+    (*this)(u, v);
+  }
 };
 template <class ScalarType>
 CMatrixVectorProduct<ScalarType>::~CMatrixVectorProduct() {}
@@ -116,5 +153,34 @@ class CSysMatrixVectorProduct final : public CMatrixVectorProduct<ScalarType> {
     } else {
       matrix.MatrixVectorProduct(u, v, geometry, config);
     }
+  }
+
+  inline bool SupportsKokkosDeviceResident() const override {
+#ifdef HAVE_KOKKOS
+    /*--- Direct device residency currently requires the device-buffer halo path.
+     * Host-staged MPI still needs the SpMV result on host. ---*/
+    return config->GetKokkos() && config->GetKokkosGPUAwareMPI();
+#else
+    return false;
+#endif
+  }
+
+  inline void KokkosDeviceResident(const CSysVector<ScalarType>& u, CSysVector<ScalarType>& v,
+                                   bool matrix_on_device, bool input_on_device,
+                                   bool output_to_host) const override {
+#ifdef HAVE_KOKKOS
+    if (!SupportsKokkosDeviceResident()) {
+      (*this)(u, v);
+      return;
+    }
+    KokkosSpMVControl::Begin(matrix_on_device, input_on_device, output_to_host);
+    matrix.KokkosMatrixVectorProduct(u, v, geometry, config);
+    KokkosSpMVControl::End();
+#else
+    (void)matrix_on_device;
+    (void)input_on_device;
+    (void)output_to_host;
+    (*this)(u, v);
+#endif
   }
 };
