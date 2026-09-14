@@ -244,10 +244,14 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
   if (config->GetKokkosGPUAwareMPI()) {
     KokkosGPUAwareHaloExchange(prod, geometry, output_to_host);
   } else {
-    /*--- Host-staged communication intrinsically requires the product on host. ---*/
+    /*--- Host-staged MPI requires host data for packing/communication.  A
+     * device-resident Krylov caller can nevertheless continue on device once
+     * the halo has been completed, so restore the communicated vector to the
+     * accelerator unless the caller explicitly requested host output. ---*/
     prod.DtHTransfer();
     CSysMatrixComms::Initiate(prod, geometry, config);
     CSysMatrixComms::Complete(prod, geometry, config);
+    if (kokkos_spmv_mode.active && !output_to_host) prod.HtDTransfer();
   }
 }
 

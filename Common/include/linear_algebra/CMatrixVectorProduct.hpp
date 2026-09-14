@@ -1,4 +1,4 @@
-﻿/*!
+/*!
  * \file CMatrixVectorProduct.hpp
  * \brief Headers for the classes related to sparse matrix-vector product wrappers.
  *        The actual operations are currently implemented mostly by CSysMatrix.
@@ -157,9 +157,11 @@ class CSysMatrixVectorProduct final : public CMatrixVectorProduct<ScalarType> {
 
   inline bool SupportsKokkosDeviceResident() const override {
 #ifdef HAVE_KOKKOS
-    /*--- Direct device residency currently requires the device-buffer halo path.
-     * Host-staged MPI still needs the SpMV result on host. ---*/
-    return config->GetKokkos() && config->GetKokkosGPUAwareMPI();
+    /*--- Krylov device residency is independent of MPI transport.  With
+     * KOKKOS_GPU_AWARE_MPI=YES the halo stays in device buffers; otherwise
+     * the existing host-staged halo path is used and the communicated result
+     * is restored to device before returning to a resident Krylov solver. ---*/
+    return config->GetKokkos();
 #else
     return false;
 #endif
