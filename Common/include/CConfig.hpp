@@ -136,6 +136,7 @@ private:
   Axisymmetric,             /*!< \brief Flag for axisymmetric calculations */
   Enable_Cuda,              /*!< \brief Flag for switching CUDA computing. */
   Enable_Kokkos,            /*!< \brief Flag for switching Kokkos linear algebra computing. */
+  Kokkos_GPUAwareMPI,       /*!< \brief Flag for direct MPI communication with Kokkos device buffers. */
   Integrated_HeatFlux;      /*!< \brief Flag for heat flux BC whether it deals with integrated values.*/
   su2double Buffet_k;       /*!< \brief Sharpness coefficient for buffet sensor.*/
   su2double Buffet_lambda;  /*!< \brief Offset parameter for buffet sensor.*/
@@ -6578,6 +6579,9 @@ public:
 
   /*! \brief Get whether the Kokkos linear algebra backend is enabled at runtime. */
   bool GetKokkos(void) const { return Enable_Kokkos; }
+
+  /*! \brief Get whether Kokkos linear algebra uses direct device-buffer MPI communication. */
+  bool GetKokkosGPUAwareMPI(void) const { return Kokkos_GPUAwareMPI; }
 
   /*!
    * \brief Subtract one to the index of the finest grid (full multigrid strategy).
