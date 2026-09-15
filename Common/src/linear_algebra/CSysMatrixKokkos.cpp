@@ -184,6 +184,82 @@ void Begin(bool matrix_on_device, bool input_on_device, bool output_to_host) {
 void End() { kokkos_spmv_mode = KokkosSpMVExecutionMode{}; }
 }  // namespace KokkosSpMVControl
 
+/*--- KOKKOS JACOBI DEVICE STORAGE ---------------------------------------------*/
+template <class ScalarType>
+void CSysMatrix<ScalarType>::SyncKokkosJacobiPreconditioner() {
+  if (invM == nullptr || nPointDomain == 0) return;
+
+  const auto count = nPointDomain * nVar * nVar;
+
+  if (d_invM == nullptr)
+    d_invM = GPUMemoryAllocation::gpu_alloc<ScalarType>(
+        count * sizeof(ScalarType));
+
+  Kokkos::deep_copy(
+      DeviceView<ScalarType>(d_invM, count),
+      HostView<const ScalarType>(invM, count));
+}
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::KokkosComputeJacobiPreconditioner(
+    const CSysVector<ScalarType>& vec,
+    CSysVector<ScalarType>& prod,
+    CGeometry* geometry,
+    const CConfig* config) const {
+
+  if (d_invM == nullptr)
+    SU2_MPI::Error(
+        "Kokkos Jacobi device storage is not initialized.",
+        CURRENT_FUNCTION);
+
+  using execution_space = Kokkos::DefaultExecutionSpace;
+  using range_policy =
+      Kokkos::RangePolicy<execution_space,
+                          Kokkos::IndexType<unsigned long>>;
+
+  execution_space exec;
+
+  const auto inv_diag = d_invM;
+  const auto input = vec.GetDevicePointer();
+  const auto output = prod.GetDevicePointer();
+
+  const auto block_size = nVar;
+  const auto block_entries = nVar * nVar;
+  const auto domain_points = nPointDomain;
+
+  Kokkos::parallel_for(
+      "SU2::KokkosJacobiApply",
+      range_policy(exec, 0ul, domain_points),
+      KOKKOS_LAMBDA(const unsigned long i) {
+        const auto offset = i * block_size;
+        const auto block = inv_diag + i * block_entries;
+
+        for (unsigned long i_var = 0;
+             i_var < block_size; ++i_var) {
+          ScalarType value = 0;
+
+          for (unsigned long j_var = 0;
+               j_var < block_size; ++j_var)
+            value +=
+                block[i_var * block_size + j_var] *
+                input[offset + j_var];
+
+          output[offset + i_var] = value;
+        }
+      });
+
+  exec.fence("SU2::Kokkos Jacobi apply complete");
+
+  if (config->GetKokkosGPUAwareMPI()) {
+    KokkosGPUAwareHaloExchange(prod, geometry, false);
+  } else {
+    prod.DtHTransfer();
+    CSysMatrixComms::Initiate(prod, geometry, config);
+    CSysMatrixComms::Complete(prod, geometry, config);
+    prod.HtDTransfer();
+  }
+}
+
 /*--- KOKKOS ILU DEVICE STORAGE ------------------------------------------------
  * Keep CPU factorization semantics unchanged. The completed factors are
  * mirrored after each BuildILUPreconditioner(); sparse and level metadata are

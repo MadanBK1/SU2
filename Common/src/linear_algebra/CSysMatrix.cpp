@@ -73,6 +73,9 @@ CSysMatrix<ScalarType>::~CSysMatrix() {
   MemoryAllocation::aligned_free(invM);
 
   if (useDevice) {
+#ifdef HAVE_KOKKOS
+    if (d_invM != nullptr) GPUMemoryAllocation::gpu_free(d_invM);
+#endif
     GPUMemoryAllocation::gpu_free(d_matrix);
     GPUMemoryAllocation::gpu_free(d_row_ptr);
     GPUMemoryAllocation::gpu_free(d_col_ind);
@@ -682,6 +685,11 @@ void CSysMatrix<ScalarType>::BuildJacobiPreconditioner() {
   for (unsigned long iPoint = 0; iPoint < nPointDomain; iPoint++)
     InverseDiagonalBlock(iPoint, &(invM[iPoint * nVar * nVar]));
   END_SU2_OMP_FOR
+
+#ifdef HAVE_KOKKOS
+  if (useDevice) SyncKokkosJacobiPreconditioner();
+#endif
+
 }
 
 template <class ScalarType>

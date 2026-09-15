@@ -176,6 +176,11 @@ class CSysMatrix {
 
   ScalarType* invM; /*!< \brief Inverse of (Jacobi) preconditioner. */
 
+#ifdef HAVE_KOKKOS
+  /*--- KOKKOS JACOBI DEVICE STORAGE: persistent mirror of invM. ---*/
+  ScalarType* d_invM = nullptr;
+#endif
+
   /*--- Temporary (hence mutable) working memory used in the Linelet preconditioner, outer vector is for threads ---*/
   mutable vector<vector<const ScalarType*> >
       LineletUpper; /*!< \brief Pointers to the upper blocks of the tri-diag system (working memory). */
@@ -905,7 +910,16 @@ class CSysMatrix {
 
 
 #ifdef HAVE_KOKKOS
-  /*! \\brief Mirror completed ILU factors and dependency metadata to Kokkos device memory. */
+  /*! \brief Mirror completed Jacobi inverse diagonal blocks to Kokkos device memory. */
+  void SyncKokkosJacobiPreconditioner();
+
+  /*! \brief Apply Jacobi entirely in Kokkos device memory. */
+  void KokkosComputeJacobiPreconditioner(const CSysVector<ScalarType>& vec,
+                                         CSysVector<ScalarType>& prod,
+                                         CGeometry* geometry,
+                                         const CConfig* config) const;
+
+  /*! \brief Mirror completed ILU factors and dependency metadata to Kokkos device memory. */
   void SyncKokkosILUPreconditioner();
 
   /*--- KOKKOS DEVICE ILU APPLY ---*/

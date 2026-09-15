@@ -129,6 +129,17 @@ class CJacobiPreconditioner final : public CPreconditioner<ScalarType> {
    * \note Request the associated matrix to build the preconditioner.
    */
   inline void Build() override { sparse_matrix.BuildJacobiPreconditioner(); }
+
+#ifdef HAVE_KOKKOS
+  inline bool SupportsKokkosDeviceResident() const override {
+    return config->GetKokkos();
+  }
+
+  inline void KokkosDeviceResident(const CSysVector<ScalarType>& u,
+                                   CSysVector<ScalarType>& v) const override {
+    sparse_matrix.KokkosComputeJacobiPreconditioner(u, v, geometry, config);
+  }
+#endif
 };
 
 /*!
