@@ -171,6 +171,237 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
 
   if (output_to_host) vector.DtHTransfer();
 }
+
+/*!
+ * \brief Exchange only halo entries through host-staged MPI buffers.
+ *
+ * The full CSysVector remains device resident. Device gather/scatter kernels
+ * operate on the persistent Kokkos halo buffers already owned by CSysVector.
+ * Only the compact send/receive halo buffers cross the device-host boundary.
+ */
+template <class ScalarType>
+void KokkosHostStagedHaloExchange(CSysVector<ScalarType>& vector,
+                                  CGeometry* geometry,
+                                  bool output_to_host) {
+#ifdef HAVE_MPI
+  static_assert(std::is_same_v<ScalarType, float> ||
+                    std::is_same_v<ScalarType, double>,
+                "Kokkos host-staged halo exchange supports float and double vectors.");
+
+  using execution_space = Kokkos::DefaultExecutionSpace;
+  using memory_space = typename execution_space::memory_space;
+
+  using index_view =
+      Kokkos::View<unsigned long*, memory_space,
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+
+  using value_view =
+      Kokkos::View<ScalarType*, memory_space,
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+
+  using host_value_view =
+      Kokkos::View<ScalarType*, Kokkos::HostSpace,
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+
+  using range_policy =
+      Kokkos::RangePolicy<execution_space,
+                          Kokkos::IndexType<unsigned long>>;
+
+  const auto n_var = vector.GetNVar();
+
+  const auto send_points =
+      geometry->nP2PSend > 0
+          ? static_cast<unsigned long>(
+                geometry->nPoint_P2PSend[geometry->nP2PSend])
+          : 0ul;
+
+  const auto recv_points =
+      geometry->nP2PRecv > 0
+          ? static_cast<unsigned long>(
+                geometry->nPoint_P2PRecv[geometry->nP2PRecv])
+          : 0ul;
+
+  const auto send_value_count = send_points * n_var;
+  const auto recv_value_count = recv_points * n_var;
+
+  vector.PrepareKokkosMPIBuffers(send_points, recv_points);
+
+  index_view send_indices(vector.GetKokkosMPISendIndices(), send_points);
+  index_view recv_indices(vector.GetKokkosMPIRecvIndices(), recv_points);
+
+  value_view device_send(vector.GetKokkosMPISendBuffer(), send_value_count);
+  value_view device_recv(vector.GetKokkosMPIRecvBuffer(), recv_value_count);
+
+  /* Reuse the same geometry/index cache as the direct device-MPI path. */
+  static std::unordered_map<const void*, HaloIndexCache> halo_index_cache;
+  auto& cache = halo_index_cache[static_cast<const void*>(&vector)];
+
+  const bool refresh_send =
+      cache.geometry != geometry ||
+      cache.host_send_indices != geometry->Local_Point_P2PSend ||
+      cache.device_send_indices != vector.GetKokkosMPISendIndices() ||
+      cache.send_points != send_points;
+
+  const bool refresh_recv =
+      cache.geometry != geometry ||
+      cache.host_recv_indices != geometry->Local_Point_P2PRecv ||
+      cache.device_recv_indices != vector.GetKokkosMPIRecvIndices() ||
+      cache.recv_points != recv_points;
+
+  if (refresh_send && send_points > 0) {
+    Kokkos::deep_copy(
+        send_indices,
+        HostView<const unsigned long>(
+            geometry->Local_Point_P2PSend, send_points));
+  }
+
+  if (refresh_recv && recv_points > 0) {
+    Kokkos::deep_copy(
+        recv_indices,
+        HostView<const unsigned long>(
+            geometry->Local_Point_P2PRecv, recv_points));
+  }
+
+  if (refresh_send || refresh_recv) {
+    cache.geometry = geometry;
+    cache.host_send_indices = geometry->Local_Point_P2PSend;
+    cache.host_recv_indices = geometry->Local_Point_P2PRecv;
+    cache.device_send_indices = vector.GetKokkosMPISendIndices();
+    cache.device_recv_indices = vector.GetKokkosMPIRecvIndices();
+    cache.send_points = send_points;
+    cache.recv_points = recv_points;
+  }
+
+  /*
+   * Persistent host buffers per execution thread. They grow only when the halo
+   * grows, avoiding allocation in every Krylov/preconditioner application.
+   */
+  static thread_local std::vector<ScalarType> host_send;
+  static thread_local std::vector<ScalarType> host_recv;
+
+  if (host_send.size() < send_value_count)
+    host_send.resize(send_value_count);
+
+  if (host_recv.size() < recv_value_count)
+    host_recv.resize(recv_value_count);
+
+  const auto mpi_datatype =
+      std::is_same_v<ScalarType, float> ? MPI_FLOAT : MPI_DOUBLE;
+
+  /* Post host receives first so communication can begin immediately. */
+  for (int i_recv = 0; i_recv < geometry->nP2PRecv; ++i_recv) {
+    const auto offset =
+        static_cast<unsigned long>(geometry->nPoint_P2PRecv[i_recv]) * n_var;
+
+    const auto count =
+        static_cast<unsigned long>(
+            geometry->nPoint_P2PRecv[i_recv + 1] -
+            geometry->nPoint_P2PRecv[i_recv]) *
+        n_var;
+
+    if (count > static_cast<unsigned long>(std::numeric_limits<int>::max()))
+      SU2_MPI::Error(
+          "Kokkos host-staged MPI receive count exceeds MPI int limit.",
+          CURRENT_FUNCTION);
+
+    const auto source = geometry->Neighbors_P2PRecv[i_recv];
+
+    SU2_MPI::Irecv(
+        host_recv.data() + offset,
+        static_cast<int>(count),
+        mpi_datatype,
+        source,
+        source + 1,
+        SU2_MPI::GetComm(),
+        &geometry->GetP2PRecvReq<ScalarType>()[i_recv]);
+  }
+
+  /* Gather only send-halo entries on the GPU. */
+  if (send_value_count > 0) {
+    const auto device_vector = vector.GetDevicePointer();
+
+    Kokkos::parallel_for(
+        "SU2::PackKokkosHostStagedHalo",
+        range_policy(0ul, send_value_count),
+        KOKKOS_LAMBDA(const unsigned long i) {
+          const auto point = i / n_var;
+          const auto variable = i % n_var;
+
+          device_send(i) =
+              device_vector[send_indices(point) * n_var + variable];
+        });
+
+    /* Copies only the compact halo send buffer. */
+    Kokkos::deep_copy(
+        host_value_view(host_send.data(), send_value_count),
+        device_send);
+  }
+
+  for (int i_send = 0; i_send < geometry->nP2PSend; ++i_send) {
+    const auto offset =
+        static_cast<unsigned long>(geometry->nPoint_P2PSend[i_send]) * n_var;
+
+    const auto count =
+        static_cast<unsigned long>(
+            geometry->nPoint_P2PSend[i_send + 1] -
+            geometry->nPoint_P2PSend[i_send]) *
+        n_var;
+
+    if (count > static_cast<unsigned long>(std::numeric_limits<int>::max()))
+      SU2_MPI::Error(
+          "Kokkos host-staged MPI send count exceeds MPI int limit.",
+          CURRENT_FUNCTION);
+
+    SU2_MPI::Isend(
+        host_send.data() + offset,
+        static_cast<int>(count),
+        mpi_datatype,
+        geometry->Neighbors_P2PSend[i_send],
+        SU2_MPI::GetRank() + 1,
+        SU2_MPI::GetComm(),
+        &geometry->GetP2PSendReq<ScalarType>()[i_send]);
+  }
+
+  if (geometry->nP2PRecv > 0) {
+    SU2_MPI::Waitall(
+        geometry->nP2PRecv,
+        geometry->GetP2PRecvReq<ScalarType>(),
+        MPI_STATUSES_IGNORE);
+  }
+
+  if (recv_value_count > 0) {
+    /* Copies only the compact halo receive buffer. */
+    Kokkos::deep_copy(
+        device_recv,
+        host_value_view(host_recv.data(), recv_value_count));
+
+    const auto device_vector = vector.GetDevicePointer();
+
+    Kokkos::parallel_for(
+        "SU2::UnpackKokkosHostStagedHalo",
+        range_policy(0ul, recv_value_count),
+        KOKKOS_LAMBDA(const unsigned long i) {
+          const auto point = i / n_var;
+          const auto variable = i % n_var;
+
+          device_vector[recv_indices(point) * n_var + variable] =
+              device_recv(i);
+        });
+
+    Kokkos::fence("SU2::Kokkos host-staged halo unpack complete");
+  }
+
+  if (geometry->nP2PSend > 0) {
+    SU2_MPI::Waitall(
+        geometry->nP2PSend,
+        geometry->GetP2PSendReq<ScalarType>(),
+        MPI_STATUSES_IGNORE);
+  }
+#endif
+
+  if (output_to_host) vector.DtHTransfer();
+}
+
 }  // namespace
 
 namespace KokkosSpMVControl {
@@ -461,10 +692,9 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
   if (config->GetKokkosGPUAwareMPI()) {
     KokkosGPUAwareHaloExchange(prod, geometry, false);
   } else {
-    prod.DtHTransfer();
-    CSysMatrixComms::Initiate(prod, geometry, config);
-    CSysMatrixComms::Complete(prod, geometry, config);
-    prod.HtDTransfer();
+    /* Keep the complete preconditioned vector resident. Only compact halo
+     * buffers are staged through host memory for non-GPU-aware MPI. */
+    KokkosHostStagedHaloExchange(prod, geometry, false);
   }
 }
 
@@ -529,14 +759,9 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
   if (config->GetKokkosGPUAwareMPI()) {
     KokkosGPUAwareHaloExchange(prod, geometry, output_to_host);
   } else {
-    /*--- Host-staged MPI requires host data for packing/communication.  A
-     * device-resident Krylov caller can nevertheless continue on device once
-     * the halo has been completed, so restore the communicated vector to the
-     * accelerator unless the caller explicitly requested host output. ---*/
-    prod.DtHTransfer();
-    CSysMatrixComms::Initiate(prod, geometry, config);
-    CSysMatrixComms::Complete(prod, geometry, config);
-    if (kokkos_spmv_mode.active && !output_to_host) prod.HtDTransfer();
+    /* Keep the full SpMV result device resident. Only the compact halo
+     * send/receive buffers are staged through host memory. */
+    KokkosHostStagedHaloExchange(prod, geometry, output_to_host);
   }
 }
 
