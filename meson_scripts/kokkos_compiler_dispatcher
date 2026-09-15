@@ -11,6 +11,20 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 kokkos_dir="${script_dir}/../subprojects/Kokkos"
 host_compiler="${SU2_KOKKOS_HOST_COMPILER:-nvc++}"
 
+# NVCC invokes this dispatcher through -ccbin for its host phase.
+# Route that phase directly to the GNU host compiler used by Kokkos.
+for arg in "$@"; do
+  if [[ "${arg}" == "--nvcchost" ]]; then
+    nvcc_host_compiler="${NVCC_WRAPPER_DEFAULT_COMPILER:-g++}"
+    nvcc_host_args=()
+    for host_arg in "$@"; do
+      [[ "${host_arg}" == "--nvcchost" ]] && continue
+      nvcc_host_args+=("${host_arg}")
+    done
+    exec "${nvcc_host_compiler}" "${nvcc_host_args[@]}"
+  fi
+done
+
 kokkos_dependence=0
 has_kokkos_marker=0
 has_extended_lambda=0
