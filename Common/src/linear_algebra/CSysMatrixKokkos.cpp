@@ -14,6 +14,15 @@
 #include "../../include/toolboxes/allocation_toolbox.hpp"
 
 namespace {
+
+#if defined(KOKKOS_ARCH_HOPPER90)
+constexpr int KOKKOS_ILU_TEAM_SIZE = 512;
+#elif defined(KOKKOS_ARCH_VOLTA70) || defined(KOKKOS_ARCH_VOLTA72)
+constexpr int KOKKOS_ILU_TEAM_SIZE = 64;
+#else
+constexpr int KOKKOS_ILU_TEAM_SIZE = 64;
+#endif
+
 template <class T>
 using DeviceView = Kokkos::View<T*, typename Kokkos::DefaultExecutionSpace::memory_space,
                                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
@@ -579,7 +588,7 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
    * ---*/
   Kokkos::parallel_for(
       "SU2::KokkosILUForwardPersistent",
-      team_policy(exec, 1, 512),
+      team_policy(exec, 1, KOKKOS_ILU_TEAM_SIZE),
       KOKKOS_LAMBDA(const member_type& team) {
         for (unsigned long level = 0; level < n_levels; ++level) {
           const auto begin = level_ptr[level];
@@ -624,7 +633,7 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
    * ---*/
   Kokkos::parallel_for(
       "SU2::KokkosILUBackwardPersistent",
-      team_policy(exec, 1, 512),
+      team_policy(exec, 1, KOKKOS_ILU_TEAM_SIZE),
       KOKKOS_LAMBDA(const member_type& team) {
         for (unsigned long level_plus_one = n_levels;
              level_plus_one > 0; --level_plus_one) {
