@@ -78,6 +78,16 @@ CSysMatrix<ScalarType>::~CSysMatrix() {
     GPUMemoryAllocation::gpu_free(d_col_ind);
   }
 
+
+#ifdef HAVE_KOKKOS
+  GPUMemoryAllocation::gpu_free(d_ILU_matrix);
+  GPUMemoryAllocation::gpu_free(d_row_ptr_ilu);
+  GPUMemoryAllocation::gpu_free(d_dia_ptr_ilu);
+  GPUMemoryAllocation::gpu_free(d_col_ind_ilu);
+  GPUMemoryAllocation::gpu_free(d_ilu_level_ptr);
+  GPUMemoryAllocation::gpu_free(d_ilu_level_rows);
+#endif
+
 #ifdef USE_MKL
   mkl_jit_destroy(MatrixMatrixProductJitter);
   mkl_jit_destroy(MatrixVectorProductJitterBetaZero);
@@ -185,7 +195,14 @@ void CSysMatrix<ScalarType>::Initialize(unsigned long npoint, unsigned long npoi
     dia_ptr_ilu = csr_ilu.diagPtr();
     nnz_ilu = csr_ilu.getNumNonZeros();
 
-    if (omp_get_max_threads() > 1 && config->GetLinear_Solver_ILU_levels()) {
+    /*--- KOKKOS ILU LEVEL SCHEDULE
+     * Host ILU historically builds dependency levels only for multi-threaded
+     * OpenMP.  A Kokkos triangular solve requires the same dependency graph
+     * even when SU2 was configured with -Dwith-omp=false, so build the level
+     * structure whenever Kokkos is enabled.  The CPU ILU algorithms remain
+     * unchanged and may continue to ignore levels_ilu when appropriate. ---*/
+    if (config->GetKokkos() ||
+        (omp_get_max_threads() > 1 && config->GetLinear_Solver_ILU_levels())) {
       levels_ilu = computeLevels(csr_ilu);
     }
   }
@@ -808,6 +825,10 @@ void CSysMatrix<ScalarType>::BuildILUPreconditioner() {
       END_SU2_OMP_FOR
     }
   }
+
+#ifdef HAVE_KOKKOS
+  if (useDevice) SyncKokkosILUPreconditioner();
+#endif
 }
 
 template <class ScalarType>

@@ -355,6 +355,11 @@ unsigned long CSysSolve<ScalarType>::CG_LinSolver(const CSysVector<ScalarType>& 
     auto ApplyPreconditioner = [&](const CSysVector<ScalarType>& in, CSysVector<ScalarType>& out) {
       if (precond.IsIdentity()) {
         KokkosLinearAlgebra::Copy(in, out);
+#ifdef HAVE_KOKKOS
+      } else if (precond.SupportsKokkosDeviceResident()) {
+        /*--- KOKKOS DEVICE ILU APPLY ---*/
+        precond.KokkosDeviceResident(in, out);
+#endif
       } else {
         KokkosLinearAlgebra::DeviceToHost(in);
         precond(in, out);
@@ -1230,6 +1235,11 @@ unsigned long CSysSolve<ScalarType>::BCGSTAB_LinSolver(const CSysVector<ScalarTy
     auto ApplyPreconditioner = [&](const CSysVector<ScalarType>& in, CSysVector<ScalarType>& out) {
       if (precond.IsIdentity()) {
         KokkosLinearAlgebra::Copy(in, out);
+#ifdef HAVE_KOKKOS
+      } else if (precond.SupportsKokkosDeviceResident()) {
+        /*--- KOKKOS DEVICE ILU APPLY ---*/
+        precond.KokkosDeviceResident(in, out);
+#endif
       } else {
         KokkosLinearAlgebra::DeviceToHost(in);
         precond(in, out);

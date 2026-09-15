@@ -157,6 +157,20 @@ class CSysMatrix {
   const unsigned long* col_ind_ilu; /*!< \brief Column index for each of the elements in val() (ILU). */
   unsigned short ilu_fill_in;       /*!< \brief Fill in level for the ILU preconditioner. */
 
+
+#ifdef HAVE_KOKKOS
+  /*--- KOKKOS ILU DEVICE STORAGE
+   * Persistent mirrors of the completed host ILU factors and their sparse /
+   * level-scheduling metadata. The structure is immutable after matrix
+   * initialization; only d_ILU_matrix is refreshed when ILU is rebuilt. ---*/
+  ScalarType* d_ILU_matrix = nullptr;
+  const unsigned long* d_row_ptr_ilu = nullptr;
+  const unsigned long* d_dia_ptr_ilu = nullptr;
+  const unsigned long* d_col_ind_ilu = nullptr;
+  const unsigned long* d_ilu_level_ptr = nullptr;
+  const unsigned long* d_ilu_level_rows = nullptr;
+#endif
+
   /*!< \brief Level structure for alternative shared memory parallelization of ILU. */
   CCompressedSparsePatternUL levels_ilu;
 
@@ -888,6 +902,17 @@ class CSysMatrix {
   /*! \brief Kokkos block-CSR sparse matrix-vector product. */
   void KokkosMatrixVectorProduct(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
                                  CGeometry* geometry, const CConfig* config) const;
+
+
+#ifdef HAVE_KOKKOS
+  /*! \\brief Mirror completed ILU factors and dependency metadata to Kokkos device memory. */
+  void SyncKokkosILUPreconditioner();
+
+  /*--- KOKKOS DEVICE ILU APPLY ---*/
+  /*! rief Apply the already-built ILU factors entirely in Kokkos device memory. */
+  void KokkosComputeILUPreconditioner(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
+                                      CGeometry* geometry, const CConfig* config) const;
+#endif
 
   /*!
    * \brief Performs first step of the LU_SGS Preconditioner building
