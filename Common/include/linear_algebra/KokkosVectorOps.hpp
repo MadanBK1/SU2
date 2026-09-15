@@ -10,6 +10,8 @@
 #include <Kokkos_Core.hpp>
 #include <cmath>
 #include <type_traits>
+#include <vector>
+#include <cstddef>
 
 #include "CSysVector.hpp"
 #include "../parallelization/mpi_structure.hpp"
@@ -145,6 +147,38 @@ template <class ScalarType>
 inline ScalarType Norm(const CSysVector<ScalarType>& x, bool global_reduce = true) {
   const ScalarType value = Dot(x, x, global_reduce);
   return value > ScalarType(0) ? std::sqrt(value) : ScalarType(0);
+}
+
+/*!
+ * \brief Compute V[0:n]^T w with one MPI reduction for all coefficients.
+ *
+ * Local dot products remain device reductions.  The important first-stage
+ * optimization is that the n scalar results are communicated with one
+ * MPI_Allreduce instead of n separate collective operations.
+ *
+ * This mirrors the communication semantics of CSysVector::multiDot while
+ * keeping the Krylov vectors device-resident.
+ */
+template <class ScalarType>
+inline std::vector<ScalarType> MultiDot(const std::vector<CSysVector<ScalarType>>& V,
+                                        std::size_t n,
+                                        const CSysVector<ScalarType>& w,
+                                        bool global_reduce = true) {
+  std::vector<ScalarType> local(n);
+
+  for (std::size_t k = 0; k < n; ++k) {
+    local[k] = LocalDot(V[k], w);
+  }
+
+  if (!global_reduce || SU2_MPI::GetSize() == 1 || n == 0) return local;
+
+  std::vector<ScalarType> global(n);
+
+  using MPIWrapper = typename SelectMPIWrapper<ScalarType>::W;
+  MPIWrapper::Allreduce(local.data(), global.data(), static_cast<int>(n),
+                        MPIDatatype<ScalarType>(), MPI_SUM, SU2_MPI::GetComm());
+
+  return global;
 }
 
 /*--- Synchronization helpers. These are deliberately explicit so solver code can
