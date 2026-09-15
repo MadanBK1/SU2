@@ -579,7 +579,7 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
    * ---*/
   Kokkos::parallel_for(
       "SU2::KokkosILUForwardPersistent",
-      team_policy(exec, 1, Kokkos::AUTO),
+      team_policy(exec, 1, 64),
       KOKKOS_LAMBDA(const member_type& team) {
         for (unsigned long level = 0; level < n_levels; ++level) {
           const auto begin = level_ptr[level];
@@ -624,7 +624,7 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
    * ---*/
   Kokkos::parallel_for(
       "SU2::KokkosILUBackwardPersistent",
-      team_policy(exec, 1, Kokkos::AUTO),
+      team_policy(exec, 1, 64),
       KOKKOS_LAMBDA(const member_type& team) {
         for (unsigned long level_plus_one = n_levels;
              level_plus_one > 0; --level_plus_one) {
