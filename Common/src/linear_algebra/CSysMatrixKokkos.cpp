@@ -3,6 +3,7 @@
  * \brief Portable Kokkos implementation of the block-CSR matrix-vector product.
  */
 
+#include <algorithm>
 #include <Kokkos_Core.hpp>
 
 #include <limits>
@@ -555,6 +556,11 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
 
   execution_space exec;
 
+  /*--- 64 threads was tuned for V100. Cap by backend concurrency so host
+   * backends (Serial: max team size 1) remain valid. ---*/
+  const int ilu_team_size = static_cast<int>(
+      std::min<long>(64, static_cast<long>(exec.concurrency())));
+
   const auto factors = d_ILU_matrix;
   const auto rows = d_row_ptr_ilu;
   const auto diagonal = d_dia_ptr_ilu;
@@ -579,7 +585,7 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
    * ---*/
   Kokkos::parallel_for(
       "SU2::KokkosILUForwardPersistent",
-      team_policy(exec, 1, 64),
+      team_policy(exec, 1, ilu_team_size),
       KOKKOS_LAMBDA(const member_type& team) {
         for (unsigned long level = 0; level < n_levels; ++level) {
           const auto begin = level_ptr[level];
@@ -624,7 +630,7 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
    * ---*/
   Kokkos::parallel_for(
       "SU2::KokkosILUBackwardPersistent",
-      team_policy(exec, 1, 64),
+      team_policy(exec, 1, ilu_team_size),
       KOKKOS_LAMBDA(const member_type& team) {
         for (unsigned long level_plus_one = n_levels;
              level_plus_one > 0; --level_plus_one) {

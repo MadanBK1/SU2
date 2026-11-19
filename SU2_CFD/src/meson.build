@@ -15,6 +15,10 @@ su2_cfd_src += files(['fluid/CFluidModel.cpp',
                       'fluid/CSU2TCLib.cpp',
                       'fluid/CDataDrivenFluid.cpp'])
 
+if get_option('enable-kokkos')
+  su2_cfd_src += files(['fluid/kokkos/NEMOGasKokkos.cpp'])
+endif
+
 su2_cfd_src += files(['output/COutputFactory.cpp',
                       'output/CAdjElasticityOutput.cpp',
                       'output/CAdjFlowOutput.cpp',

@@ -68,3 +68,19 @@ if get_option('enable-tests')
     test('Catch2 test driver (DD)', test_driver_DD)
   endif
 endif
+
+# Kokkos NEMO thermodynamics validation (standalone driver with its own main/ScopeGuard).
+# Not built by default: ninja -C <builddir> UnitTests/nemo_gas_kokkos_validation
+if get_option('enable-kokkos') and get_option('enable-normal')
+  nemo_gas_kokkos_validation = executable(
+      'nemo_gas_kokkos_validation',
+      files(['SU2_CFD/fluid/NEMOGasKokkos_validation.cpp']),
+      install : false,
+      build_by_default : false,
+      dependencies : [su2_cfd_dep, common_dep, su2_deps],
+      cpp_args: [default_warning_flags, su2_cpp_args]
+  )
+  # 1e-10: -ffast-math/-march=native (FMA) codegen differs between the CPU and inlined device
+  # paths; with -fno-unsafe-math-optimizations -ffp-contract=off the comparison is bitwise.
+  test('NEMO gas Kokkos validation', nemo_gas_kokkos_validation, args : ['5000', '1e-10'], timeout : 900)
+endif

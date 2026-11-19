@@ -29,12 +29,17 @@
 
 #include "CNEMOGas.hpp"
 
+namespace su2kokkos { namespace nemo { struct NEMOGasTablesAccess; } }
+
 /*!
  * \derived class CSU2TCLib
  * \brief Child class for user defined nonequilibrium gas model.
  * \author: C. Garbacz, W. Maier, S. R. Copeland
  */
 class CSU2TCLib : public CNEMOGas {
+
+  /*--- Read-only access for the Kokkos table builder (SU2_CFD/src/fluid/kokkos/NEMOGasKokkos.cpp). ---*/
+  friend struct su2kokkos::nemo::NEMOGasTablesAccess;
 
 private:
 
