@@ -351,9 +351,12 @@ unsigned long CNEMOEulerSolver::SetPrimitive_Variables(CSolver **solver_containe
   bool nonphysical = true;
 
 #ifdef HAVE_KOKKOS
-  const bool verify = kokkosData && CNEMOKokkosData::VerifyEnabled();
+  /*--- SU2_KOKKOS_NEMO_HOST=c2p: host Cons2Prim, the device stages then re-upload what they read. ---*/
+  const bool deviceC2P = kokkosData && !CNEMOKokkosData::HostForced("c2p");
+  if (kokkosData && !deviceC2P) kokkosData->InvalidatePrimitive();
+  const bool verify = deviceC2P && CNEMOKokkosData::VerifyEnabled();
   unsigned long nonPhysDevice = 0;
-  if (kokkosData) {
+  if (deviceC2P) {
     if (verify) kokkosData->Snapshot();
 
     /*--- Device Cons2Prim + rollback + Gamma (uploads U/V, downloads V, secondaries, U). ---*/
@@ -661,6 +664,10 @@ void CNEMOEulerSolver::Centered_Residual(CGeometry *geometry, CSolver **solver_c
 void CNEMOEulerSolver::Upwind_Residual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
                                        CConfig *config, unsigned short iMesh) {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  if (!upwindHostOnly && Device_UpwindResidual(geometry, solver_container, numerics_container, config, iMesh)) return;
+#endif
 
   /*--- Set booleans based on config settings ---*/
   const bool implicit         = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
@@ -2592,8 +2599,12 @@ void CNEMOEulerSolver::SetPressureDiffusionSensor(CGeometry *geometry, CConfig *
 namespace {
 /*! \brief Debug: SU2_KOKKOS_NEMO_HOST=grad,lim,dt forces individual stages back to the host. */
 bool ForcedHost(const char* stage) {
-  const char* env = std::getenv("SU2_KOKKOS_NEMO_HOST");
-  return env != nullptr && std::strstr(env, stage) != nullptr;
+#ifdef HAVE_KOKKOS
+  return CNEMOKokkosData::HostForced(stage);
+#else
+  (void)stage;
+  return false;
+#endif
 }
 }  // namespace
 
@@ -2653,7 +2664,8 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
   };
   auto where = [](const std::string& why) { return why.empty() ? std::string("device") : "host (" + why + ")"; };
 
-  cout << "[KOKKOS_NEMO] stage Cons2Prim (SetPrimVar + non-physical reduce): device" << endl;
+  cout << "[KOKKOS_NEMO] stage Cons2Prim (SetPrimVar + non-physical reduce): "
+       << where(CNEMOKokkosData::HostForced("c2p") ? "SU2_KOKKOS_NEMO_HOST" : "") << endl;
 
   /*--- Mirror the Preprocessing logic of CNEMOEulerSolver / CNEMONSSolver. ---*/
   const auto gm = config->GetKind_Gradient_Method();
@@ -2683,12 +2695,23 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
        << where(Device_TimeStepUnsupported(config)) << endl;
   cout << "[KOKKOS_NEMO] stage max eigenvalue (centered only): "
        << (center ? where(Device_TimeStepUnsupported(config)) : std::string("not used")) << endl;
-  cout << "[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, NS transport, residuals, Jacobian, linear solve, CFL adapt"
-       << endl;
+  if (!center) {
+    const auto up = config->GetKind_Upwind_Flow();
+    const char* uname = up == UPWIND::AUSM ? "AUSM" : up == UPWIND::AUSMPLUSM ? "AUSM+M"
+                      : up == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2" : "other";
+    cout << "[KOKKOS_NEMO] stage upwind (" << uname << (muscl ? " + MUSCL" : "") << ", residual"
+         << (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT ? " + Jacobian" : "") << "): "
+         << where(Device_UpwindUnsupported(config, MESH_0)) << endl;
+  }
+  cout << "[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, NS transport, viscous/source/BC residuals,"
+          " linear solve, CFL adapt" << endl;
   cout << "[KOKKOS_NEMO] sync: SetPrimVar HtoD U,U_old,V,secondaries + DtoH all; stages reuse device V, DtoH domain rows"
-          " of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS)" << endl;
+          " of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS); upwind reuses device"
+          " V/secondaries/gradient/limiter (HtoD halo rows, Non_Physical, sensor), DtoH residual + Jacobian values"
+       << endl;
   if (CNEMOKokkosData::StageVerifyEnabled())
-    cout << "[KOKKOS_NEMO] SU2_KOKKOS_STAGE_VERIFY=1: gradient/limiter/time step A/B against the host code" << endl;
+    cout << "[KOKKOS_NEMO] SU2_KOKKOS_STAGE_VERIFY=1: gradient/limiter/time step/upwind A/B against the host code"
+         << endl;
 #endif
 }
 
@@ -2807,6 +2830,124 @@ bool CNEMOEulerSolver::Device_PrimitiveLimiter(CGeometry *geometry, const CConfi
   InitiateComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER);
   CompleteComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER);
   kokkosData->stagePerf[K::ST_LIMITER].host += timer.seconds();
+  return true;
+#else
+  return false;
+#endif
+}
+
+/*============================ Device (Kokkos) Step 5: upwind residual ============================*/
+
+std::string CNEMOEulerSolver::Device_UpwindUnsupported(const CConfig *config, unsigned short iMesh) const {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return "no device data";
+  if (!kokkosData->geo.domain_first) return "domain points not first";
+  if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
+  if (dynamic_grid) return "dynamic grid";
+  if (ReducerStrategy) return "reducer strategy";
+  if (ForcedHost("upwind")) return "SU2_KOKKOS_NEMO_HOST";
+  const auto kind = config->GetKind_Upwind_Flow();
+  if (kind != UPWIND::AUSM && kind != UPWIND::AUSMPLUSM)
+    return kind == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members)"
+                                       : "upwind scheme not ported";
+  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  const bool muscl = config->GetMUSCL_Flow() && (iMesh == MESH_0);
+  if (muscl && nodes->GetGradient_Reconstruction().size() == 0) return "gradient not allocated";
+  return "";
+#else
+  return "no Kokkos";
+#endif
+}
+
+bool CNEMOEulerSolver::Device_UpwindResidual(CGeometry *geometry, CSolver **solver_container,
+                                             CNumerics **numerics_container, CConfig *config, unsigned short iMesh) {
+#ifdef HAVE_KOKKOS
+  if (!Device_UpwindUnsupported(config, iMesh).empty()) return false;
+  SU2_ZONE_SCOPED
+
+  using K = CNEMOKokkosData;
+  K::UpwindParams p;
+  p.scheme = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM : K::UpwindScheme::AUSM;
+  p.implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
+  p.muscl = (config->GetMUSCL_Flow() && (iMesh == MESH_0));
+  p.limiter = (config->GetKind_SlopeLimit_Flow() != LIMITER::NONE);
+  p.vanAlbada = (config->GetKind_SlopeLimit_Flow() == LIMITER::VAN_ALBADA_EDGE);
+  p.kappa = config->GetMUSCL_Kappa_Flow();
+  p.musclRamp = config->GetMUSCLRampValue() * config->GetNewtonKrylovRelaxation();
+  p.Minf = config->GetMach();
+  p.nElNumerics = config->GetIonization() ? 1 : 0; /*--- CNEMONumerics::nEl ---*/
+
+  const bool verify = K::StageVerifyEnabled();
+
+  /*--- Base of the CSysMatrix values (row 0 starts at non-zero 0; its diagonal block is at dia_ptr[0]). ---*/
+  su2mixedfloat* jac = nullptr;
+  size_t nJac = 0;
+  if (p.implicit) {
+    const auto& pattern = geometry->GetSparsePattern(ConnectivityType::FiniteVolume, 0);
+    jac = Jacobian.GetBlock(0, 0) - pattern.diagPtr()[0] * nVar * nVar;
+    nJac = size_t(pattern.getNumNonZeros()) * nVar * nVar;
+  }
+  const size_t nRes = size_t(nPoint) * nVar;
+
+  /*--- A/B: inputs of the host rerun that the device call modifies. ---*/
+  std::vector<su2double> res0, jac0, np0, cnt0;
+  if (verify) {
+    res0.assign(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes);
+    if (p.implicit) jac0.assign(jac, jac + nJac);
+    kokkosData->GetNonPhysical(np0, cnt0);
+  }
+
+  auto r = kokkosData->ComputeUpwindResidual(p, verify, LinSysRes.GetBlock(0), jac);
+
+  /*--- Host remainder: gas-state replay (the CPU loop leaves FluidModel in the state of its last
+   *    ComputeConsistentExtrapolation call) and the non-physical reconstruction counter. ---*/
+  Kokkos::Timer timer;
+  if (r.haveLastRec) {
+    su2double scratch[4][MAXNVAR] = {{0.0}}, eve[MAXNVAR] = {0.0};
+    ComputeConsistentExtrapolation(GetFluidModel(), nSpecies, r.lastRec.data(), scratch[0], scratch[1], scratch[2],
+                                   eve, scratch[3]);
+  }
+  ErrorCounter = 0;
+  if ((iMesh == MESH_0) && (config->GetComm_Level() == COMM_FULL)) {
+    unsigned long counter_local = r.nonPhysical;
+    ErrorCounter += counter_local;
+    counter_local = ErrorCounter;
+    SU2_MPI::Reduce(&counter_local, &ErrorCounter, 1, MPI_UNSIGNED_LONG, MPI_SUM, MASTER_NODE, SU2_MPI::GetComm());
+    config->SetNonphysical_Reconstr(ErrorCounter);
+  }
+  kokkosData->stagePerf[K::ST_UPWIND].host += timer.seconds();
+
+  if (!verify) return true;
+
+  /*--- A/B: keep the device results, restore the inputs, rerun the unchanged host code, compare. ---*/
+  std::vector<su2double> resD(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes), jacD, npD, cntD;
+  if (p.implicit) jacD.assign(jac, jac + nJac);
+  kokkosData->GetNonPhysical(npD, cntD);
+  const su2double errD = ErrorCounter;
+
+  std::copy(res0.begin(), res0.end(), LinSysRes.GetBlock(0));
+  if (p.implicit) std::copy(jac0.begin(), jac0.end(), jac);
+  kokkosData->SetNonPhysical(np0, cnt0);
+
+  upwindHostOnly = true;
+  timer.reset();
+  Upwind_Residual(geometry, solver_container, numerics_container, config, iMesh);
+  kokkosData->stagePerf[K::ST_UPWIND].hostRef += timer.seconds();
+  kokkosData->stagePerf[K::ST_UPWIND].hostRefCalls++;
+  upwindHostOnly = false;
+
+  std::vector<su2double> npH, cntH;
+  kokkosData->GetNonPhysical(npH, cntH);
+  kokkosData->StageCompare(K::ST_UPWIND, "LinSysRes", LinSysRes.GetBlock(0), resD.data(), nRes, nVar);
+  if (p.implicit) {
+    std::vector<su2double> jacH(jac, jac + nJac);
+    kokkosData->StageCompare(K::ST_UPWIND, "Jacobian", jacH.data(), jacD.data(), nJac, size_t(nVar) * nVar);
+  }
+  if (p.muscl) {
+    kokkosData->StageCompare(K::ST_UPWIND, "Non_Physical", npH.data(), npD.data(), nPoint);
+    kokkosData->StageCompare(K::ST_UPWIND, "Non_Physical_Counter", cntH.data(), cntD.data(), nPoint);
+  }
+  kokkosData->StageCompareScalar(K::ST_UPWIND, "Nonphysical_Reconstr", su2double(ErrorCounter), errD);
   return true;
 #else
   return false;

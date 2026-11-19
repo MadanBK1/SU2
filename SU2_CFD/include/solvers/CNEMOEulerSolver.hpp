@@ -81,6 +81,15 @@ protected:
                                 bool massFractions);
   bool Device_PrimitiveLimiter(CGeometry *geometry, const CConfig *config);
 
+  /*!
+   * \brief Device (Kokkos) Step 5: Upwind_Residual for AUSM / AUSM+M (residual + Jacobian downloaded and added to
+   *        LinSysRes / Jacobian). False -> run the host Upwind_Residual. A/B with SU2_KOKKOS_STAGE_VERIFY=1.
+   */
+  bool Device_UpwindResidual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
+                             CConfig *config, unsigned short iMesh);
+  std::string Device_UpwindUnsupported(const CConfig *config, unsigned short iMesh) const;
+  bool upwindHostOnly = false; /*!< \brief Set while Upwind_Residual must run the host code (A/B rerun). */
+
   /*! \brief Reason a device stage is not used ("" if it is), shared by the dispatch and the startup report. */
   std::string Device_GradientUnsupported(const CConfig *config, bool reconstruction, bool greenGauss) const;
   std::string Device_LimiterUnsupported(const CConfig *config) const;

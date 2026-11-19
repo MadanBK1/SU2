@@ -131,9 +131,12 @@ unsigned long CNEMONSSolver::SetPrimitive_Variables(CSolver **solver_container,C
   //const bool tkeNeeded = (turb_model == TURB_MODEL::SST);
 
 #ifdef HAVE_KOKKOS
-  const bool verify = kokkosData && CNEMOKokkosData::VerifyEnabled();
+  /*--- SU2_KOKKOS_NEMO_HOST=c2p: host Cons2Prim, the device stages then re-upload what they read. ---*/
+  const bool deviceC2P = kokkosData && !CNEMOKokkosData::HostForced("c2p");
+  if (kokkosData && !deviceC2P) kokkosData->InvalidatePrimitive();
+  const bool verify = deviceC2P && CNEMOKokkosData::VerifyEnabled();
   unsigned long nonPhysDevice = 0;
-  if (kokkosData) {
+  if (deviceC2P) {
     if (verify) kokkosData->Snapshot();
 
     /*--- Eddy viscosity first (SetPrimVar does not read or write it). ---*/

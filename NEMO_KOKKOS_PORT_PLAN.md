@@ -97,9 +97,52 @@ Each step runs behind `ENABLE_KOKKOS`, keeps the CPU path, and is validated agai
   - Gather-based point kernels (point→neighbour CSR, then the point's boundary vertices in marker-major order): Green-Gauss incl. boundary faces and the NEMO-NS Y_s override, (weighted) least squares, Venkatakrishnan / Barth-Jespersen / Venkatakrishnan-Wang (device min/max + host MPI reduction), time step (edge + vertex spectral radii, local dt, `MinMax` reduce, host tail for time stepping / dual time) and max eigenvalue. Comms stay on the host after the download, in the CPU order.
   - Device Primitive is reused from SetPrimVar (no re-upload). Gradients stay on the device for the limiter. Only domain rows are downloaded. dt uploads LocalCFL (+ μ, k, k_ve for NS).
   - Symmetry/Euler-wall gradient correction runs on the host, using the CPU `correctGradientsSymmetry` itself, and the affected rows are re-uploaded. A device version is available with `SU2_KOKKOS_NEMO_DEVICE_SYM=1`; it is only ULP-close.
-  - **Exactness.** Under `-ffast-math` GCC re-associates and FMA-contracts the CPU templates per code shape. NEMO's MUSCL non-physical-reconstruction switch turns 1-ULP trace-species gradient differences into O(1e-4) field differences on invwedge (464 flipped edge states). The 2D LS kernel therefore pins the arithmetic GCC actually emits (read from the disassembly) using `fma` and value barriers. Results:
-    - Gradients (2D LS/WLS/GG): bitwise.
-    - Limiter: ≤6e-12 relative, from the Venkat ratio.
-    - dt/λ: ≤4.9e-16.
+  - **Exactness.** Under `-ffast-math` GCC re-associates and FMA-contracts the CPU templates per code shape. NEMO's MUSCL non-physical switch turns 1-ULP trace-species gradient differences into O(1e-4) field differences on invwedge. Step 3 first pinned the GCC-13 disassembly form (fma + value barriers) of the 2D LS kernel. That was non-portable and was removed in Task A of Step 5: all kernels are now source order. Strict build: gradients, limiter and dt/λ are bitwise (the limiter was 6e-12 before). Production: ULP-level, gated per the validation policy below.
   - Falls back to host for: periodic LS/limiter, dynamic grids, other limiter kinds, discrete adjoint, `SU2_KOKKOS_NEMO_HOST=grad,lim,dt`.
   - A/B check: `SU2_KOKKOS_STAGE_VERIFY=1`.
+
+## Validation policy (from Step 5 on)
+- **Portability rule.** Device kernels use plain source-order arithmetic, statement by statement as the CPU code. No compiler-specific evaluation order is pinned (the GCC-13 `-ffast-math` FMA/value-barrier form of the 2D least-squares kernel from Step 3 was removed: nvcc/icpx/hipcc contract differently).
+- **Exactness gate = strict IEEE build** (`build-kokkos-strict`: `-Denable-fast-math=false`, `-ffp-contract=off`):
+  - `SU2_KOKKOS_STAGE_VERIFY=1` per-stage A/B (gradient, limiter, time step, upwind residual + Jacobian + Non_Physical): 0 non-bitwise entries on all configuration variants (`/home/claude/runs/ab_variants.sh`).
+  - `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 check.sh`: ENABLE_KOKKOS=YES vs YES with every NEMO stage forced to the host (`SU2_KOKKOS_NEMO_HOST=all`, same Kokkos linear solver) → bitwise restart files.
+  - `REF_MODE=NO FIELD_TOL=1e-12` cannot pass on invwedge, also before Step 5: YES uses the Kokkos device-resident linear solver, whose reductions are ordered differently from the host solver (6.7e-10 fields after 11 iterations; residual rows identical). That is a linear-solver property, isolated by REF_MODE=HOST.
+- **Production gate (`-ffast-math` build).** Device code and CPU templates are contracted/re-associated differently, so they agree to a few ULP. NEMO's MUSCL non-physical-reconstruction switch (CheckNonPhys + sticky Non_Physical, ~2.4e4 flagged states per iteration on invwedge) amplifies ULP noise into O(1e-4) field differences after 11 iterations, the same way recompiling the CPU code does. Gates:
+  1. `PHYS_SCALE=1 RES_NOISE_ORDERS=10 check.sh super_cat thermalbath` (FIELD_TOL 1e-9, RES_TOL 2e-6): species scaled by mixture density, momenta by max sqrt(rho*rhoE), round-off residual columns (>10 orders below the row max, e.g. rms[RhoU] of the 0-D bath) ignored.
+  2. `check_converged.sh` (NO vs YES, long run, field ≤ 1e-6 after physical scaling, history within HIST_TOL) for a case that converges. invwedge_ausm at its cfg CFL (3, 5 BCGSTAB iterations) does **not** converge: CPU-only it limit-cycles at rms[Rho_0] ≈ -2.7 from ~500 to 1300+ iterations (first order also stalls, CFL 20/50 stall or diverge), so a converged comparison is impossible there. NO and YES show the same stall level.
+  3. invwedge noise-floor comparison (`check_noisefloor.sh`): |YES_prod − NO_prod| must not exceed K=10× |NO_strict − NO_prod|, i.e. the device must not perturb the solution more than recompiling the CPU code with/without fast-math.
+- **ENABLE_KOKKOS=NO** stays bit-identical to the previous commit (`check_no_identity.sh`: restart files and screen history, 4 cases).
+
+## Target architecture (user direction, 2026-11-19; not implemented beyond Step 5)
+"GPU state becomes authoritative; CPU copies become temporary views used only when necessary. Mesh loaded once → GPU simulation → GPU convergence → results written out."
+- Geometry/pattern are uploaded once (done). The device State becomes the owner of U, V, secondaries, gradients, limiter, Non_Physical, LinSysRes, Jacobian values; host CVariable containers are refreshed only for output/restart, for host-only features (Mutation++, fallbacks) and for debug A/B.
+- Per-iteration transfers left after Step 5 and what removes each one: see the Step 5 status below.
+
+## Step 5 status (device upwind residual, AUSM family)
+- Files: `SU2_CFD/src/solvers/kokkos/CNEMOKokkosUpwind.cpp` (new), dispatch `CNEMOEulerSolver::Device_UpwindResidual` (called at the top of `Upwind_Residual`; `upwindHostOnly` reruns the unchanged CPU body for A/B).
+- Kernels: (1) edge: MUSCL reconstruction (device gradient + Venkatakrishnan/BJ/Wang limiter, or van Albada, or none) and raw CheckNonPhys; (2) point: replay of `SetNon_Physical`/`GetNon_Physical` over the point's edges in increasing edge order (point→(edge,side) CSR), giving the flag each edge reads back and the final Non_Physical / Non_Physical_Counter; reduction of the non-physical counter and of the last consistent extrapolation (host gas-state replay); (3) edge: Eve/Gamma at reconstructed states, AUSM or AUSM+M flux + approximate Jacobian with MAXNVAR stack arrays, CheckResidualNaNs, `Kokkos::atomic_add/sub` into a device residual and a device copy of the block-CSR values (`edge_nnz`, `dia_ptr`; UpdateBlocks ii+=Ji, ij+=Jj, ji-=Ji, jj-=Jj). Then DtoH and `host += device` (host residual/Jacobian are zero at that point in the CPU stage order, so bitwise).
+- Serial runs kernel 3 sequentially in edge order → per-entry summation order equals the CPU. On GPUs the atomics are order-nondeterministic (ULP, run-to-run). TODO: edge-coloured variant (`colorSparsePattern` on the FV pattern) for determinism; costs more launches and worse locality.
+- Not ported (host fallback): AUSM+-up2 (the CPU `ComputeJacobian` reads the members M_L/M_R, which up2 never sets because it shadows them with locals → uninitialised), Roe/MSW/LAX/centered, dynamic grids, discrete adjoint. Not separately validated: 3D, periodic halos.
+- CPU semantics reproduced on purpose (pre-existing issues, not fixed):
+  - `ComputeConsistentExtrapolation` computes only Eve and Gamma. For a reconstructed state the zero-initialised local dPdU/dTdU/dTvedU/Cvve arrays are used, so the AUSM Jacobian of a reconstructed state uses dPdU = 0.
+  - Primitive entries ≥ nPrimVarGrad of reconstructed states are 0. P, ρ, h, a and ρCv are extrapolated independently.
+  - The AUSM Jacobian splits electrons/heavy with `CNEMONumerics::nEl` = config `IONIZATION`, while CSU2TCLib forces ionization for AIR-7. The numerics' count is used (found by the AIR-7 A/B).
+- Validation (2026-11-19):
+  - Strict A/B over 13 variants (AUSM, AUSM+M explicit/implicit, van Albada, no limiter, BJ+GG, Venkat-Wang κ=0.3, explicit MUSCL, first order, AIR-7 with and without IONIZATION, NS+MUSCL, super_cat): residual, Jacobian, Non_Physical, counter and non-physical count are bitwise (0 non-bitwise entries).
+  - Strict `REF_MODE=HOST` check.sh: bitwise restart files.
+  - Production: quick cases PASS; invwedge noise floor ratio 1.07 (11 it) / 1.52 (100 it).
+  - NO identity PASS; thermo driver PASS in both builds.
+- Perf (Serial, 1 core, invwedge 25 830 pts / 51 221 edges / nVar 9, production): upwind device 125 ms/call kernel (CPU host loop 75 ms/call). Serial pays for the lock-prefixed atomics on 4×81 Jacobian entries per edge and for the reconstruction done twice. h2d is 12 ms/call, mostly zeroing the 83 MB Jacobian copy. d2h is 85 MB/call, 12 ms/call.
+- Per-iteration host↔device transfers left after Step 5, and what removes each:
+
+  | Transfer | Removed by |
+  |---|---|
+  | SetPrimVar HtoD U, U_old, V, secondaries (14.7 MB) | Step 6/10: device-resident solution update (AddSolution, under-relaxation on device) + device halo comms |
+  | SetPrimVar DtoH V, secondaries, U (13.3 MB) | host consumers: Velocity2, NS transport (Step 8), viscous/source/BC residuals (Steps 7-9), output |
+  | Gradient DtoH (6.2 MB) and limiter/min/max DtoH (9.3 MB) | host MPI/periodic comms (Step 10) and host viscous residual (Step 8) |
+  | Symmetry-row HtoD | device symmetry correction made exact-enough to be default (Step 10) |
+  | Time step: HtoD LocalCFL (+μ, k, k_ve), DtoH Λ, Δt (0.6 MB) | device CFL adaptation + device implicit diagonal (Step 6) and device transport (Step 8) |
+  | Upwind HtoD Non_Physical (+counter), AUSM+M sensor, halo rows | device ownership of Non_Physical (needs nothing else on host), device pressure sensor, device halos (Step 10) |
+  | Upwind DtoH residual + Jacobian values (85 MB) | Step 6: other residual stages add into the device residual/Jacobian (sources Step 7, viscous Step 8, BCs Step 9), device diag += Vol/dt, device solve on CSysMatrix d_matrix (the domain-row prefix of `st.JacVal` has the same layout) |
+  | Linear solver HtDTransfer of the full matrix (`matrix_on_device=false`) and host ILU/Jacobi factorisation | Step 6: hand the device Jacobian to the device solver, then device Jacobi / ILU(0) build |
+  | Gas-state replay, residual RMS, non-physical counts (scalars) | stay (scalars/Allreduce) |

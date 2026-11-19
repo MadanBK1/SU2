@@ -86,6 +86,12 @@ class CNEMOKokkosData {
     View1D<unsigned long> dia_ptr;    /*!< (nPoint) */
     View2D<unsigned long> edge_nnz;   /*!< (nEdge, 2): non-zero index of (i,j) and (j,i) */
     bool has_pattern = false;
+    unsigned long nnz = 0;
+
+    /*--- Step 5: point -> (edge << 1 | side) CSR, edges in increasing order (CPU edge-loop order per point;
+     *    side 0: the point is node 0 (iPoint) of the edge, side 1: node 1 (jPoint)). ---*/
+    View1D<unsigned long> pside_ptr;  /*!< (nPoint+1) */
+    View1D<unsigned long> pside_idx;  /*!< (2*nEdge) */
 
     /*--- Boundary info for gather-based point kernels (UploadBoundaryInfo). ---*/
     View1D<unsigned long> pvtx_ptr;   /*!< point -> flattened vertex CSR (nPoint+1), marker-major order */
@@ -116,6 +122,16 @@ class CNEMOKokkosData {
     View1D<double> LimiterEps2;               /*!< (nPrimVarGrad) limiter eps^2 per variable */
     View1D<double> LocalCFL, MaxLambdaInv, MaxLambdaVisc, DeltaTime, Lambda; /*!< (nPoint) */
     View1D<double> LamVisc, ThermalCond, ThermalCondVe;                      /*!< (nPoint), NS only */
+
+    /*--- Step 5 (allocated on first use). ---*/
+    View2D<double> Res;                    /*!< (nPoint, nVar) upwind residual (LinSysRes contribution) */
+    View1D<double> JacVal;                 /*!< (nnz*nVar*nVar) upwind Jacobian contribution, CSysMatrix layout */
+    View1D<unsigned char> NonPhys;         /*!< (nPoint) CVariable::Non_Physical (sticky MUSCL first-order flag) */
+    View1D<unsigned short> NonPhysCount;   /*!< (nPoint) CVariable::Non_Physical_Counter */
+    View2D<unsigned char> EdgeNonPhys;     /*!< (nEdge, 2) CheckNonPhys of the reconstructed states, then the
+                                                sticky flag the CPU reads back (GetNon_Physical) for that edge */
+    View1D<double> Sensor;                 /*!< (nPoint) pressure diffusion sensor (AUSM+M) */
+    View1D<double> LastRec;                /*!< (nPrimVar) last reconstructed state passed to ComputeConsistentExtrapolation */
   };
 
   Geometry geo;
@@ -173,7 +189,7 @@ class CNEMOKokkosData {
   /*! \brief The device Primitive is what the last SetPrimVar() produced (== host Primitive for the first
    *         nPrimVarGrad columns). Cleared when the host overwrites Primitive behind our back (A/B verify). */
   bool PrimitiveOnDevice() const { return primDeviceValid; }
-  void InvalidatePrimitive() { primDeviceValid = false; }
+  void InvalidatePrimitive() { primDeviceValid = false; secDeviceValid = false; }
   /*! \brief HtoD of the host Primitive only (no secondaries), marks it valid. */
   void UploadPrimitiveOnly();
 
@@ -227,11 +243,45 @@ class CNEMOKokkosData {
    *        its results, reruns the unchanged host code and compares. The run continues with the host results.
    */
   static bool StageVerifyEnabled();
-  enum Stage { ST_GRADIENT = 0, ST_LIMITER, ST_TIMESTEP, ST_MAXEIG, N_STAGES };
+  enum Stage { ST_GRADIENT = 0, ST_LIMITER, ST_TIMESTEP, ST_MAXEIG, ST_UPWIND, N_STAGES };
   /*! \brief Compare host (CPU) result vs a copy of the device result over n entries (row-major, ncol columns,
    *         relative difference normalised per column); accumulates per stage. */
   void StageCompare(Stage s, const char* name, const double* cpu, const double* dev, size_t n, size_t ncol = 1);
   void StageCompareScalar(Stage s, const char* name, double cpu, double dev);
+
+  /*====================== Step 5: upwind residual (AUSM family) ======================*/
+
+  enum class UpwindScheme { AUSM = 0, AUSMPLUSM = 1 };
+  struct UpwindParams {
+    UpwindScheme scheme = UpwindScheme::AUSM;
+    bool implicit = false, muscl = false, limiter = false, vanAlbada = false;
+    double kappa = 0.0, musclRamp = 1.0, Minf = 0.0;
+    int nElNumerics = 0; /*!< CNEMONumerics::nEl = config IONIZATION (may differ from the gas model's, e.g. AIR-7) */
+  };
+  /*! \brief Host results of ComputeUpwindResidual (besides the accumulated residual/Jacobian). */
+  struct UpwindResult {
+    unsigned long nonPhysical = 0;    /*!< counter_local of the CPU loop (sum of the sticky flags read back) */
+    bool haveLastRec = false;         /*!< a reconstructed state was passed to ComputeConsistentExtrapolation */
+    std::vector<double> lastRec;      /*!< the last such state (CPU order), for the host gas-state replay */
+  };
+
+  /*!
+   * \brief Device CNEMOEulerSolver::Upwind_Residual for AUSM / AUSM+M (CUpwAUSM_SLAU_Base_NEMO::ComputeResidual +
+   *        ComputeJacobian): MUSCL reconstruction with the device gradient/limiter (or van Albada), CheckNonPhys, the
+   *        sticky Non_Physical/Non_Physical_Counter update in CPU edge order, consistent extrapolation (Eve, Gamma),
+   *        flux, approximate Jacobian, NaN check and atomic accumulation. Then DtoH and host accumulation:
+   *        hostRes[k] += Res, hostJac[k] += JacVal (nnz*nVar^2, CSysMatrix layout); Non_Physical(+counter) DtoH.
+   *        Uploads Non_Physical(+counter) (host authoritative), the AUSM+M sensor, halo rows of gradient/limiter.
+   * \param[in] uploadAll - Re-upload Primitive+secondaries, gradient and limiter from the host (A/B isolation).
+   */
+  UpwindResult ComputeUpwindResidual(const UpwindParams& p, bool uploadAll, double* hostRes, double* hostJac);
+  /*! \brief Copy of the host Non_Physical / Non_Physical_Counter (A/B snapshot), and restore. */
+  void GetNonPhysical(std::vector<double>& flag, std::vector<double>& count) const;
+  void SetNonPhysical(const std::vector<double>& flag, const std::vector<double>& count);
+
+  /*! \brief Debug: env SU2_KOKKOS_NEMO_HOST contains stage ("c2p", "grad", "lim", "dt", "upwind", "all"). */
+  static bool HostForced(const char* stage);
+  bool LimiterOnDevice() const { return limValid; }
 
   struct StagePerf {
     double h2d = 0, kernel = 0, d2h = 0, host = 0;
@@ -239,6 +289,8 @@ class CNEMOKokkosData {
     double bytes_h2d = 0, bytes_d2h = 0;
     double verifyMaxRel = 0;
     unsigned long verifyCalls = 0, verifyNonBitwise = 0, verifyEntries = 0;
+    double hostRef = 0;          /*!< time of the host (CPU) code rerun by the A/B verification */
+    unsigned long hostRefCalls = 0;
   };
   mutable StagePerf stagePerf[N_STAGES];
 
@@ -260,6 +312,9 @@ class CNEMOKokkosData {
   unsigned long nPoint;
   bool viscousVars = false; /*!< nodes is a CNEMONSVariable */
   bool primDeviceValid = false, gradPrimValid = false, gradRecValid = false;
+  bool secDeviceValid = false; /*!< device dPdU/dTdU/dTvedU/eves/Cvves/Gamma == host (set by SetPrimVar/UploadPrimitive) */
+  bool limValid = false;       /*!< device Limiter == host domain rows (set by ComputeLimiter) */
+  void UploadUpwindStatic();   /*!< pside CSR (once) */
   bool separateRecGradient = false;
   unsigned long residencyChecks = 0, residencyMismatch = 0;
   std::vector<unsigned long> h_symPoints; /*!< domain points with a SYMMETRY_PLANE/EULER_WALL vertex */

@@ -879,6 +879,7 @@ void CNEMOKokkosData::ComputeLimiter(int kind, double umusclKappa, double epsVen
   P.bytes_d2h += DownloadRows(hostMin, st.PrimMin, geo.nPointDomain);
   P.d2h += timer.seconds();
   P.calls++;
+  limValid = true;
 }
 
 void CNEMOKokkosData::ComputeTimeStep(bool viscous, double maxDeltaTime, double& minDt, double& maxDt) {

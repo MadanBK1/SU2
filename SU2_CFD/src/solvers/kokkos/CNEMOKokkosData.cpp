@@ -131,6 +131,7 @@ CNEMOKokkosData::CNEMOKokkosData(CGeometry* geometry, const CConfig* config, CNE
   UploadConservative();
   UploadPrimitive();
   primDeviceValid = true;
+  secDeviceValid = true;
   perf = Perf();
 
   const char* env = std::getenv("SU2_KOKKOS_SELFCHECK");
@@ -320,6 +321,7 @@ void CNEMOKokkosData::UploadGeometry(CGeometry* geometry) {
     const auto& emap = geometry->GetEdgeToSparsePatternMap();
     const auto nrow = pattern.getOuterSize();
     const auto nnz = pattern.getNumNonZeros();
+    geo.nnz = nnz;
     if (nrow != np) SU2_MPI::Error("CNEMOKokkosData: sparse pattern rows != nPoint.", CURRENT_FUNCTION);
     geo.row_ptr = View1D<unsigned long>("NEMO::row_ptr", nrow + 1);
     geo.col_ind = View1D<unsigned long>("NEMO::col_ind", nnz);
@@ -450,6 +452,7 @@ unsigned long CNEMOKokkosData::SetPrimVar() {
   /*--- The device Primitive now equals the host one (host SetVelocity2 recomputes the same U/rho velocity,
    *    NS transport only writes columns >= nPrimVarGrad), so Steps 3-4 read it without re-uploading. ---*/
   primDeviceValid = true;
+  secDeviceValid = true;
   gradPrimValid = gradRecValid = false;
 
   return nonPhysical;
@@ -572,7 +575,7 @@ void CNEMOKokkosData::PrintPerf() const {
             << " | d2h " << perf.d2h << " s (" << perf.d2h / c << "/call, " << perf.bytes_d2h / c / 1e6
             << " MB/call)"
             << " | host post " << perf.host_post << " s (" << perf.host_post / c << "/call)" << std::endl;
-  static const char* names[N_STAGES] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue"};
+  static const char* names[N_STAGES] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue", "Upwind"};
   for (int s = 0; s < N_STAGES; ++s) {
     const auto& P = stagePerf[s];
     if (P.calls == 0) continue;
@@ -585,6 +588,9 @@ void CNEMOKokkosData::PrintPerf() const {
       std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " " << names[s] << " compares=" << P.verifyCalls
                 << " entries=" << P.verifyEntries << " non-bitwise=" << P.verifyNonBitwise
                 << " max rel diff=" << P.verifyMaxRel << std::endl;
+    if (P.hostRefCalls > 0)
+      std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " " << names[s] << " host reference (A/B rerun) "
+                << P.hostRef << " s (" << P.hostRef / P.hostRefCalls << "/call)" << std::endl;
   }
   if (residencyChecks > 0)
     std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " device-resident Primitive checks=" << residencyChecks
