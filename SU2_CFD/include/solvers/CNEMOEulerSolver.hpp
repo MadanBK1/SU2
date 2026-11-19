@@ -82,13 +82,41 @@ protected:
   bool Device_PrimitiveLimiter(CGeometry *geometry, const CConfig *config);
 
   /*!
-   * \brief Device (Kokkos) Step 5: Upwind_Residual for AUSM / AUSM+M (residual + Jacobian downloaded and added to
-   *        LinSysRes / Jacobian). False -> run the host Upwind_Residual. A/B with SU2_KOKKOS_STAGE_VERIFY=1.
+   * \brief Device (Kokkos) Step 5: Upwind_Residual for AUSM / AUSM+M into the device residual accumulator (Step 7:
+   *        no download here, see Device_ResidualToHost). False -> run the host Upwind_Residual. A/B with
+   *        SU2_KOKKOS_STAGE_VERIFY=1.
    */
   bool Device_UpwindResidual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
                              CConfig *config, unsigned short iMesh);
   std::string Device_UpwindUnsupported(const CConfig *config, unsigned short iMesh) const;
   bool upwindHostOnly = false; /*!< \brief Set while Upwind_Residual must run the host code (A/B rerun). */
+
+  /*!
+   * \brief Device (Kokkos) Step 7: source terms (chemistry + V-T relaxation) and Euler boundary conditions added into
+   *        the device residual accumulator, which is downloaded once at the end of the space integration
+   *        (FinalizeSpaceIntegration) when the whole residual pipeline can stay on the device ("deferred" sync), or
+   *        after every device stage otherwise ("eager"). A host stage first moves the accumulator to the host
+   *        (Device_BeginHostStage). A device stage that finds the accumulator on the host (non-zero) uploads it only
+   *        with SU2_KOKKOS_NEMO_MIXED=1 or in A/B mode, otherwise it runs on the host (no extra transfers).
+   */
+  bool Device_SourceResidual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
+                             CConfig *config, unsigned short iMesh);
+  std::string Device_SourceUnsupported(const CConfig *config) const;
+  /*! \brief kind: CNEMOKokkosData::BCKind. */
+  bool Device_BCResidual(CGeometry *geometry, CSolver **solver_container, CNumerics *conv_numerics,
+                         CNumerics *visc_numerics, CConfig *config, unsigned short val_marker, int kind);
+  std::string Device_BCUnsupported(const CConfig *config, int kind) const;
+  /*! \brief Make the device accumulator authoritative if allowed (see above); false -> run the stage on the host. */
+  bool Device_ResidualToDevice(CGeometry *geometry, const CConfig *config);
+  /*! \brief Download the device accumulator into LinSysRes / Jacobian if it is authoritative. */
+  void Device_ResidualToHost(CGeometry *geometry);
+  /*! \brief Called at the top of every host residual stage (no-op without device data). */
+  void Device_BeginHostStage(CGeometry *geometry);
+  /*! \brief Static analysis: "" if the accumulator may stay on the device until FinalizeSpaceIntegration. */
+  std::string Device_DeferralUnsupported(const CConfig *config) const;
+  bool deferResidualSync = false; /*!< \brief Deferred (single) residual download, set at construction. */
+  bool deviceJacobianAllocated = false; /*!< \brief The Jacobian was initialized (implicit at construction). */
+  bool sourceHostOnly = false, bcHostOnly = false; /*!< \brief A/B reruns of the host code. */
 
   /*! \brief Reason a device stage is not used ("" if it is), shared by the dispatch and the startup report. */
   std::string Device_GradientUnsupported(const CConfig *config, bool reconstruction, bool greenGauss) const;
@@ -370,6 +398,11 @@ public:
    * \param[in] config - Definition of the particular problem.
    */
   void PrepareImplicitIteration(CGeometry *geometry, CSolver**, CConfig *config) final;
+
+  /*!
+   * \brief End of CIntegration::Space_Integration: download the device residual accumulator (Kokkos Step 7).
+   */
+  void FinalizeSpaceIntegration(CGeometry *geometry, CConfig *config, unsigned short iMesh) override;
 
   /*!
    * \brief Complete an implicit iteration.

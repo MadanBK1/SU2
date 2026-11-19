@@ -15,6 +15,9 @@
  *    keep gradients device-resident for the limiter, and download only domain rows of their outputs.
  *  - Flags / scratch (Cons2Prim status bits, first-attempt gas Density/Pressure): device-written,
  *    downloaded to host mirrors owned by this class.
+ *  - Residual accumulator (Step 7: st.Res + st.JacVal): upwind, source and BC stages add into it on the device;
+ *    exactly one of {host LinSysRes/Jacobian, device accumulator} is authoritative (AccumulatorToDevice/ToHost),
+ *    downloaded once per space integration when the whole residual pipeline is on the device.
  *
  * \version 8.5.0 "Harrier"
  *
@@ -132,6 +135,10 @@ class CNEMOKokkosData {
                                                 sticky flag the CPU reads back (GetNon_Physical) for that edge */
     View1D<double> Sensor;                 /*!< (nPoint) pressure diffusion sensor (AUSM+M) */
     View1D<double> LastRec;                /*!< (nPrimVar) last reconstructed state passed to ComputeConsistentExtrapolation */
+
+    /*--- Step 7 (allocated on first use). Res / JacVal above are the device residual accumulator. ---*/
+    View2D<double> Charac;                 /*!< (nVertexTotal, nPrimVar) CharacPrimVar written by the device BC_Outlet */
+    View1D<double> BState;                 /*!< far-field / supersonic-inlet state: V | eve | dPdU | Gamma */
   };
 
   Geometry geo;
@@ -189,7 +196,7 @@ class CNEMOKokkosData {
   /*! \brief The device Primitive is what the last SetPrimVar() produced (== host Primitive for the first
    *         nPrimVarGrad columns). Cleared when the host overwrites Primitive behind our back (A/B verify). */
   bool PrimitiveOnDevice() const { return primDeviceValid; }
-  void InvalidatePrimitive() { primDeviceValid = false; secDeviceValid = false; }
+  void InvalidatePrimitive() { primDeviceValid = false; secDeviceValid = false; consDeviceValid = false; }
   /*! \brief HtoD of the host Primitive only (no secondaries), marks it valid. */
   void UploadPrimitiveOnly();
 
@@ -243,7 +250,7 @@ class CNEMOKokkosData {
    *        its results, reruns the unchanged host code and compares. The run continues with the host results.
    */
   static bool StageVerifyEnabled();
-  enum Stage { ST_GRADIENT = 0, ST_LIMITER, ST_TIMESTEP, ST_MAXEIG, ST_UPWIND, N_STAGES };
+  enum Stage { ST_GRADIENT = 0, ST_LIMITER, ST_TIMESTEP, ST_MAXEIG, ST_UPWIND, ST_SOURCE, ST_BC, ST_RESSYNC, N_STAGES };
   /*! \brief Compare host (CPU) result vs a copy of the device result over n entries (row-major, ncol columns,
    *         relative difference normalised per column); accumulates per stage. */
   void StageCompare(Stage s, const char* name, const double* cpu, const double* dev, size_t n, size_t ncol = 1);
@@ -269,12 +276,82 @@ class CNEMOKokkosData {
    * \brief Device CNEMOEulerSolver::Upwind_Residual for AUSM / AUSM+M (CUpwAUSM_SLAU_Base_NEMO::ComputeResidual +
    *        ComputeJacobian): MUSCL reconstruction with the device gradient/limiter (or van Albada), CheckNonPhys, the
    *        sticky Non_Physical/Non_Physical_Counter update in CPU edge order, consistent extrapolation (Eve, Gamma),
-   *        flux, approximate Jacobian, NaN check and atomic accumulation. Then DtoH and host accumulation:
-   *        hostRes[k] += Res, hostJac[k] += JacVal (nnz*nVar^2, CSysMatrix layout); Non_Physical(+counter) DtoH.
+   *        flux, approximate Jacobian, NaN check and atomic accumulation into the device residual accumulator
+   *        (Res, JacVal: nnz*nVar^2, CSysMatrix layout), which the caller must have made authoritative with
+   *        AccumulatorToDevice(). Non_Physical(+counter) DtoH.
    *        Uploads Non_Physical(+counter) (host authoritative), the AUSM+M sensor, halo rows of gradient/limiter.
    * \param[in] uploadAll - Re-upload Primitive+secondaries, gradient and limiter from the host (A/B isolation).
    */
-  UpwindResult ComputeUpwindResidual(const UpwindParams& p, bool uploadAll, double* hostRes, double* hostJac);
+  UpwindResult ComputeUpwindResidual(const UpwindParams& p, bool uploadAll);
+
+  /*====================== Step 7: residual accumulator, source terms, boundary conditions ======================*/
+
+  /*!
+   * \brief Device residual accumulator (st.Res + st.JacVal). Exactly one copy is authoritative at any time:
+   *        - host LinSysRes / Jacobian (initially, after every host stage, after AccumulatorToHost), or
+   *        - the device accumulator (after AccumulatorToDevice, until AccumulatorToHost).
+   *        Device stages add into the device copy statement by statement in the CPU order, so moving the whole
+   *        accumulator between host and device (exact copies) keeps every entry bitwise equal to the CPU sums.
+   * \param[in] hostRes/hostJac - host LinSysRes / CSysMatrix values (hostJac: nnz*nVar^2, nullptr if explicit).
+   *        Uploaded unless the host is known to be zero (MarkHostAccumulatorZero), then the device copy is zeroed.
+   */
+  void AccumulatorToDevice(bool implicit, const double* hostRes, const double* hostJac);
+  /*! \brief DtoH (overwrite) of the device accumulator into the host arrays, if the device copy is authoritative. */
+  void AccumulatorToHost(double* hostRes, double* hostJac);
+  bool AccumulatorOnDevice() const { return accOnDevice; }
+  /*! \brief The host LinSysRes / Jacobian were just zeroed (CommonPreprocessing): the next device stage zero-fills
+   *         instead of uploading. A pending device accumulator (should not happen) is discarded and counted. */
+  void MarkHostAccumulatorZero();
+  bool HostAccumulatorZero() const { return !accOnDevice && hostAccZero; }
+  /*! \brief A host stage is going to modify the host accumulator. */
+  void HostAccumulatorTouched() { hostAccZero = false; }
+
+  struct SourceParams {
+    bool implicit = false, frozen = false, monoatomic = false, vtLimiting = false;
+  };
+  struct SourceResult {
+    unsigned long eChm = 0, eVib = 0; /*!< NaN counters of the CPU loop (chemistry, vib. relaxation) */
+  };
+  /*!
+   * \brief Device CNEMOEulerSolver::Source_Residual without axisymmetry: per domain point, fused
+   *        CSource_NEMO::ComputeChemistry (ComputeNetProductionRates + ChemistryJacobian) and ComputeVibRelaxation
+   *        (ComputeEveSourceTerm + GetEveSourceTermJacobian, VT residual limiting), CheckResidualNaNs, subtraction
+   *        from the device accumulator (residual rows and diagonal Jacobian blocks, point-unique, no atomics).
+   * \param[in] uploadInputs - Re-upload Primitive + secondaries from the host (A/B isolation).
+   */
+  SourceResult ComputeSourceResidual(const SourceParams& p, bool uploadInputs);
+
+  enum class BCKind { SYMMETRY = 0, FAR_FIELD, OUTLET, SUPERSONIC_INLET, SUPERSONIC_OUTLET };
+  struct BCParams {
+    BCKind kind = BCKind::SYMMETRY;
+    int marker = 0;
+    UpwindParams upw;        /*!< scheme, implicit, Minf, nElNumerics of the boundary numerics (same type as CONV_TERM) */
+    double P_Exit = 0.0;     /*!< OUTLET: non-dimensional back pressure */
+    bool downloadCharac = false; /*!< OUTLET: copy the marker's CharacPrimVar rows to the host */
+  };
+  /*! \brief Far-field (node_infty) or supersonic-inlet state, uploaded only when it changes (host cache). */
+  struct BoundaryState {
+    const double *V = nullptr, *eve = nullptr, *dPdU = nullptr;
+    double Gamma = 0.0;
+  };
+  struct BCResult {
+    long lastSubsonic = -1;          /*!< OUTLET: last domain vertex (CPU order) on the subsonic branch, -1 if none */
+    std::vector<double> lastVOutlet; /*!< OUTLET: its V_outlet (host gas-state replay) */
+    std::vector<double> charac;      /*!< OUTLET with downloadCharac: (nVertex, nPrimVar) */
+  };
+  /*!
+   * \brief Device boundary conditions of one marker (vertex kernel over the flattened vertex arrays, domain vertices
+   *        only, accumulation into the device accumulator in the CPU statement order):
+   *        SYMMETRY (CNEMOEulerSolver::BC_Sym_Plane, also EULER_WALL), FAR_FIELD (inviscid part of BC_Far_Field),
+   *        OUTLET (BC_Outlet, no gravity / dynamic grid), SUPERSONIC_INLET / SUPERSONIC_OUTLET (AUSM only: the CPU
+   *        leaves Gamma/Sensor of the boundary numerics stale there, which AUSM+M would read).
+   *        The AUSM flux/Jacobian is the Step-5 device function.
+   * \param[in] bstate - FAR_FIELD / OUTLET: node_infty; SUPERSONIC_INLET: node_inlet; else unused.
+   * \param[in] uploadInputs - Re-upload Solution, Primitive + secondaries, sensor from the host (A/B isolation).
+   */
+  BCResult ComputeBCResidual(const BCParams& p, const BoundaryState& bstate, bool uploadInputs);
+  /*! \brief The AUSM+M sensor on the device is stale (set false by SetPrimVar, true when uploaded). */
+  bool SensorOnDevice() const { return sensorValid; }
   /*! \brief Copy of the host Non_Physical / Non_Physical_Counter (A/B snapshot), and restore. */
   void GetNonPhysical(std::vector<double>& flag, std::vector<double>& count) const;
   void SetNonPhysical(const std::vector<double>& flag, const std::vector<double>& count);
@@ -314,6 +391,17 @@ class CNEMOKokkosData {
   bool primDeviceValid = false, gradPrimValid = false, gradRecValid = false;
   bool secDeviceValid = false; /*!< device dPdU/dTdU/dTvedU/eves/Cvves/Gamma == host (set by SetPrimVar/UploadPrimitive) */
   bool limValid = false;       /*!< device Limiter == host domain rows (set by ComputeLimiter) */
+  bool consDeviceValid = false; /*!< device Solution == host (set by SetPrimVar, cleared by InvalidatePrimitive) */
+  bool sensorValid = false;     /*!< device Sensor == host (uploaded by the upwind/BC stages, cleared by SetPrimVar) */
+  bool accOnDevice = false;     /*!< the device accumulator (Res, JacVal) is authoritative */
+  bool hostAccZero = false;     /*!< host LinSysRes / Jacobian are known to be zero */
+  bool accImplicit = false;     /*!< JacVal is part of the accumulator */
+  unsigned long accDropped = 0; /*!< pending device accumulators discarded by MarkHostAccumulatorZero (expect 0) */
+  unsigned long outletCalls = 0, outletSubsonicCalls = 0; /*!< device BC_Outlet calls / with a subsonic vertex */
+  std::vector<double> bstateCache; /*!< host copy of st.BState */
+  std::vector<unsigned long> h_markerPtr; /*!< host copy of geo.marker_ptr */
+  void EnsureAccumulator(bool implicit);
+  void EnsureInputsOnDevice(bool upload, bool needSolution, bool needSensor);
   void UploadUpwindStatic();   /*!< pside CSR (once) */
   bool separateRecGradient = false;
   unsigned long residencyChecks = 0, residencyMismatch = 0;

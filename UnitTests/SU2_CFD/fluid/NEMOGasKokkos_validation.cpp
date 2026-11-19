@@ -58,14 +58,16 @@ static double RelDiff(double a, double b) {
 struct Report {
   std::map<std::string, DiffStats> stats;
   std::vector<std::string> order;
-  void add(const std::string& name, double cpu, double dev, int k = -1, int i = -1) {
+  /*! \param[in] scale - > 0: the difference is measured relative to this (physical) scale instead of max(|cpu|,|dev|). */
+  void add(const std::string& name, double cpu, double dev, int k = -1, int i = -1, double scale = -1.0) {
     if (!stats.count(name)) order.push_back(name);
     auto& s = stats[name];
     s.n++;
     const bool bw = (cpu == dev) || (std::isnan(cpu) && std::isnan(dev));
     s.nbitwise += bw;
     if (std::isnan(cpu) != std::isnan(dev)) s.nNaNmismatch++;
-    const double r = RelDiff(cpu, dev);
+    const double r = (scale > 0.0 && !bw && !std::isnan(cpu) && !std::isnan(dev)) ? std::fabs(cpu - dev) / scale
+                                                                                    : RelDiff(cpu, dev);
     if (r > s.maxrel) { s.maxrel = r; s.worst_cpu = cpu; s.worst_dev = dev; s.worst_k = k; s.worst_i = i; }
     if (!std::isnan(cpu) && !std::isnan(dev)) s.maxabs = std::max(s.maxabs, std::fabs(cpu - dev));
   }
@@ -339,6 +341,114 @@ static bool RunGas(const std::string& gas_model, const std::string& composition,
       }
     }
     all_ok = rep.print(gas_model + ": individual functions", tol) && all_ok;
+  }
+
+  /*=================== 1b) Step 7 source terms: chemistry + V-T relaxation ===================*/
+  {
+    /*--- Per state: V (Euler layout), Eve(Tve), Cvve(Tve), dTdU, dTvedU as the solver stores them; outputs:
+     *    ws | chemistry Jacobian (nVar^2) | omega | taus | VT Jacobian (nVar^2). ---*/
+    const int iV = 0, iE = nPrim, iC = iE + ns, iT = iC + ns, iTv = iT + nVar, nIn = iTv + nVar;
+    const int oW = 0, oJ = ns, oOm = oJ + nVar * nVar, oTau = oOm + 1, oJv = oTau + ns, nOut = oJv + nVar * nVar;
+    DView2D din("src_in", nStates, nIn), dout("src_out", nStates, nOut);
+    auto hin = Kokkos::create_mirror_view(din);
+    std::vector<std::vector<double>> cpu(nStates, std::vector<double>(nOut, 0.0));
+    std::vector<double*> jrows(nVar), vrows(nVar);
+    std::vector<double> jbuf(nVar * nVar), vbuf(nVar * nVar);
+    for (int k = 0; k < nVar; k++) { jrows[k] = &jbuf[k * nVar]; vrows[k] = &vbuf[k * nVar]; }
+
+    for (int i = 0; i < nStates; i++) {
+      auto& st = states[i];
+      std::vector<double> rhos = st.rhos;
+      std::vector<double> V(nPrim, 0.0), dT(nVar, 0.0), dTv(nVar, 0.0);
+      double rho = 0.0;
+      for (int s = 0; s < ns; s++) { V[s] = rhos[s]; rho += rhos[s]; }
+      V[idx.T()] = st.T;
+      V[idx.TVE()] = st.Tve;
+      for (int d = 0; d < nDim; d++) V[idx.VEL() + d] = st.vel[d];
+      gas.SetTDStateRhosTTv(rhos, st.T, st.Tve);
+      V[idx.P()] = gas.ComputePressure();
+      V[idx.RHO()] = rho;
+      V[idx.RHOCVTR()] = gas.ComputerhoCvtr();
+      V[idx.RHOCVVE()] = gas.ComputerhoCvve();
+      const std::vector<double> eve = gas.ComputeSpeciesEve(st.Tve);
+      const std::vector<double> cvve = gas.ComputeSpeciesCvVibEle(st.Tve);
+      gas.ComputedTdU(V.data(), dT.data());
+      gas.ComputedTvedU(V.data(), eve, dTv.data());
+
+      /*--- CPU reference: the CSource_NEMO call sequence. ---*/
+      auto& o = cpu[i];
+      std::fill(jbuf.begin(), jbuf.end(), 0.0);
+      std::fill(vbuf.begin(), vbuf.end(), 0.0);
+      gas.SetTDStateRhosTTv(rhos, st.T, st.Tve);
+      const auto& ws = gas.ComputeNetProductionRates(true, V.data(), eve.data(), cvve.data(), dT.data(), dTv.data(),
+                                                     jrows.data());
+      for (int s = 0; s < ns; s++) o[oW + s] = ws[s];
+      for (int k = 0; k < nVar * nVar; k++) o[oJ + k] = jbuf[k];
+      gas.SetTDStateRhosTTv(rhos, st.T, st.Tve);
+      o[oOm] = gas.ComputeEveSourceTerm();
+      gas.GetEveSourceTermJacobian(V.data(), eve.data(), cvve.data(), dT.data(), dTv.data(), vrows.data());
+      for (int k = 0; k < nVar * nVar; k++) o[oJv + k] = vbuf[k];
+
+      for (int k = 0; k < nPrim; k++) hin(i, iV + k) = V[k];
+      for (int s = 0; s < ns; s++) { hin(i, iE + s) = eve[s]; hin(i, iC + s) = cvve[s]; }
+      for (int k = 0; k < nVar; k++) { hin(i, iT + k) = dT[k]; hin(i, iTv + k) = dTv[k]; }
+    }
+    Kokkos::deep_copy(din, hin);
+
+    const auto g = tables;
+    Kokkos::parallel_for(
+        "NEMO::sources", Kokkos::RangePolicy<>(0, nStates), KOKKOS_LAMBDA(const int i) {
+          const int ns = g.nSpecies;
+          double V[nk::MAXNPRIMVAR], eve[nk::MAXNS], cvve[nk::MAXNS], dT[nk::MAXNVAR], dTv[nk::MAXNVAR];
+          double ws[nk::MAXNS], taus[nk::MAXNS], eq[nk::MAXNS], ev[nk::MAXNS];
+          double jac[nk::MAXNVAR * nk::MAXNVAR];
+          for (int k = 0; k < nPrim; k++) V[k] = din(i, iV + k);
+          for (int s = 0; s < ns; s++) { eve[s] = din(i, iE + s); cvve[s] = din(i, iC + s); }
+          for (int k = 0; k < nVar; k++) { dT[k] = din(i, iT + k); dTv[k] = din(i, iTv + k); }
+          for (int k = 0; k < nVar * nVar; k++) jac[k] = 0.0;
+          nk::ComputeNetProductionRates(g, nDim, true, V, eve, cvve, dT, dTv, ws, jac);
+          for (int s = 0; s < ns; s++) dout(i, oW + s) = ws[s];
+          for (int k = 0; k < nVar * nVar; k++) dout(i, oJ + k) = jac[k];
+          dout(i, oOm) = nk::ComputeEveSourceTerm(g, V, V[ns], V[ns + 1], ws, taus, eq, ev);
+          for (int s = 0; s < ns; s++) dout(i, oTau + s) = taus[s];
+          for (int k = 0; k < nVar * nVar; k++) jac[k] = 0.0;
+          nk::GetEveSourceTermJacobian(g, nDim, V, V[ns], eve, cvve, dT, dTv, taus, eq, jac);
+          for (int k = 0; k < nVar * nVar; k++) dout(i, oJv + k) = jac[k];
+        });
+    Kokkos::fence();
+    auto hout = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), dout);
+
+    /*--- Net production rates are differences of large forward / backward rates (and sums over reactions), so
+     *    per-entry relative differences are meaningless where they cancel (not bitwise in -ffast-math builds):
+     *    ws is measured relative to max_s |ws_s| of the state, Jacobian entries relative to a column / row maximum.
+     *    The strict IEEE build is bitwise (bitwise% = 100) regardless of the scaling. ---*/
+    Report rep;
+    for (int i = 0; i < nStates; i++) {
+      const auto& o = cpu[i];
+      double wmax = 0.0;
+      for (int s = 0; s < ns; s++) wmax = std::max(wmax, std::fabs(o[oW + s]));
+      for (int s = 0; s < ns; s++) rep.add("ws", o[oW + s], hout(i, oW + s), s, i, wmax);
+      /*--- Species rows of d(ws)/dU: scale = max over the species rows of that column (same units; one row can be
+       *    an exact cancellation of reactions that dominate the other rows); other rows: row maximum. ---*/
+      std::vector<double> colmax(nVar, 0.0);
+      for (int row = 0; row < ns; row++)
+        for (int c = 0; c < nVar; c++) colmax[c] = std::max(colmax[c], std::fabs(o[oJ + row * nVar + c]));
+      for (int row = 0; row < nVar; row++) {
+        double jmax = 0.0, vmax = 0.0;
+        for (int c = 0; c < nVar; c++) {
+          jmax = std::max(jmax, std::fabs(o[oJ + row * nVar + c]));
+          vmax = std::max(vmax, std::fabs(o[oJv + row * nVar + c]));
+        }
+        for (int c = 0; c < nVar; c++) {
+          const int k = row * nVar + c;
+          rep.add("dws/dU", o[oJ + k], hout(i, oJ + k), k, i, row < ns ? colmax[c] : jmax);
+          rep.add("domega/dU", o[oJv + k], hout(i, oJv + k), k, i, vmax);
+        }
+      }
+      rep.add("omega_ve", o[oOm], hout(i, oOm), -1, i);
+    }
+    all_ok = rep.print(gas_model + ": source terms (production rates, chemistry Jacobian, Eve source, Jacobian)",
+                       tol) && all_ok;
   }
 
   /*=================== 2) Composite Cons2Prim ===================*/

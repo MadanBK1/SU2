@@ -453,6 +453,8 @@ unsigned long CNEMOKokkosData::SetPrimVar() {
    *    NS transport only writes columns >= nPrimVarGrad), so Steps 3-4 read it without re-uploading. ---*/
   primDeviceValid = true;
   secDeviceValid = true;
+  consDeviceValid = true; /*--- device Solution (clipped / rolled back) == downloaded host Solution ---*/
+  sensorValid = false;    /*--- SetPressureDiffusionSensor recomputes it on the host after SetPrimVar ---*/
   gradPrimValid = gradRecValid = false;
 
   return nonPhysical;
@@ -575,7 +577,8 @@ void CNEMOKokkosData::PrintPerf() const {
             << " | d2h " << perf.d2h << " s (" << perf.d2h / c << "/call, " << perf.bytes_d2h / c / 1e6
             << " MB/call)"
             << " | host post " << perf.host_post << " s (" << perf.host_post / c << "/call)" << std::endl;
-  static const char* names[N_STAGES] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue", "Upwind"};
+  static const char* names[N_STAGES] = {"Gradient", "Limiter",  "TimeStep", "MaxEigenvalue",
+                                        "Upwind",   "Source",   "BC",       "ResidualSync"};
   for (int s = 0; s < N_STAGES; ++s) {
     const auto& P = stagePerf[s];
     if (P.calls == 0) continue;
@@ -592,6 +595,12 @@ void CNEMOKokkosData::PrintPerf() const {
       std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " " << names[s] << " host reference (A/B rerun) "
                 << P.hostRef << " s (" << P.hostRef / P.hostRefCalls << "/call)" << std::endl;
   }
+  if (outletCalls > 0)
+    std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " BC_Outlet calls=" << outletCalls
+              << ", with subsonic outlet vertices=" << outletSubsonicCalls << std::endl;
+  if (accDropped > 0)
+    std::cout << "[KOKKOS_NEMO] WARNING MG " << iMesh << ": " << accDropped
+              << " pending device residual accumulators were discarded (missing host sync)" << std::endl;
   if (residencyChecks > 0)
     std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " device-resident Primitive checks=" << residencyChecks
               << " mismatching entries=" << residencyMismatch << std::endl;

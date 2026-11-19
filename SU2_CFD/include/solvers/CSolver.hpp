@@ -1287,6 +1287,12 @@ public:
    */
   virtual void Impose_Fixed_Values(const CGeometry *geometry, const CConfig *config) { }
 
+  /*!
+   * \brief Called at the end of CIntegration::Space_Integration, after all residual contributions (no-op by default;
+   *        the Kokkos NEMO solver downloads its device residual accumulator here).
+   */
+  inline virtual void FinalizeSpaceIntegration(CGeometry *geometry, CConfig *config, unsigned short iMesh) { }
+
  /*!
    * \brief Get the outer state for fluid interface nodes.
    * \param[in] val_marker - marker index

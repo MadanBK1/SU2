@@ -9,5 +9,7 @@ Meshes come from su2code/TestCases: `invwedge.su2`, `viscwedge.su2`, `5x5Mesh.su
 | `check.sh` | Runs ENABLE_KOKKOS=NO and YES (or `REF_MODE=HOST`: all NEMO stages forced to host) for invwedge_ausm, thermalbath and super_cat, then compares residual rows and restart fields. | Strict build: `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0` must be bitwise. |
 | `check_noisefloor.sh` | Production (fast-math) build. The YES-vs-NO deviation must stay within 10× the CPU fast-math vs strict deviation. | |
 | `check_no_identity.sh` | Checks that the ENABLE_KOKKOS=NO output is bit-identical to a pre-change binary. | |
-| `ab_variants.sh` | Per-stage A/B over config variants, using `SU2_KOKKOS_STAGE_VERIFY=1`. | |
+| `ab_variants.sh` | Per-stage A/B over config variants, using `SU2_KOKKOS_STAGE_VERIFY=1` (gradient, limiter, time step, upwind, source, BCs). Step 7 variants: `tb*` (thermal bath: explicit/implicit, frozen, VT limiting, AIR-5), `supersonic` (supersonic inlet/outlet markers), `subout`/`subout_am` (subsonic outlet branch). | Strict build: `AB OVERALL: PASS` (0 non-bitwise entries). |
 | `check_converged.sh` | Converged-solution comparison. Note: invwedge_ausm stalls near rms[Rho_0] ≈ -2.7 and does not converge. | |
+
+Debug environment variables (ENABLE_KOKKOS= YES): `SU2_KOKKOS_NEMO_HOST=c2p,grad,lim,dt,upwind,source,bc|all` forces stages to the host; `SU2_KOKKOS_NEMO_EAGER=1` downloads the device residual accumulator after every device stage; `SU2_KOKKOS_NEMO_MIXED=1` lets device stages upload a non-zero host accumulator (after a host stage); `SU2_KOKKOS_STAGE_VERIFY=1` per-stage A/B.

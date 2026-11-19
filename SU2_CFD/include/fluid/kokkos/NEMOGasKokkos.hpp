@@ -83,7 +83,7 @@ struct NEMOGasTables {
   int nHeavy = 0;     /*!< Number of heavy species (nSpecies - nEl). */
   int nEl = 0;        /*!< Number of electrons (0 or 1, electron is species 0). */
   int nDim = 0;       /*!< nDim the CPU gas was built with. */
-  int nReactions = 0; /*!< Number of reactions (informational for now). */
+  int nReactions = 0; /*!< Number of reactions. */
   int maxEl = 0;      /*!< Max number of electronic levels (2nd extent of CharElTemp). */
   bool ionization = false;
   double Ru = 0.0;    /*!< Universal gas constant [J/(kmol K)] = 1000*UNIVERSAL_GAS_CONSTANT. */
@@ -97,6 +97,20 @@ struct NEMOGasTables {
   IntView1D nElStates;
   RealView2D CharElTemp;         /*!< (nSpecies, maxEl) */
   RealView2D ElDegeneracy;       /*!< (nSpecies, maxEl) */
+
+  /*--- Step 7: finite-rate chemistry and vibrational-electronic relaxation (CSU2TCLib). ---*/
+  using IntView2D = Kokkos::View<const int**, Kokkos::LayoutRight, memory_space>;
+  bool frozen = false;           /*!< CNEMOGas::frozen (config FROZEN_MIXTURE): no omega_CV term in the Eve source. */
+  double Avogadro = 0.0;         /*!< AVOGAD_CONSTANT [1/kmol] */
+  double Pi = 0.0;               /*!< PI_NUMBER */
+  IntView2D Reactions;           /*!< (nReactions, 6): [0,3) reactants, [3,6) products, value nSpecies = none
+                                      (CSU2TCLib::Reactions(r, 0|1, 0..2)). */
+  RealView1D ArrheniusCoefficient, ArrheniusEta, ArrheniusTheta; /*!< (nReactions) */
+  RealView1D Tcf_a, Tcf_b, Tcb_a, Tcb_b;                           /*!< (nReactions) rate-controlling T exponents */
+  RealView2D RxnConstantTable;   /*!< (nReactions, 6*5): CSU2TCLib::GetChemistryEquilConstants(r) pre-baked at build
+                                      time (the CPU re-fills its member table with std::string compares per call). */
+  RealView2D MW_A, MW_B;         /*!< (nSpecies, nSpecies) Millikan-White A_sr, B_sr of ComputeEveSourceTerm. */
+  RealView1D Diss;               /*!< (nSpecies) dissociation potential (not used by the source terms, kept for Step 8). */
 };
 
 /*!
@@ -518,6 +532,353 @@ void ComputedTvedU(const NEMOGasTables& g, int nDim, const double* V, const doub
   for (int iDim = 0; iDim < nDim; iDim++) val_dTvedU[ns + iDim] = 0.0;
   val_dTvedU[ns + nDim] = 0.0;
   val_dTvedU[ns + nDim + 1] = 1.0 / rhoCvve;
+}
+
+/*--------------------------------------------------------------------------------------*/
+/*--- Step 7: finite-rate chemistry and V-T relaxation (CSU2TCLib).                  ---*/
+/*--------------------------------------------------------------------------------------*/
+
+/*!
+ * \brief CSU2TCLib::ComputeKeqConstants (with the pre-baked GetChemistryEquilConstants table).
+ * \note Reproduces the CPU index arithmetic exactly, including its quirk: "unsigned short pwr = floor(log10(N))"
+ *       and "unsigned short iIndex = int(pwr) - 14" wrap for N < 1e14 cm^-3 (iIndex = 65535 - ..., i.e. >= 5), which
+ *       selects the HIGHEST-density row 5 instead of row 0 (low-density / high-altitude cases). The double ->
+ *       unsigned short conversion is emulated as (unsigned short)(int)x, i.e. what GCC/x86-64 emits (cvttsd2si into a
+ *       32-bit register, keep the low 16 bits), also for N < 1 and NaN. A config-guarded fix is a TODO (not done, the
+ *       CPU path is the reference).
+ */
+KOKKOS_INLINE_FUNCTION
+void ComputeKeqConstants(const NEMOGasTables& g, int iReaction, const double* rhos, double* A) {
+  /*--- Calculate mixture number density ---*/
+  double N = 0.0;
+  for (int s = 0; s < g.nSpecies; s++) {
+    N += rhos[s] / g.MolarMass(s) * g.Avogadro;
+  }
+
+  /*--- Convert number density from 1/m^3 to 1/cm^3 for table look-up ---*/
+  N = N * (1E-6);
+
+  /*--- Determine table index based on mixture N ---*/
+  const unsigned short tbl_offset = 14;
+  const unsigned short pwr = static_cast<unsigned short>(static_cast<int>(Kokkos::floor(Kokkos::log10(N))));
+
+  /*--- Bound the interpolation to table limit values ---*/
+  const unsigned short iIndex = static_cast<unsigned short>(int(pwr) - tbl_offset);
+  auto tbl = [&](int row, int col) { return g.RxnConstantTable(iReaction, row * 5 + col); };
+  if (iIndex <= 0) {
+    for (int ii = 0; ii < 5; ii++) A[ii] = tbl(0, ii);
+    return;
+  }
+  if (iIndex >= 5) {
+    for (int ii = 0; ii < 5; ii++) A[ii] = tbl(5, ii);
+    return;
+  }
+
+  /*--- Calculate interpolation denominator terms avoiding pow() ---*/
+  double tmp1 = 1.0;
+  double tmp2 = 1.0;
+  for (unsigned short ii = 0; ii < pwr; ii++) {
+    tmp1 *= 10.0;
+    tmp2 *= 10.0;
+  }
+  tmp2 *= 10.0;
+
+  /*--- Interpolate ---*/
+  for (int ii = 0; ii < 5; ii++) {
+    A[ii] = (tbl(iIndex + 1, ii) - tbl(iIndex, ii)) / (tmp2 - tmp1) * (N - tmp1) + tbl(iIndex, ii);
+  }
+}
+
+/*!
+ * \brief CSU2TCLib::ComputeNetProductionRates (+ ChemistryJacobian per reaction if implicit) after
+ *        SetTDStateRhosTTv(V[rho_s], V[T], V[Tve]).
+ * \param[out] ws - Species net production rates (nSpecies), what the CPU keeps in its "ws" member (read again by
+ *                  ComputeEveSourceTerm).
+ * \param[in,out] jac - nVar x nVar row-major, accumulated into ("+=", the caller zeroes it), not scaled by Volume.
+ *                      Untouched if !implicit. dTdU/dTvedU may be nullptr if !implicit.
+ */
+KOKKOS_INLINE_FUNCTION
+void ComputeNetProductionRates(const NEMOGasTables& g, int nDim, bool implicit, const double* V, const double* eve,
+                               const double* cvve, const double* dTdU, const double* dTvedU, double* ws,
+                               double* jac) {
+  const int nSpecies = g.nSpecies;
+  const int nEve = nSpecies + nDim + 1;
+  const int nVar = nSpecies + nDim + 2;
+  const double* rhos = V;
+  const double T = V[nSpecies], Tve = V[nSpecies + 1];
+
+  for (int s = 0; s < nSpecies; s++) ws[s] = 0.0;
+
+  /*--- Define artificial chemistry parameters ---*/
+  const double T_min = 800.0;
+  const double epsilon = 80;
+
+  for (int iReaction = 0; iReaction < g.nReactions; iReaction++) {
+    /*--- Determine the rate-controlling temperature ---*/
+    const double af = g.Tcf_a(iReaction);
+    const double bf = g.Tcf_b(iReaction);
+    const double ab = g.Tcb_a(iReaction);
+    const double bb = g.Tcb_b(iReaction);
+    const double Trxnf = Kokkos::pow(T, af) * Kokkos::pow(Tve, bf);
+    const double Trxnb = Kokkos::pow(T, ab) * Kokkos::pow(Tve, bb);
+
+    /*--- Calculate the modified temperature ---*/
+    const double Thf = 0.5 * (Trxnf + T_min + Kokkos::sqrt((Trxnf - T_min) * (Trxnf - T_min) + epsilon * epsilon));
+    const double Thb = 0.5 * (Trxnb + T_min + Kokkos::sqrt((Trxnb - T_min) * (Trxnb - T_min) + epsilon * epsilon));
+
+    /*--- Get the Keq & Arrhenius coefficients ---*/
+    double A[5];
+    ComputeKeqConstants(g, iReaction, rhos, A);
+
+    /*--- Calculate Keq ---*/
+    const double Keq = Kokkos::exp(A[0] * (Thb / 1E4) + A[1] + A[2] * Kokkos::log(1E4 / Thb) + A[3] * (1E4 / Thb) +
+                                   A[4] * (1E4 / Thb) * (1E4 / Thb));
+
+    /*--- Calculate rate coefficients ---*/
+    const double kf = g.ArrheniusCoefficient(iReaction) * Kokkos::exp(g.ArrheniusEta(iReaction) * Kokkos::log(Thf)) *
+                      Kokkos::exp(-g.ArrheniusTheta(iReaction) / Thf);
+    const double kfb = g.ArrheniusCoefficient(iReaction) * Kokkos::exp(g.ArrheniusEta(iReaction) * Kokkos::log(Thb)) *
+                       Kokkos::exp(-g.ArrheniusTheta(iReaction) / Thb);
+    const double kb = kfb / Keq;
+
+    /*--- Determine production & destruction of each species ---*/
+    double fwdRxn = 1.0;
+    double bkwRxn = 1.0;
+    for (int ii = 0; ii < 3; ii++) {
+      /*--- Reactants ---*/
+      const int iSpecies = g.Reactions(iReaction, ii);
+      if (iSpecies != nSpecies) fwdRxn *= 0.001 * rhos[iSpecies] / g.MolarMass(iSpecies);
+
+      /*--- Products ---*/
+      const int jSpecies = g.Reactions(iReaction, 3 + ii);
+      if (jSpecies != nSpecies) {
+        bkwRxn *= 0.001 * rhos[jSpecies] / g.MolarMass(jSpecies);
+      }
+    }
+
+    fwdRxn = 1000.0 * kf * fwdRxn;
+    bkwRxn = 1000.0 * kb * bkwRxn;
+
+    for (int ii = 0; ii < 3; ii++) {
+      /*--- Products ---*/
+      int iSpecies = g.Reactions(iReaction, 3 + ii);
+      if (iSpecies != nSpecies) ws[iSpecies] += g.MolarMass(iSpecies) * (fwdRxn - bkwRxn);
+
+      /*--- Reactants ---*/
+      iSpecies = g.Reactions(iReaction, ii);
+      if (iSpecies != nSpecies) ws[iSpecies] -= g.MolarMass(iSpecies) * (fwdRxn - bkwRxn);
+    }
+
+    if (!implicit) continue;
+
+    /*====================== CSU2TCLib::ChemistryJacobian(iReaction) ======================*/
+    double dkf[MAXNVAR], dkb[MAXNVAR], dRfok[MAXNVAR], dRbok[MAXNVAR];
+    int alphak[MAXNS], betak[MAXNS];
+    for (int iVar = 0; iVar < nVar; iVar++) {
+      dkf[iVar] = 0.0;
+      dRfok[iVar] = 0.0;
+      dkb[iVar] = 0.0;
+      dRbok[iVar] = 0.0;
+    }
+    for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+      alphak[iSpecies] = 0;
+      betak[iSpecies] = 0;
+    }
+
+    /*--- Extract additional Arrhenius information ---*/
+    const double eta = g.ArrheniusEta(iReaction);
+    const double theta = g.ArrheniusTheta(iReaction);
+
+    /*--- Derivative of modified temperature wrt Trxnf ---*/
+    const double dThf = 0.5 * (1.0 + (Trxnf - T_min) / Kokkos::sqrt((Trxnf - T_min) * (Trxnf - T_min) + epsilon * epsilon));
+    const double dThb = 0.5 * (1.0 + (Trxnb - T_min) / Kokkos::sqrt((Trxnb - T_min) * (Trxnb - T_min) + epsilon * epsilon));
+
+    /*--- Fwd rate coefficient derivatives ---*/
+    double coeff = kf * (eta / Thf + theta / (Thf * Thf)) * dThf;
+    for (int iVar = 0; iVar < nVar; iVar++) {
+      dkf[iVar] = coeff * (af * Trxnf / T * dTdU[iVar] + bf * Trxnf / Tve * dTvedU[iVar]);
+    }
+
+    /*--- Bkwd rate coefficient derivatives ---*/
+    coeff = kb * (eta / Thb + theta / (Thb * Thb)) * dThb;
+    for (int iVar = 0; iVar < nVar; iVar++) {
+      dkb[iVar] = coeff * (ab * Trxnb / T * dTdU[iVar] + bb * Trxnb / Tve * dTvedU[iVar]) -
+                  kb * ((A[0] * Thb / 1E4 - A[2] - A[3] * 1E4 / Thb - 2 * A[4] * (1E4 / Thb) * (1E4 / Thb)) / Thb) *
+                      dThb * (ab * Trxnb / T * dTdU[iVar] + bb * Trxnb / Tve * dTvedU[iVar]);
+    }
+
+    /*--- Rxn rate derivatives ---*/
+    for (int ii = 0; ii < 3; ii++) {
+      /*--- Products ---*/
+      int iSpecies = g.Reactions(iReaction, 3 + ii);
+      if (iSpecies != nSpecies) betak[iSpecies]++;
+
+      /*--- Reactants ---*/
+      iSpecies = g.Reactions(iReaction, ii);
+      if (iSpecies != nSpecies) alphak[iSpecies]++;
+    }
+
+    /*--- pow(double, int) is std::pow(double, double(int)) (C++11 promotion), written out explicitly. ---*/
+    for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+      // Fwd
+      dRfok[iSpecies] = 0.001 * alphak[iSpecies] / g.MolarMass(iSpecies) *
+                        Kokkos::pow(0.001 * rhos[iSpecies] / g.MolarMass(iSpecies),
+                                    double(alphak[iSpecies] - 1 > 0 ? alphak[iSpecies] - 1 : 0));
+
+      for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++)
+        if (jSpecies != iSpecies)
+          dRfok[iSpecies] *= Kokkos::pow(0.001 * rhos[jSpecies] / g.MolarMass(jSpecies), double(alphak[jSpecies]));
+      dRfok[iSpecies] *= 1000.0;
+
+      // Bkw
+      dRbok[iSpecies] = 0.001 * betak[iSpecies] / g.MolarMass(iSpecies) *
+                        Kokkos::pow(0.001 * rhos[iSpecies] / g.MolarMass(iSpecies),
+                                    double(betak[iSpecies] - 1 > 0 ? betak[iSpecies] - 1 : 0));
+
+      for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++)
+        if (jSpecies != iSpecies)
+          dRbok[iSpecies] *= Kokkos::pow(0.001 * rhos[jSpecies] / g.MolarMass(jSpecies), double(betak[jSpecies]));
+      dRbok[iSpecies] *= 1000.0;
+    }
+
+#define NEMO_JAC(r, c) jac[(r) * nVar + (c)]
+    for (int ii = 0; ii < 3; ii++) {
+      /*--- Products ---*/
+      int iSpecies = g.Reactions(iReaction, 3 + ii);
+      if (iSpecies != nSpecies) {
+        const double Ms = g.MolarMass(iSpecies);
+        for (int iVar = 0; iVar < nVar; iVar++) {
+          NEMO_JAC(iSpecies, iVar) +=
+              Ms * (dkf[iVar] * (fwdRxn / kf) + kf * dRfok[iVar] - dkb[iVar] * (bkwRxn / kb) - kb * dRbok[iVar]);
+          NEMO_JAC(nEve, iVar) +=
+              Ms * (dkf[iVar] * (fwdRxn / kf) + kf * dRfok[iVar] - dkb[iVar] * (bkwRxn / kb) - kb * dRbok[iVar]) *
+              eve[iSpecies];
+        }
+
+        for (int jVar = 0; jVar < nVar; jVar++) {
+          NEMO_JAC(nEve, jVar) += Ms * (fwdRxn - bkwRxn) * cvve[iSpecies] * dTvedU[jVar];
+        }
+      }
+
+      /*--- Reactants ---*/
+      iSpecies = g.Reactions(iReaction, ii);
+      if (iSpecies != nSpecies) {
+        const double Ms = g.MolarMass(iSpecies);
+        for (int iVar = 0; iVar < nVar; iVar++) {
+          NEMO_JAC(iSpecies, iVar) -=
+              Ms * (dkf[iVar] * (fwdRxn / kf) + kf * dRfok[iVar] - dkb[iVar] * (bkwRxn / kb) - kb * dRbok[iVar]);
+          NEMO_JAC(nEve, iVar) -=
+              Ms * (dkf[iVar] * (fwdRxn / kf) + kf * dRfok[iVar] - dkb[iVar] * (bkwRxn / kb) - kb * dRbok[iVar]) *
+              eve[iSpecies];
+        }
+
+        for (int jVar = 0; jVar < nVar; jVar++) {
+          NEMO_JAC(nEve, jVar) -= Ms * (fwdRxn - bkwRxn) * cvve[iSpecies] * dTvedU[jVar];
+        }
+      }
+    }
+#undef NEMO_JAC
+  }
+}
+
+/*!
+ * \brief CSU2TCLib::ComputeEveSourceTerm after SetTDStateRhosTTv(rhos, T, Tve) (Landau-Teller, Millikan-White with
+ *        Park's limiting cross section, + sum ws*Ev if !frozen).
+ * \param[in] ws - Net production rates of the PRECEDING ComputeNetProductionRates call (the CPU's hidden "ws" member
+ *                 dependency made explicit); unused if frozen.
+ * \param[out] taus, eve_eq, eve_v - Members the CPU leaves for GetEveSourceTermJacobian: relaxation times,
+ *                 vibrational energies at T and at Tve (ComputeSpeciesEve(.., true)).
+ */
+KOKKOS_INLINE_FUNCTION
+double ComputeEveSourceTerm(const NEMOGasTables& g, const double* rhos, double T, double Tve, const double* ws,
+                            double* taus, double* eve_eq, double* eve_v) {
+  const int nSpecies = g.nSpecies;
+  const double Pressure = ComputePressure(g, rhos, T, Tve);
+  double MolarFrac[MAXNS];
+
+  double omegaVT = 0.0;
+  double omegaCV = 0.0;
+
+  /*--- Calculate mole fractions ---*/
+  double N = 0.0;
+  double conc = 0.0;
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    conc += rhos[iSpecies] / g.MolarMass(iSpecies);
+    N += rhos[iSpecies] / g.MolarMass(iSpecies) * g.Avogadro;
+  }
+
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+    MolarFrac[iSpecies] = (rhos[iSpecies] / g.MolarMass(iSpecies)) / conc;
+
+  /*--- Compute Eve and Eve* ---*/
+  ComputeSpeciesEve(g, T, eve_eq, true);
+  ComputeSpeciesEve(g, Tve, eve_v, true);
+
+  /*--- Loop over species to calculate source term --*/
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    /*--- Millikan & White relaxation time (A_sr, B_sr pre-baked, same expressions) ---*/
+    double num = 0.0;
+    double denom = 0.0;
+    for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) {
+      const double A_sr = g.MW_A(iSpecies, jSpecies);
+      const double B_sr = g.MW_B(iSpecies, jSpecies);
+      const double tau_sr = 101325.0 / Pressure * Kokkos::exp(A_sr * (Kokkos::pow(T, -1.0 / 3.0) - B_sr) - 18.42);
+
+      num += MolarFrac[jSpecies];
+      denom += MolarFrac[jSpecies] / tau_sr;
+    }
+
+    const double tauMW = num / denom;
+
+    /*--- Park limiting cross section ---*/
+    const double Cs = Kokkos::sqrt((8.0 * g.Ru * T) / (g.Pi * g.MolarMass(iSpecies)));
+    const double sig_s = 3E-21 * (2.5E9) / (T * T);
+
+    const double tauP = 1 / (sig_s * Cs * N);
+
+    /*--- Species relaxation time ---*/
+    taus[iSpecies] = tauMW + tauP;
+
+    /*--- Add species contribution to residual ---*/
+    omegaVT += rhos[iSpecies] * (eve_eq[iSpecies] - eve_v[iSpecies]) / taus[iSpecies];
+  }
+
+  /*--- Vibrational energy change due to chemical reactions ---*/
+  if (!g.frozen) {
+    for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) omegaCV += ws[iSpecies] * eve_v[iSpecies];
+  }
+
+  return omegaVT + omegaCV;
+}
+
+/*!
+ * \brief CSU2TCLib::GetEveSourceTermJacobian (after ComputeEveSourceTerm, whose taus / eve_eq it reads).
+ * \note As on the CPU the parameter "eve" (the node's Eve, vib + el) shadows the member of the same name in the
+ *       last loop, so d(omega)/d(rho_s) uses (Ev_eq(T) - Eve_node)/tau_s.
+ * \param[in,out] jac - nVar x nVar row-major, accumulated into, not scaled by Volume.
+ */
+KOKKOS_INLINE_FUNCTION
+void GetEveSourceTermJacobian(const NEMOGasTables& g, int nDim, const double* rhos, double T, const double* eve,
+                              const double* cvve, const double* dTdU, const double* dTvedU, const double* taus,
+                              const double* eve_eq, double* jac) {
+  const int nSpecies = g.nSpecies;
+  const int nEv = nSpecies + nDim + 1;
+  const int nVar = nSpecies + nDim + 2;
+
+  /*--- Compute Cvvs ---*/
+  double cvve_eq[MAXNS];
+  ComputeSpeciesCvVibEle(g, T, cvve_eq);
+
+  /*--- Loop through species ---*/
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    for (int iVar = 0; iVar < nVar; iVar++) {
+      jac[nEv * nVar + iVar] +=
+          rhos[iSpecies] / taus[iSpecies] * (cvve_eq[iSpecies] * dTdU[iVar] - cvve[iSpecies] * dTvedU[iVar]);
+    }
+  }
+
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+    jac[nEv * nVar + iSpecies] += (eve_eq[iSpecies] - eve[iSpecies]) / taus[iSpecies];
 }
 
 /*--------------------------------------------------------------------------------------*/

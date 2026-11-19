@@ -206,6 +206,9 @@ void CIntegration::Space_Integration(CGeometry *geometry,
   }
   //AD::ResumePreaccumulation(pausePreacc);
 
+  /*--- All residual contributions are assembled (device-resident solvers synchronize here). ---*/
+  solver_container[MainSolver]->FinalizeSpaceIntegration(geometry, config, iMesh);
+
 }
 
 void CIntegration::Time_Integration(CGeometry *geometry, CSolver **solver_container, CConfig *config,

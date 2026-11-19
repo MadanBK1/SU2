@@ -236,6 +236,10 @@ void CNEMONSSolver::Viscous_Residual(CGeometry *geometry,
                                      unsigned short iRKStep) {
   SU2_ZONE_SCOPED
 
+#ifdef HAVE_KOKKOS
+  Device_BeginHostStage(geometry); /*--- device residual accumulator -> host ---*/
+#endif
+
   const bool implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
   CNumerics* numerics = numerics_container[VISC_TERM];
 
@@ -390,6 +394,10 @@ void CNEMONSSolver::BC_HeatFlux_Wall(CGeometry *geometry,
                                      CConfig *config,
                                      unsigned short val_marker) {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  Device_BeginHostStage(geometry); /*--- device residual accumulator -> host ---*/
+#endif
 
   bool catalytic = config->GetCatalytic_Wall(val_marker);
 
@@ -573,6 +581,10 @@ void CNEMONSSolver::BC_Isothermal_Wall(CGeometry *geometry, CSolver **solver_con
                                        CNumerics *conv_numerics, CNumerics *sour_numerics,
                                        CConfig *config, unsigned short val_marker) {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  Device_BeginHostStage(geometry); /*--- device residual accumulator -> host ---*/
+#endif
 
   bool catalytic = config->GetCatalytic_Wall(val_marker);
 
@@ -912,6 +924,10 @@ void CNEMONSSolver::BC_Smoluchowski_Maxwell(CGeometry *geometry,
                                             CConfig *config,
                                             unsigned short val_marker) {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  Device_BeginHostStage(geometry); /*--- device residual accumulator -> host ---*/
+#endif
 
 
   const bool ionization = config->GetIonization();

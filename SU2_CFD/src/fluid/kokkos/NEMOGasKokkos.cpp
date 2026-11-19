@@ -14,6 +14,7 @@
 #include "../../../include/fluid/CSU2TCLib.hpp"
 #include "../../../../Common/include/toolboxes/allocation_toolbox.hpp"
 
+#include <cmath>
 #include <string>
 #include <type_traits>
 
@@ -96,7 +97,94 @@ struct NEMOGasTablesAccess {
     Kokkos::deep_copy(the, hthe);
     Kokkos::deep_copy(gdeg, hg);
 
+    /*--- Step 7: reaction data and V-T relaxation constants. ---*/
+    const int nr = gas.nReactions;
+    Kokkos::View<int**, Kokkos::LayoutRight, mem> rx("NEMO::Reactions", nr, 6);
+    Kokkos::View<double*, mem> arrA("NEMO::ArrheniusCoefficient", nr), arrEta("NEMO::ArrheniusEta", nr),
+        arrTh("NEMO::ArrheniusTheta", nr), tfa("NEMO::Tcf_a", nr), tfb("NEMO::Tcf_b", nr), tba("NEMO::Tcb_a", nr),
+        tbb("NEMO::Tcb_b", nr), diss("NEMO::Diss", ns);
+    Kokkos::View<double**, Kokkos::LayoutRight, mem> rxt("NEMO::RxnConstantTable", nr, 30), mwA("NEMO::MW_A", ns, ns),
+        mwB("NEMO::MW_B", ns, ns);
+    {
+      auto hrx = Kokkos::create_mirror_view(rx);
+      auto hA = Kokkos::create_mirror_view(arrA);
+      auto hEta = Kokkos::create_mirror_view(arrEta);
+      auto hTh = Kokkos::create_mirror_view(arrTh);
+      auto hfa = Kokkos::create_mirror_view(tfa);
+      auto hfb = Kokkos::create_mirror_view(tfb);
+      auto hba = Kokkos::create_mirror_view(tba);
+      auto hbb = Kokkos::create_mirror_view(tbb);
+      auto hdiss = Kokkos::create_mirror_view(diss);
+      auto hrxt = Kokkos::create_mirror_view(rxt);
+      auto hmwA = Kokkos::create_mirror_view(mwA);
+      auto hmwB = Kokkos::create_mirror_view(mwB);
+
+      /*--- GetChemistryEquilConstants(r) fills the member RxnConstantTable from std::string compares of the gas
+       *    model name. Call it per reaction in the CPU order (0..nr-1, as the reaction loop does) on the gas object
+       *    and keep each table; the member table is restored afterwards so the host object is left unchanged.
+       *    (A reaction index not covered by any branch keeps the previous reaction's table, exactly as in the CPU
+       *    loop, except for reaction 0, where the CPU would see the table left by the previous point.) ---*/
+      auto& g = const_cast<CSU2TCLib&>(gas);
+      const su2activematrix saved = g.RxnConstantTable;
+      for (int r = 0; r < nr; r++) {
+        for (int k = 0; k < 3; k++) {
+          hrx(r, k) = static_cast<int>(gas.Reactions(r, 0, k));
+          hrx(r, 3 + k) = static_cast<int>(gas.Reactions(r, 1, k));
+          if (hrx(r, k) < 0 || hrx(r, k) > ns || hrx(r, 3 + k) < 0 || hrx(r, 3 + k) > ns)
+            SU2_MPI::Error("NEMOGasKokkos: reaction species index out of range.", CURRENT_FUNCTION);
+        }
+        hA(r) = gas.ArrheniusCoefficient[r];
+        hEta(r) = gas.ArrheniusEta[r];
+        hTh(r) = gas.ArrheniusTheta[r];
+        hfa(r) = gas.Tcf_a[r];
+        hfb(r) = gas.Tcf_b[r];
+        hba(r) = gas.Tcb_a[r];
+        hbb(r) = gas.Tcb_b[r];
+        g.GetChemistryEquilConstants(r);
+        for (int row = 0; row < 6; row++)
+          for (int c = 0; c < 5; c++) hrxt(r, row * 5 + c) = gas.RxnConstantTable(row, c);
+      }
+      g.RxnConstantTable = saved;
+
+      /*--- Millikan-White constants, same expressions as CSU2TCLib::ComputeEveSourceTerm. ---*/
+      for (int i = 0; i < ns; i++) {
+        hdiss(i) = gas.Diss[i];
+        for (int j = 0; j < ns; j++) {
+          const su2double mu = gas.MolarMass[i] * gas.MolarMass[j] / (gas.MolarMass[i] + gas.MolarMass[j]);
+          hmwA(i, j) = 1.16 * 1E-3 * sqrt(mu) * pow(gas.CharVibTemp[i], 4.0 / 3.0);
+          hmwB(i, j) = 0.015 * pow(mu, 0.25);
+        }
+      }
+      Kokkos::deep_copy(rx, hrx);
+      Kokkos::deep_copy(arrA, hA);
+      Kokkos::deep_copy(arrEta, hEta);
+      Kokkos::deep_copy(arrTh, hTh);
+      Kokkos::deep_copy(tfa, hfa);
+      Kokkos::deep_copy(tfb, hfb);
+      Kokkos::deep_copy(tba, hba);
+      Kokkos::deep_copy(tbb, hbb);
+      Kokkos::deep_copy(diss, hdiss);
+      Kokkos::deep_copy(rxt, hrxt);
+      Kokkos::deep_copy(mwA, hmwA);
+      Kokkos::deep_copy(mwB, hmwB);
+    }
+
     NEMOGasTables t;
+    t.frozen = gas.frozen;
+    t.Avogadro = AVOGAD_CONSTANT;
+    t.Pi = PI_NUMBER;
+    t.Reactions = rx;
+    t.ArrheniusCoefficient = arrA;
+    t.ArrheniusEta = arrEta;
+    t.ArrheniusTheta = arrTh;
+    t.Tcf_a = tfa;
+    t.Tcf_b = tfb;
+    t.Tcb_a = tba;
+    t.Tcb_b = tbb;
+    t.RxnConstantTable = rxt;
+    t.MW_A = mwA;
+    t.MW_B = mwB;
+    t.Diss = diss;
     t.nSpecies = ns;
     t.nHeavy = gas.nHeavy;
     t.nEl = gas.nEl;
