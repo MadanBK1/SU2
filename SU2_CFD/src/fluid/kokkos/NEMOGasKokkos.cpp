@@ -116,9 +116,47 @@ struct NEMOGasTablesAccess {
     t.ElDegeneracy = gdeg;
     return t;
   }
+
+  static void Replay(CSU2TCLib& gas, int nDim, const double* V, unsigned char status, const double* firstDP,
+                     bool full) {
+    const int ns = gas.nSpecies;
+    const NEMOPrimIndices idx(ns, nDim);
+    vector<su2double> rhos(V + idx.RHOS(), V + idx.RHOS() + ns);
+    const double T = V[idx.T()], Tve = V[idx.TVE()];
+
+    if (status & C2P_FINAL_FULL) {
+      /*--- Same calls, same order, as the full path of CNEMOEulerVariable::Cons2PrimVar. ---*/
+      gas.SetTDStateRhosTTv(rhos, T, Tve);
+      if (full) {
+        gas.ComputeSpeciesCvVibEle(Tve);
+        gas.ComputeSpeciesEve(Tve);
+        gas.ComputerhoCvtr();
+        gas.ComputerhoCvve();
+        gas.ComputePressure();
+        gas.ComputeSoundSpeed();
+      }
+    } else {
+      /*--- Early return: only ComputeTemperatures ran (sets rhos, T (clipped), Tve). Density and
+       *    Pressure keep the values of the last SetTDStateRhosTTv, which is the first attempt of
+       *    this point if that one took the full path, otherwise the previous point (sequential replay). ---*/
+      gas.rhos = rhos;
+      gas.T = T;
+      gas.Tve = Tve;
+      if (status & C2P_FIRST_FULL) {
+        gas.Density = firstDP[0];
+        gas.Pressure = firstDP[1];
+      }
+    }
+    if (full) gas.ComputeGamma();
+  }
 };
 
 NEMOGasTables BuildNEMOGasTables(const CSU2TCLib& gas) { return NEMOGasTablesAccess::Build(gas); }
+
+void ReplayHostGasState(CSU2TCLib& gas, int nDim, const double* V, unsigned char status, const double* firstDP,
+                        bool full) {
+  NEMOGasTablesAccess::Replay(gas, nDim, V, status, firstDP, full);
+}
 
 }  // namespace nemo
 }  // namespace su2kokkos

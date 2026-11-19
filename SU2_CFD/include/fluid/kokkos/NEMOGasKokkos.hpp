@@ -105,6 +105,40 @@ struct NEMOGasTables {
  */
 NEMOGasTables BuildNEMOGasTables(const CSU2TCLib& gas);
 
+/*!
+ * \brief Per-point status bits written by the solver-level device Cons2Prim (SetPrimVar semantics).
+ *        "FULL" means the call got past the temperature checks, i.e. the CPU would have called
+ *        CSU2TCLib::SetTDStateRhosTTv (which sets the gas members Density and Pressure).
+ */
+enum NEMOCons2PrimStatus : unsigned char {
+  C2P_FIRST_NONPHYS = 1, /*!< First attempt non-physical (counted, triggers rollback to Solution_Old). */
+  C2P_FIRST_FULL = 2,    /*!< First attempt reached the full path. */
+  C2P_FINAL_FULL = 4,    /*!< Final (possibly rolled back) attempt reached the full path. */
+};
+
+/*!
+ * \brief Host-side replay of the CSU2TCLib member state that CNEMOEulerVariable::SetPrimVar leaves
+ *        behind for one point, given the device results (final V, status bits, and the gas
+ *        Density/Pressure of the first attempt when it reached the full path but the rollback did not).
+ * \param[in] full - false: only rhos, T, Tve, Density, Pressure (what transport properties read);
+ *                   true: also the members touched by Cons2PrimVar + ComputeGamma (rhoCvtr, rhoCvve,
+ *                   Cvves, SoundSpeed2, gamma, ...), used for the last point so the gas object
+ *                   ends in the same state as after the CPU loop.
+ * \note Defined in SU2_CFD/src/fluid/kokkos/NEMOGasKokkos.cpp.
+ */
+void ReplayHostGasState(CSU2TCLib& gas, int nDim, const double* V, unsigned char status, const double* firstDP,
+                        bool full);
+
+/*! \brief True if V (after Cons2Prim) passed the temperature checks, i.e. the full path was taken. */
+KOKKOS_INLINE_FUNCTION
+bool Cons2PrimReachedFullPath(int nSpecies, bool monoatomic, const double* V) {
+  const double Tmin = 50.0, Tmax = 8E4, Tvemin = 50.0, Tvemax = 8E4;
+  const double T = V[nSpecies], Tve = V[nSpecies + 1];
+  if (T <= Tmin || T >= Tmax || T != T) return false;
+  if (!monoatomic && (Tve <= Tvemin || Tve >= Tvemax || Tve != Tve)) return false;
+  return true;
+}
+
 /*--------------------------------------------------------------------------------------*/
 /*--- Species-level thermodynamics (CSU2TCLib).                                      ---*/
 /*--------------------------------------------------------------------------------------*/

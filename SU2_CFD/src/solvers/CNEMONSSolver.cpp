@@ -30,6 +30,9 @@
 #include "../../../Common/include/toolboxes/printing_toolbox.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
 #include "../../include/solvers/CFVMFlowSolverBase.inl"
+#ifdef HAVE_KOKKOS
+#include "../../include/solvers/kokkos/CNEMOKokkosData.hpp"
+#endif
 
 /*--- Explicit instantiation of the parent class of CNEMOEulerSolver,
  *    to spread the compilation over two cpp files. ---*/
@@ -119,6 +122,42 @@ unsigned long CNEMONSSolver::SetPrimitive_Variables(CSolver **solver_container,C
   const TURB_MODEL turb_model = config->GetKind_Turb_Model();
   //const bool tkeNeeded = (turb_model == TURB_MODEL::SST);
 
+#ifdef HAVE_KOKKOS
+  const bool verify = kokkosData && CNEMOKokkosData::VerifyEnabled();
+  unsigned long nonPhysDevice = 0;
+  if (kokkosData) {
+    if (verify) kokkosData->Snapshot();
+
+    /*--- Eddy viscosity first (SetPrimVar does not read or write it). ---*/
+    if (turb_model != TURB_MODEL::NONE && solver_container[TURB_SOL] != nullptr) {
+      for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++)
+        nodes->SetEddyViscosity(iPoint, solver_container[TURB_SOL]->GetNodes()->GetmuT(iPoint));
+    }
+
+    /*--- Device Cons2Prim + rollback + Gamma. ---*/
+    nonPhysicalPoints = kokkosData->SetPrimVar();
+
+    /*--- Host remainder of CNEMONSVariable::SetPrimVar: velocity^2 and transport properties.
+     *    The transport routines read the gas model state, which is replayed per point exactly as
+     *    Cons2PrimVar would have left it (full replay for the last point). ---*/
+    Kokkos::Timer timer;
+    auto* nsNodes = static_cast<CNEMONSVariable*>(nodes);
+    for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++) {
+      nodes->SetVelocity2(iPoint);
+      kokkosData->ReplayGasState(iPoint, iPoint + 1 == nPoint);
+      nsNodes->SetTransportProperties(iPoint, FluidModel);
+    }
+    kokkosData->perf.host_post += timer.seconds();
+
+    if (!verify) return nonPhysicalPoints;
+
+    /*--- Debug A/B: restore the pre-call host state and fall through to the CPU loop. ---*/
+    nonPhysDevice = nonPhysicalPoints;
+    nonPhysicalPoints = 0;
+    kokkosData->SwapSnapshot();
+  }
+#endif
+
   SU2_OMP_FOR_STAT(omp_chunk_size)
   for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++) {
 
@@ -143,6 +182,11 @@ unsigned long CNEMONSSolver::SetPrimitive_Variables(CSolver **solver_container,C
 
   }
   END_SU2_OMP_FOR
+
+#ifdef HAVE_KOKKOS
+  if (verify) kokkosData->CompareSnapshot(nonPhysDevice, nonPhysicalPoints);
+#endif
+
   return nonPhysicalPoints;
 }
 

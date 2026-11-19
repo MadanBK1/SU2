@@ -87,3 +87,9 @@ Each step runs behind `ENABLE_KOKKOS`, keeps the CPU path, and is validated agai
   - Production `-ffast-math`: ≤8.2e-12 relative (dTdU, AIR-5). Most quantities ≤1e-13.
   - Non-physical flag: 0 mismatches in 140k calls.
 - **Gate for future kernels:** bitwise under strict flags, ≤1e-10 under production flags.
+- **Steps 1–2 done:**
+  - `CNEMOKokkosData` (`SU2_CFD/{include,src}/solvers/kokkos/`): device mirror of the geometry (edges, normals, coords, volumes, point/edge CSR, per-marker vertices, FV pattern with all nPoint rows + dia_ptr + edge→nnz map) and of the state. Owned by `CNEMOEulerSolver`, created only with `ENABLE_KOKKOS= YES` and SU2_NONEQ. `SU2_KOKKOS_SELFCHECK=1` runs a bitwise round-trip check.
+  - Device `SetPrimVar` (Cons2Prim + rollback to Solution_Old + Gamma + parallel_reduce count) in `CNEMOEulerSolver`/`CNEMONSSolver::SetPrimitive_Variables`. The host stays authoritative: every call uploads U, U_old, V and secondaries and downloads the results. Velocity2, NS transport and a replay of the host gas-model state stay on the host.
+  - `SU2_KOKKOS_C2P_VERIFY=1` runs an A/B check against the CPU loop on every call: ≤5.8e-16 relative under -ffast-math (ULP level), 0 non-physical count mismatches.
+  - check.sh: residual rows are identical. Fields: invwedge 1.7e-10 (linear solver), super_cat 1.7e-15, thermalbath 0. The CPU path is bit-identical to before.
+  - check.sh fix: super_cat.cfg has no trailing newline, so `ENABLE_KOKKOS` had been appended to SCREEN_OUTPUT. super_cat had never run the YES path.

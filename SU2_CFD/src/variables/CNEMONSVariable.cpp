@@ -98,7 +98,14 @@ bool CNEMONSVariable::SetPrimVar(unsigned long iPoint, CFluidModel *FluidModel) 
 
   SetVelocity2(iPoint);
 
-  const auto& Ds = fluidmodel->GetDiffusionCoeff();
+  SetTransportProperties(iPoint, fluidmodel);
+
+  return nonPhys;
+}
+
+void CNEMONSVariable::SetTransportProperties(unsigned long iPoint, CNEMOGas *gas) {
+
+  const auto& Ds = gas->GetDiffusionCoeff();
   for (auto iSpecies = 0u; iSpecies < nSpecies; iSpecies++)
     DiffusionCoeff(iPoint, iSpecies) = Ds[iSpecies];
 
@@ -106,17 +113,15 @@ bool CNEMONSVariable::SetPrimVar(unsigned long iPoint, CFluidModel *FluidModel) 
   su2double Tve =  Primitive(iPoint,nSpecies+1);
 
   su2double* val_eves = GetEve(iPoint);
-  const auto& hs = fluidmodel->ComputeSpeciesEnthalpy(T, Tve, val_eves);
+  const auto& hs = gas->ComputeSpeciesEnthalpy(T, Tve, val_eves);
   for (auto iSpecies = 0u; iSpecies < nSpecies; iSpecies++)
     Enthalpys(iPoint, iSpecies) = hs[iSpecies];
 
-  LaminarViscosity(iPoint) = fluidmodel->GetViscosity();
+  LaminarViscosity(iPoint) = gas->GetViscosity();
 
-  const auto& thermalconductivities = fluidmodel->GetThermalConductivities();
+  const auto& thermalconductivities = gas->GetThermalConductivities();
   ThermalCond(iPoint)      = thermalconductivities[0];
   ThermalCond_ve(iPoint)   = thermalconductivities[1];
 
   Primitive(iPoint, LAM_VISC_INDEX) = LaminarViscosity(iPoint);
-
-  return nonPhys;
 }

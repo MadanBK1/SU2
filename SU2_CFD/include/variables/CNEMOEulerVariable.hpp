@@ -68,6 +68,10 @@ class CNEMOEulerVariable : public CFlowVariable {
   };
 
  protected:
+#ifdef HAVE_KOKKOS
+  /*--- Device mirror (SU2_CFD/src/solvers/kokkos/CNEMOKokkosData.cpp) reads/writes the state containers. ---*/
+  friend class CNEMOKokkosData;
+#endif
   const CIndices<unsigned long> indices;
 
   bool ionization;          /*!< \brief Presence of charged species in gas mixture. */

@@ -31,6 +31,11 @@
 #include "../fluid/CNEMOGas.hpp"
 #include "CFVMFlowSolverBase.hpp"
 
+#ifdef HAVE_KOKKOS
+#include <memory>
+class CNEMOKokkosData;
+#endif
+
 /*!
  * \class CNEMOEulerSolver
  * \brief Main class for defining the NEMO Euler's flow solver.
@@ -59,6 +64,11 @@ protected:
   CNEMOGas  *FluidModel;          /*!< \brief fluid model used in the solver */
 
   CNEMOEulerVariable* node_infty = nullptr;
+
+#ifdef HAVE_KOKKOS
+  /*--- Device mirror + device Cons2Prim, only created when ENABLE_KOKKOS= YES (and the gas model is SU2TCLib). ---*/
+  std::unique_ptr<CNEMOKokkosData> kokkosData;
+#endif
 
   /*!
    * \brief Set the maximum value of the eigenvalue.

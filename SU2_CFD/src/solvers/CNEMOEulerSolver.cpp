@@ -31,6 +31,9 @@
 #include "../../../Common/include/toolboxes/printing_toolbox.hpp"
 #include "../../include/fluid/CMutationTCLib.hpp"
 #include "../../include/fluid/CSU2TCLib.hpp"
+#ifdef HAVE_KOKKOS
+#include "../../include/solvers/kokkos/CNEMOKokkosData.hpp"
+#endif
 
 CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
                            unsigned short iMesh, const bool navier_stokes) :
@@ -224,6 +227,18 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
   if((nDim > MAXNDIM) || (nPrimVar > MAXNVAR))
     SU2_MPI::Error("Oops! The CNEMOEulerSolver static array sizes are not large enough.",CURRENT_FUNCTION);
 
+#ifdef HAVE_KOKKOS
+  /*--- Device mirror and device Cons2Prim (Steps 1-2 of NEMO_KOKKOS_PORT_PLAN.md). ---*/
+  if (config->GetKokkos()) {
+    auto* su2tc = dynamic_cast<CSU2TCLib*>(FluidModel);
+    if (su2tc != nullptr) {
+      kokkosData = std::make_unique<CNEMOKokkosData>(geometry, config, nodes, su2tc, iMesh);
+    } else if (rank == MASTER_NODE && iMesh == MESH_0) {
+      cout << "[KOKKOS_NEMO] gas model is not SU2_NONEQ, device Cons2Prim disabled (host path)." << endl;
+    }
+  }
+#endif
+
    /*--- Deallocate arrays ---*/
   delete [] Mvec_Inf;
 
@@ -231,6 +246,10 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
 
 CNEMOEulerSolver::~CNEMOEulerSolver() {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  kokkosData.reset(); /*--- Prints [KOKKOS_NEMO_PERF]; must go before the gas model it references. ---*/
+#endif
 
   delete node_infty;
   delete FluidModel;
@@ -324,6 +343,34 @@ unsigned long CNEMOEulerSolver::SetPrimitive_Variables(CSolver **solver_containe
   unsigned long nonPhysicalPoints = 0;
   bool nonphysical = true;
 
+#ifdef HAVE_KOKKOS
+  const bool verify = kokkosData && CNEMOKokkosData::VerifyEnabled();
+  unsigned long nonPhysDevice = 0;
+  if (kokkosData) {
+    if (verify) kokkosData->Snapshot();
+
+    /*--- Device Cons2Prim + rollback + Gamma (uploads U/V, downloads V, secondaries, U). ---*/
+    nonPhysicalPoints = kokkosData->SetPrimVar();
+
+    /*--- Host remainder of CNEMOEulerVariable::SetPrimVar, same per-point order. ---*/
+    Kokkos::Timer timer;
+    for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++) {
+      nodes->SetVelocity2(iPoint);
+      if (!Output) LinSysRes.SetBlock_Zero(iPoint);
+    }
+    /*--- Leave the host gas model in the state the CPU loop leaves it (last point). ---*/
+    if (nPoint > 0) kokkosData->ReplayGasState(nPoint-1, true);
+    kokkosData->perf.host_post += timer.seconds();
+
+    if (!verify) return nonPhysicalPoints;
+
+    /*--- Debug A/B: restore the pre-call host state and fall through to the CPU loop. ---*/
+    nonPhysDevice = nonPhysicalPoints;
+    nonPhysicalPoints = 0;
+    kokkosData->SwapSnapshot();
+  }
+#endif
+
   for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++) {
 
     /*--- Incompressible flow, primitive variables ---*/
@@ -339,6 +386,10 @@ unsigned long CNEMOEulerSolver::SetPrimitive_Variables(CSolver **solver_containe
     if (!Output) LinSysRes.SetBlock_Zero(iPoint);
 
   }
+
+#ifdef HAVE_KOKKOS
+  if (verify) kokkosData->CompareSnapshot(nonPhysDevice, nonPhysicalPoints);
+#endif
 
   return nonPhysicalPoints;
 }

@@ -36,6 +36,9 @@
  * \author C. Garbacz, W. Maier, S.R. Copeland.
  */
 class CNEMONSVariable final : public CNEMOEulerVariable {
+#ifdef HAVE_KOKKOS
+  friend class CNEMOKokkosData; /*!< Debug verification (SU2_KOKKOS_C2P_VERIFY) reads the transport arrays. */
+#endif
 private:
   VectorType Prandtl_Lam;       /*!< \brief Laminar Prandtl number. */
   VectorType Temperature_Ref;   /*!< \brief Reference temperature of the fluid. */
@@ -87,6 +90,13 @@ public:
    * \brief Set all the primitive variables for compressible flows.
    */
   bool SetPrimVar(unsigned long iPoint, CFluidModel *FluidModel) final;
+
+  /*!
+   * \brief Transport part of SetPrimVar (diffusion coefficients, species enthalpies, viscosity,
+   *        conductivities). Reads the CURRENT state of the gas model, i.e. it must be called right
+   *        after the Cons2Prim of this point (or after replaying the gas state of this point).
+   */
+  void SetTransportProperties(unsigned long iPoint, CNEMOGas *gas);
 
   /*!
    * \overload
