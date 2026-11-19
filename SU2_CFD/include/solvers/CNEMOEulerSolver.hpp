@@ -71,6 +71,29 @@ protected:
 #endif
 
   /*!
+   * \brief Device (Kokkos) Steps 3-4. Each returns false when the host path must run instead
+   *        (no ENABLE_KOKKOS, unsupported option); always false without HAVE_KOKKOS.
+   *        With SU2_KOKKOS_STAGE_VERIFY=1 they also run the host path and compare (A/B).
+   * \param[in] greenGauss - GREEN_GAUSS (true) or the least-squares family (weighting from config, as the base class).
+   * \param[in] massFractions - NEMO-NS Green-Gauss override (gradient of Y_s instead of rho_s).
+   */
+  bool Device_PrimitiveGradient(CGeometry *geometry, const CConfig *config, bool reconstruction, bool greenGauss,
+                                bool massFractions);
+  bool Device_PrimitiveLimiter(CGeometry *geometry, const CConfig *config);
+
+  /*! \brief Reason a device stage is not used ("" if it is), shared by the dispatch and the startup report. */
+  std::string Device_GradientUnsupported(const CConfig *config, bool reconstruction, bool greenGauss) const;
+  std::string Device_LimiterUnsupported(const CConfig *config) const;
+  std::string Device_TimeStepUnsupported(const CConfig *config) const;
+  void PrintDeviceStages(const CConfig *config) const;
+
+  /*! \brief Host implementations (unchanged CPU code), used by the fallback and the A/B verification. */
+  void SetTime_Step_Host(CGeometry *geometry, CSolver **solver_container, CConfig *config,
+                         unsigned short iMesh, unsigned long Iteration);
+  void SetMax_Eigenvalue_Host(CGeometry *geometry, CConfig *config);
+  void CorrectGradientsSymmetryHost(CGeometry *geometry, const CConfig *config, CVectorOfMatrix& gradient) const;
+
+  /*!
    * \brief Set the maximum value of the eigenvalue.
    * \param[in] geometry - Geometrical definition of the problem.
    * \param[in] config - Definition of the particular problem.

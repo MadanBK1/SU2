@@ -17,7 +17,8 @@ su2_cfd_src += files(['fluid/CFluidModel.cpp',
 
 if get_option('enable-kokkos')
   su2_cfd_src += files(['fluid/kokkos/NEMOGasKokkos.cpp',
-                        'solvers/kokkos/CNEMOKokkosData.cpp'])
+                        'solvers/kokkos/CNEMOKokkosData.cpp',
+                        'solvers/kokkos/CNEMOKokkosStages.cpp'])
 endif
 
 su2_cfd_src += files(['output/COutputFactory.cpp',

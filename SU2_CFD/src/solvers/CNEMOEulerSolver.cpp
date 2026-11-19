@@ -26,6 +26,9 @@
  */
 
 #include "../../include/solvers/CNEMOEulerSolver.hpp"
+#include "../../include/gradients/correctGradientsSymmetry.hpp"
+#include <cstdlib>
+#include <cstring>
 #include "../../include/variables/CNEMONSVariable.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
 #include "../../../Common/include/toolboxes/printing_toolbox.hpp"
@@ -233,6 +236,7 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
     auto* su2tc = dynamic_cast<CSU2TCLib*>(FluidModel);
     if (su2tc != nullptr) {
       kokkosData = std::make_unique<CNEMOKokkosData>(geometry, config, nodes, su2tc, iMesh);
+      if (rank == MASTER_NODE && iMesh == MESH_0) PrintDeviceStages(config);
     } else if (rank == MASTER_NODE && iMesh == MESH_0) {
       cout << "[KOKKOS_NEMO] gas model is not SU2_NONEQ, device Cons2Prim disabled (host path)." << endl;
     }
@@ -324,15 +328,18 @@ void CNEMOEulerSolver::Preprocessing(CGeometry *geometry, CSolver **solver_conta
 
     /*--- Calculate the gradients ---*/
     if (config->GetKind_Gradient_Method() == GREEN_GAUSS) {
-      SetPrimitive_Gradient_GG(geometry, config, true);
+      if (!Device_PrimitiveGradient(geometry, config, true, true, false))
+        SetPrimitive_Gradient_GG(geometry, config, true);
     }
     if (config->GetKind_Gradient_Method() == WEIGHTED_LEAST_SQUARES) {
-      SetPrimitive_Gradient_LS(geometry, config, true);
+      if (!Device_PrimitiveGradient(geometry, config, true, false, false))
+        SetPrimitive_Gradient_LS(geometry, config, true);
     }
 
     /*--- Limiter computation ---*/
     if (limiter && !van_albada) {
-      SetPrimitive_Limiter(geometry, config);
+      if (!Device_PrimitiveLimiter(geometry, config))
+        SetPrimitive_Limiter(geometry, config);
     }
   }
 }
@@ -368,6 +375,7 @@ unsigned long CNEMOEulerSolver::SetPrimitive_Variables(CSolver **solver_containe
     nonPhysDevice = nonPhysicalPoints;
     nonPhysicalPoints = 0;
     kokkosData->SwapSnapshot();
+    kokkosData->InvalidatePrimitive(); /*--- The CPU loop below overwrites the host Primitive. ---*/
   }
 #endif
 
@@ -397,6 +405,107 @@ unsigned long CNEMOEulerSolver::SetPrimitive_Variables(CSolver **solver_containe
 void CNEMOEulerSolver::SetTime_Step(CGeometry *geometry, CSolver **solver_container, CConfig *config,
                                     unsigned short iMesh, unsigned long Iteration) {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  if (kokkosData && Device_TimeStepUnsupported(config).empty()) {
+    /*--- Device part of SetTime_Step_impl (edge + vertex spectral radii, local dt, rank-local min/max). ---*/
+    const bool viscous = config->GetViscous();
+    const bool verify = CNEMOKokkosData::StageVerifyEnabled();
+    if (verify) kokkosData->UploadPrimitiveOnly(); /*--- Isolate this stage from the Cons2Prim A/B. ---*/
+    /*--- A/B: the time-stepping branch below overwrites LocalCFL, an input of the host rerun. ---*/
+    std::vector<su2double> cflIn;
+    if (verify) {
+      cflIn.resize(nPointDomain);
+      for (auto i = 0ul; i < nPointDomain; ++i) cflIn[i] = nodes->GetLocalCFL(i);
+    }
+
+    su2double minDt = 1e30, maxDt = 0.0;
+    kokkosData->ComputeTimeStep(viscous, config->GetMax_DeltaTime(), minDt, maxDt);
+
+    /*--- Host remainder of SetTime_Step_impl, same statements (no OpenMP in Kokkos builds). ---*/
+    Kokkos::Timer timer;
+    const bool implicit      = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
+    const bool time_stepping = (config->GetTime_Marching() == TIME_MARCHING::TIME_STEPPING);
+    const bool dual_time     = (config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_1ST) ||
+                               (config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_2ND);
+
+    Min_Delta_Time = 1e30; Max_Delta_Time = 0.0; Global_Delta_UnstTimeND = 1e30;
+    Min_Delta_Time = min(Min_Delta_Time, minDt);
+    Max_Delta_Time = max(Max_Delta_Time, maxDt);
+
+    if (config->GetComm_Level() == COMM_FULL) {
+      su2double rbuf_time;
+      SU2_MPI::Allreduce(&Min_Delta_Time, &rbuf_time, 1, MPI_DOUBLE, MPI_MIN, SU2_MPI::GetComm());
+      Min_Delta_Time = rbuf_time;
+      SU2_MPI::Allreduce(&Max_Delta_Time, &rbuf_time, 1, MPI_DOUBLE, MPI_MAX, SU2_MPI::GetComm());
+      Max_Delta_Time = rbuf_time;
+    }
+    Global_Delta_Time = Min_Delta_Time;
+
+    if (time_stepping) {
+      if (config->GetUnst_CFL() == 0.0) Global_Delta_Time = config->GetDelta_UnstTime();
+      else Global_Delta_Time = Min_Delta_Time;
+      Max_Delta_Time = Global_Delta_Time;
+      config->SetDelta_UnstTimeND(Global_Delta_Time);
+      for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++) {
+        nodes->SetLocalCFL(iPoint, config->GetUnst_CFL());
+        nodes->SetDelta_Time(iPoint, Global_Delta_Time);
+      }
+    }
+
+    if (dual_time && (Iteration == config->GetRestart_Iter()) && (config->GetUnst_CFL() != 0.0) && (iMesh == MESH_0)) {
+      su2double glbDtND = 1e30;
+      for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++)
+        glbDtND = min(glbDtND, config->GetUnst_CFL()*Global_Delta_Time / nodes->GetLocalCFL(iPoint));
+      Global_Delta_UnstTimeND = min(Global_Delta_UnstTimeND, glbDtND);
+      SU2_MPI::Allreduce(&Global_Delta_UnstTimeND, &glbDtND, 1, MPI_DOUBLE, MPI_MIN, SU2_MPI::GetComm());
+      Global_Delta_UnstTimeND = glbDtND;
+      config->SetDelta_UnstTimeND(Global_Delta_UnstTimeND);
+    }
+
+    if (dual_time && !implicit) {
+      for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++) {
+        su2double dt = min((2.0/3.0)*config->GetDelta_UnstTimeND(), nodes->GetDelta_Time(iPoint));
+        nodes->SetDelta_Time(iPoint, dt);
+      }
+    }
+    kokkosData->stagePerf[CNEMOKokkosData::ST_TIMESTEP].host += timer.seconds();
+
+    if (!verify) return;
+
+    /*--- A/B: keep the device results, rerun the unchanged host code, compare, continue with the host results. ---*/
+    const auto nd = nPointDomain;
+    auto grab = [&](auto getter) {
+      std::vector<su2double> v(nd);
+      for (auto i = 0ul; i < nd; ++i) v[i] = getter(i);
+      return v;
+    };
+    auto lamInv = [&](unsigned long i) { return nodes->GetMax_Lambda_Inv(i); };
+    auto lamVisc = [&](unsigned long i) { return nodes->GetMax_Lambda_Visc(i); };
+    auto delta = [&](unsigned long i) { return nodes->GetDelta_Time(i); };
+    const auto dLamInv = grab(lamInv), dDt = grab(delta);
+    const auto dLamVisc = viscous ? grab(lamVisc) : std::vector<su2double>();
+    const su2double dMin = Min_Delta_Time, dMax = Max_Delta_Time, dGlb = Global_Delta_Time;
+
+    for (auto i = 0ul; i < nPointDomain; ++i) nodes->SetLocalCFL(i, cflIn[i]);
+    SetTime_Step_Host(geometry, solver_container, config, iMesh, Iteration);
+
+    using K = CNEMOKokkosData;
+    kokkosData->StageCompare(K::ST_TIMESTEP, "Max_Lambda_Inv", grab(lamInv).data(), dLamInv.data(), nd);
+    if (viscous) kokkosData->StageCompare(K::ST_TIMESTEP, "Max_Lambda_Visc", grab(lamVisc).data(), dLamVisc.data(), nd);
+    kokkosData->StageCompare(K::ST_TIMESTEP, "Delta_Time", grab(delta).data(), dDt.data(), nd);
+    kokkosData->StageCompareScalar(K::ST_TIMESTEP, "Min_Delta_Time", Min_Delta_Time, dMin);
+    kokkosData->StageCompareScalar(K::ST_TIMESTEP, "Max_Delta_Time", Max_Delta_Time, dMax);
+    kokkosData->StageCompareScalar(K::ST_TIMESTEP, "Global_Delta_Time", Global_Delta_Time, dGlb);
+    return;
+  }
+#endif
+
+  SetTime_Step_Host(geometry, solver_container, config, iMesh, Iteration);
+}
+
+void CNEMOEulerSolver::SetTime_Step_Host(CGeometry *geometry, CSolver **solver_container, CConfig *config,
+                                         unsigned short iMesh, unsigned long Iteration) {
 
   /*--- Define an object to compute the speed of sound. ---*/
   struct SoundSpeed {
@@ -448,6 +557,38 @@ void CNEMOEulerSolver::SetTime_Step(CGeometry *geometry, CSolver **solver_contai
 
 void CNEMOEulerSolver::SetMax_Eigenvalue(CGeometry *geometry, CConfig *config) {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  if (kokkosData && Device_TimeStepUnsupported(config).empty()) {
+    const bool verify = CNEMOKokkosData::StageVerifyEnabled();
+    if (verify) kokkosData->UploadPrimitiveOnly();
+    kokkosData->ComputeMaxEigenvalue();
+
+    if (!verify) {
+      Kokkos::Timer timer;
+      /*--- Same comms as SetMax_Eigenvalue_impl. ---*/
+      for (unsigned short iPeriodic = 1; iPeriodic <= config->GetnMarker_Periodic()/2; iPeriodic++) {
+        InitiatePeriodicComms(geometry, config, iPeriodic, PERIODIC_MAX_EIG);
+        CompletePeriodicComms(geometry, config, iPeriodic, PERIODIC_MAX_EIG);
+      }
+      InitiateComms(geometry, config, MPI_QUANTITIES::MAX_EIGENVALUE);
+      CompleteComms(geometry, config, MPI_QUANTITIES::MAX_EIGENVALUE);
+      kokkosData->stagePerf[CNEMOKokkosData::ST_MAXEIG].host += timer.seconds();
+      return;
+    }
+    std::vector<su2double> dLam(nPointDomain), hLam(nPointDomain);
+    for (auto i = 0ul; i < nPointDomain; ++i) dLam[i] = nodes->GetLambda(i);
+    SetMax_Eigenvalue_Host(geometry, config);
+    for (auto i = 0ul; i < nPointDomain; ++i) hLam[i] = nodes->GetLambda(i);
+    kokkosData->StageCompare(CNEMOKokkosData::ST_MAXEIG, "Lambda", hLam.data(), dLam.data(), nPointDomain);
+    return;
+  }
+#endif
+
+  SetMax_Eigenvalue_Host(geometry, config);
+}
+
+void CNEMOEulerSolver::SetMax_Eigenvalue_Host(CGeometry *geometry, CConfig *config) {
 
   /*--- Define an object to compute the speed of sound. ---*/
   struct SoundSpeed {
@@ -2444,4 +2585,230 @@ void CNEMOEulerSolver::SetPressureDiffusionSensor(CGeometry *geometry, CConfig *
   InitiateComms(geometry, config, MPI_QUANTITIES::SENSOR);
   CompleteComms(geometry, config, MPI_QUANTITIES::SENSOR);
 
+}
+
+/*============================ Device (Kokkos) Steps 3-4: dispatch ============================*/
+
+namespace {
+/*! \brief Debug: SU2_KOKKOS_NEMO_HOST=grad,lim,dt forces individual stages back to the host. */
+bool ForcedHost(const char* stage) {
+  const char* env = std::getenv("SU2_KOKKOS_NEMO_HOST");
+  return env != nullptr && std::strstr(env, stage) != nullptr;
+}
+}  // namespace
+
+std::string CNEMOEulerSolver::Device_GradientUnsupported(const CConfig *config, bool reconstruction,
+                                                         bool greenGauss) const {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return "no device data";
+  if (!kokkosData->geo.domain_first) return "domain points not first";
+  if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
+  if (!greenGauss && config->GetnMarker_Periodic() > 0) return "periodic least squares";
+  if (ForcedHost("grad")) return "SU2_KOKKOS_NEMO_HOST";
+  const auto& grad = reconstruction ? nodes->GetGradient_Reconstruction() : nodes->GetGradient_Primitive();
+  if (grad.size() == 0) return "gradient not allocated";
+  return "";
+#else
+  return "no Kokkos";
+#endif
+}
+
+std::string CNEMOEulerSolver::Device_LimiterUnsupported(const CConfig *config) const {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return "no device data";
+  if (!kokkosData->geo.domain_first) return "domain points not first";
+  if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
+  if (config->GetnMarker_Periodic() > 0) return "periodic";
+  if (ForcedHost("lim")) return "SU2_KOKKOS_NEMO_HOST";
+  const auto kind = config->GetKind_SlopeLimit_Flow();
+  if (kind != LIMITER::BARTH_JESPERSEN && kind != LIMITER::VENKATAKRISHNAN && kind != LIMITER::VENKATAKRISHNAN_WANG)
+    return "limiter kind not ported";
+  return "";
+#else
+  return "no Kokkos";
+#endif
+}
+
+std::string CNEMOEulerSolver::Device_TimeStepUnsupported(const CConfig *config) const {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return "no device data";
+  if (!kokkosData->geo.domain_first) return "domain points not first";
+  if (dynamic_grid) return "dynamic grid";
+  if (ForcedHost("dt")) return "SU2_KOKKOS_NEMO_HOST";
+  if (config->GetViscous() && dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr) return "viscous without NS variables";
+  return "";
+#else
+  return "no Kokkos";
+#endif
+}
+
+void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
+#ifdef HAVE_KOKKOS
+  const bool center = config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED;
+  const bool muscl = config->GetMUSCL_Flow();
+  const bool viscous = config->GetViscous();
+  auto gname = [](unsigned short m) {
+    return m == GREEN_GAUSS ? "GREEN_GAUSS" : m == WEIGHTED_LEAST_SQUARES ? "WEIGHTED_LEAST_SQUARES"
+         : m == LEAST_SQUARES ? "LEAST_SQUARES" : "NONE";
+  };
+  auto where = [](const std::string& why) { return why.empty() ? std::string("device") : "host (" + why + ")"; };
+
+  cout << "[KOKKOS_NEMO] stage Cons2Prim (SetPrimVar + non-physical reduce): device" << endl;
+
+  /*--- Mirror the Preprocessing logic of CNEMOEulerSolver / CNEMONSSolver. ---*/
+  const auto gm = config->GetKind_Gradient_Method();
+  if (viscous) {
+    if (config->GetReconstructionGradientRequired() && muscl && !center) {
+      const auto rm = config->GetKind_Gradient_Method_Recon();
+      cout << "[KOKKOS_NEMO] stage gradient reconstruction (" << gname(rm) << (rm == GREEN_GAUSS ? ", Y_s" : "")
+           << "): " << where(Device_GradientUnsupported(config, true, rm == GREEN_GAUSS)) << endl;
+    }
+    if (gm == GREEN_GAUSS || gm == WEIGHTED_LEAST_SQUARES)
+      cout << "[KOKKOS_NEMO] stage gradient primitive (" << gname(gm) << (gm == GREEN_GAUSS ? ", Y_s" : "")
+           << "): " << where(Device_GradientUnsupported(config, false, gm == GREEN_GAUSS)) << endl;
+  } else if (muscl && !center && (gm == GREEN_GAUSS || gm == WEIGHTED_LEAST_SQUARES)) {
+    cout << "[KOKKOS_NEMO] stage gradient (" << gname(gm) << ", into Gradient_Reconstruction): "
+         << where(Device_GradientUnsupported(config, true, gm == GREEN_GAUSS)) << endl;
+  } else {
+    cout << "[KOKKOS_NEMO] stage gradient: not used (first order / centered)" << endl;
+  }
+  const auto lim = config->GetKind_SlopeLimit_Flow();
+  if (muscl && !center && lim != LIMITER::NONE && lim != LIMITER::VAN_ALBADA_EDGE)
+    cout << "[KOKKOS_NEMO] stage limiter (" << (lim == LIMITER::VENKATAKRISHNAN ? "VENKATAKRISHNAN"
+            : lim == LIMITER::BARTH_JESPERSEN ? "BARTH_JESPERSEN" : lim == LIMITER::VENKATAKRISHNAN_WANG ? "VENKATAKRISHNAN_WANG"
+            : "other") << "): " << where(Device_LimiterUnsupported(config)) << endl;
+  else
+    cout << "[KOKKOS_NEMO] stage limiter: not used" << endl;
+  cout << "[KOKKOS_NEMO] stage time step (spectral radii + local dt + min/max reduce): "
+       << where(Device_TimeStepUnsupported(config)) << endl;
+  cout << "[KOKKOS_NEMO] stage max eigenvalue (centered only): "
+       << (center ? where(Device_TimeStepUnsupported(config)) : std::string("not used")) << endl;
+  cout << "[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, NS transport, residuals, Jacobian, linear solve, CFL adapt"
+       << endl;
+  cout << "[KOKKOS_NEMO] sync: SetPrimVar HtoD U,U_old,V,secondaries + DtoH all; stages reuse device V, DtoH domain rows"
+          " of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS)" << endl;
+  if (CNEMOKokkosData::StageVerifyEnabled())
+    cout << "[KOKKOS_NEMO] SU2_KOKKOS_STAGE_VERIFY=1: gradient/limiter/time step A/B against the host code" << endl;
+#endif
+}
+
+void CNEMOEulerSolver::CorrectGradientsSymmetryHost(CGeometry *geometry, const CConfig *config,
+                                                    CVectorOfMatrix& gradient) const {
+  /*--- Called through a volatile pointer so that it is not inlined here: the program then runs the same
+   *    (COMDAT) instantiation as computeGradientsLeastSquares/GreenGauss, i.e. the same machine code. ---*/
+  using Fn = void (*)(CGeometry&, const CConfig&, const size_t, const size_t, const int, CVectorOfMatrix&);
+  static Fn volatile fn2 = &correctGradientsSymmetry<2, CVectorOfMatrix>;
+  static Fn volatile fn3 = &correctGradientsSymmetry<3, CVectorOfMatrix>;
+  (nDim == 2 ? fn2 : fn3)(*geometry, *config, 0, nPrimVarGrad, prim_idx.Velocity(), gradient);
+}
+
+bool CNEMOEulerSolver::Device_PrimitiveGradient(CGeometry *geometry, const CConfig *config, bool reconstruction,
+                                                bool greenGauss, bool massFractions) {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData || !Device_GradientUnsupported(config, reconstruction, greenGauss).empty()) return false;
+  SU2_ZONE_SCOPED
+
+  using K = CNEMOKokkosData;
+  auto& gradient = reconstruction ? nodes->GetGradient_Reconstruction() : nodes->GetGradient_Primitive();
+  const auto comm = reconstruction? MPI_QUANTITIES::PRIMITIVE_GRAD_REC : MPI_QUANTITIES::PRIMITIVE_GRADIENT;
+
+  /*--- Same LS weighting / periodic comm selection as CFVMFlowSolverBase::SetPrimitive_Gradient_LS/GG. ---*/
+  K::GradMethod method = K::GradMethod::GREEN_GAUSS;
+  if (!greenGauss) {
+    const bool weighted = reconstruction ? (config->GetKind_Gradient_Method_Recon() == WEIGHTED_LEAST_SQUARES)
+                                         : (config->GetKind_Gradient_Method() == WEIGHTED_LEAST_SQUARES);
+    method = weighted ? K::GradMethod::WEIGHTED_LEAST_SQUARES : K::GradMethod::LEAST_SQUARES;
+  }
+
+  const bool verify = K::StageVerifyEnabled();
+  if (verify) kokkosData->UploadPrimitiveOnly(); /*--- Isolate this stage from the Cons2Prim A/B. ---*/
+
+  const bool deviceSym = K::DeviceSymmetryEnabled();
+  kokkosData->ComputeGradient(method, massFractions, reconstruction, prim_idx.Velocity(), deviceSym, gradient.data());
+
+  if (!deviceSym) {
+    /*--- Symmetry / Euler-wall correction with the CPU routine itself (boundary-local work, bitwise by
+     *    construction), then refresh those rows of the device gradient (read by the device limiter). ---*/
+    Kokkos::Timer timer;
+    CorrectGradientsSymmetryHost(geometry, config, gradient);
+    kokkosData->stagePerf[K::ST_GRADIENT].host += timer.seconds();
+    kokkosData->UploadSymmetryRows(reconstruction, gradient.data());
+  }
+
+  if (verify) {
+    const size_t n = size_t(nPointDomain) * nPrimVarGrad * nDim;
+    std::vector<su2double> dev(gradient.data(), gradient.data() + n);
+    if (greenGauss) SetPrimitive_Gradient_GG(geometry, config, reconstruction); /*--- virtual: NS Y_s override ---*/
+    else SetPrimitive_Gradient_LS(geometry, config, reconstruction);
+    kokkosData->StageCompare(K::ST_GRADIENT, reconstruction ? "Gradient_Reconstruction" : "Gradient_Primitive",
+                             gradient.data(), dev.data(), n, size_t(nPrimVarGrad) * nDim);
+    return true;
+  }
+
+  Kokkos::Timer timer;
+  if (greenGauss) {
+    const auto commPer = reconstruction? PERIODIC_PRIM_GG_R : PERIODIC_PRIM_GG;
+    for (size_t iPeriodic = 1; iPeriodic <= config->GetnMarker_Periodic() / 2; ++iPeriodic) {
+      InitiatePeriodicComms(geometry, config, iPeriodic, commPer);
+      CompletePeriodicComms(geometry, config, iPeriodic, commPer);
+    }
+  }
+  InitiateComms(geometry, config, comm);
+  CompleteComms(geometry, config, comm);
+  kokkosData->stagePerf[K::ST_GRADIENT].host += timer.seconds();
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool CNEMOEulerSolver::Device_PrimitiveLimiter(CGeometry *geometry, const CConfig *config) {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData || !Device_LimiterUnsupported(config).empty()) return false;
+  SU2_ZONE_SCOPED
+
+  using K = CNEMOKokkosData;
+  const auto kind = config->GetKind_SlopeLimit_Flow();
+  const bool verify = K::StageVerifyEnabled();
+
+  /*--- eps2 as CLimiterDetails<kind>::preprocess (Venkatakrishnan-Wang: K, eps2 from the device range). ---*/
+  su2double eps = LimiterHelpers<>::epsilon();
+  if (kind == LIMITER::VENKATAKRISHNAN) {
+    su2double L = config->GetRefElemLength();
+    su2double Kc = config->GetVenkat_LimiterCoeff();
+    su2double eps1 = fabs(L*Kc);
+    eps = max(eps1*eps1*eps1, LimiterHelpers<>::epsilon());
+  } else if (kind == LIMITER::VENKATAKRISHNAN_WANG) {
+    eps = config->GetVenkat_LimiterCoeff();
+  }
+
+  auto& grad = nodes->GetGradient_Reconstruction();
+  if (verify || !kokkosData->GradientOnDevice(true)) kokkosData->UploadGradient(true, grad.data());
+  if (verify) kokkosData->UploadPrimitiveOnly();
+
+  auto& lim = nodes->GetLimiter_Primitive();
+  auto& pmax = nodes->GetSolution_Max();
+  auto& pmin = nodes->GetSolution_Min();
+  kokkosData->ComputeLimiter(static_cast<int>(kind), config->GetMUSCL_Kappa_Flow(), eps, lim.data(), pmax.data(),
+                             pmin.data());
+
+  if (verify) {
+    const size_t n = size_t(nPointDomain) * nPrimVarGrad;
+    std::vector<su2double> dl(lim.data(), lim.data() + n), dx(pmax.data(), pmax.data() + n),
+        dn(pmin.data(), pmin.data() + n);
+    SetPrimitive_Limiter(geometry, config);
+    kokkosData->StageCompare(K::ST_LIMITER, "Limiter_Primitive", lim.data(), dl.data(), n, nPrimVarGrad);
+    kokkosData->StageCompare(K::ST_LIMITER, "Solution_Max", pmax.data(), dx.data(), n, nPrimVarGrad);
+    kokkosData->StageCompare(K::ST_LIMITER, "Solution_Min", pmin.data(), dn.data(), n, nPrimVarGrad);
+    return true;
+  }
+
+  Kokkos::Timer timer;
+  InitiateComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER);
+  CompleteComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER);
+  kokkosData->stagePerf[K::ST_LIMITER].host += timer.seconds();
+  return true;
+#else
+  return false;
+#endif
 }

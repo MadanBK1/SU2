@@ -78,10 +78,14 @@ void CNEMONSSolver::Preprocessing(CGeometry *geometry, CSolver **solver_containe
   if (config->GetReconstructionGradientRequired() && muscl && !center) {
     switch (config->GetKind_Gradient_Method_Recon()) {
       case GREEN_GAUSS:
-        SetPrimitive_Gradient_GG(geometry, config, true); break;
+        if (!Device_PrimitiveGradient(geometry, config, true, true, true))
+          SetPrimitive_Gradient_GG(geometry, config, true);
+        break;
       case LEAST_SQUARES:
       case WEIGHTED_LEAST_SQUARES:
-        SetPrimitive_Gradient_LS(geometry, config, true); break;
+        if (!Device_PrimitiveGradient(geometry, config, true, false, false))
+          SetPrimitive_Gradient_LS(geometry, config, true);
+        break;
       default: break;
     }
   }
@@ -89,16 +93,20 @@ void CNEMONSSolver::Preprocessing(CGeometry *geometry, CSolver **solver_containe
   /*--- Compute gradient of the primitive variables ---*/
 
   if (config->GetKind_Gradient_Method() == GREEN_GAUSS) {
-    SetPrimitive_Gradient_GG(geometry, config);
+    /*--- NEMO-NS GG differentiates Y_s (SetPrimitive_Gradient_GG override below), also on the device. ---*/
+    if (!Device_PrimitiveGradient(geometry, config, false, true, true))
+      SetPrimitive_Gradient_GG(geometry, config);
   }
   else if (config->GetKind_Gradient_Method() == WEIGHTED_LEAST_SQUARES) {
-    SetPrimitive_Gradient_LS(geometry, config);
+    if (!Device_PrimitiveGradient(geometry, config, false, false, false))
+      SetPrimitive_Gradient_LS(geometry, config);
   }
 
   /*--- Compute the limiters ---*/
 
   if (muscl && !center && limiter && !van_albada && !Output) {
-    SetPrimitive_Limiter(geometry, config);
+    if (!Device_PrimitiveLimiter(geometry, config))
+      SetPrimitive_Limiter(geometry, config);
   }
 
   /*--- Compute vorticity and strain mag. ---*/
@@ -155,6 +163,7 @@ unsigned long CNEMONSSolver::SetPrimitive_Variables(CSolver **solver_container,C
     nonPhysDevice = nonPhysicalPoints;
     nonPhysicalPoints = 0;
     kokkosData->SwapSnapshot();
+    kokkosData->InvalidatePrimitive(); /*--- The CPU loop below overwrites the host Primitive. ---*/
   }
 #endif
 

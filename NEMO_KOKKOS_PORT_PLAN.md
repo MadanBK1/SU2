@@ -93,3 +93,13 @@ Each step runs behind `ENABLE_KOKKOS`, keeps the CPU path, and is validated agai
   - `SU2_KOKKOS_C2P_VERIFY=1` runs an A/B check against the CPU loop on every call: ≤5.8e-16 relative under -ffast-math (ULP level), 0 non-physical count mismatches.
   - check.sh: residual rows are identical. Fields: invwedge 1.7e-10 (linear solver), super_cat 1.7e-15, thermalbath 0. The CPU path is bit-identical to before.
   - check.sh fix: super_cat.cfg has no trailing newline, so `ENABLE_KOKKOS` had been appended to SCREEN_OUTPUT. super_cat had never run the YES path.
+- **Steps 3–4 done** (`SU2_CFD/src/solvers/kokkos/CNEMOKokkosStages.cpp`, dispatch in `CNEMOEulerSolver.cpp`, hooks in the Euler/NS `Preprocessing`):
+  - Gather-based point kernels (point→neighbour CSR, then the point's boundary vertices in marker-major order): Green-Gauss incl. boundary faces and the NEMO-NS Y_s override, (weighted) least squares, Venkatakrishnan / Barth-Jespersen / Venkatakrishnan-Wang (device min/max + host MPI reduction), time step (edge + vertex spectral radii, local dt, `MinMax` reduce, host tail for time stepping / dual time) and max eigenvalue. Comms stay on the host after the download, in the CPU order.
+  - Device Primitive is reused from SetPrimVar (no re-upload). Gradients stay on the device for the limiter. Only domain rows are downloaded. dt uploads LocalCFL (+ μ, k, k_ve for NS).
+  - Symmetry/Euler-wall gradient correction runs on the host, using the CPU `correctGradientsSymmetry` itself, and the affected rows are re-uploaded. A device version is available with `SU2_KOKKOS_NEMO_DEVICE_SYM=1`; it is only ULP-close.
+  - **Exactness.** Under `-ffast-math` GCC re-associates and FMA-contracts the CPU templates per code shape. NEMO's MUSCL non-physical-reconstruction switch turns 1-ULP trace-species gradient differences into O(1e-4) field differences on invwedge (464 flipped edge states). The 2D LS kernel therefore pins the arithmetic GCC actually emits (read from the disassembly) using `fma` and value barriers. Results:
+    - Gradients (2D LS/WLS/GG): bitwise.
+    - Limiter: ≤6e-12 relative, from the Venkat ratio.
+    - dt/λ: ≤4.9e-16.
+  - Falls back to host for: periodic LS/limiter, dynamic grids, other limiter kinds, discrete adjoint, `SU2_KOKKOS_NEMO_HOST=grad,lim,dt`.
+  - A/B check: `SU2_KOKKOS_STAGE_VERIFY=1`.

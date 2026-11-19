@@ -93,18 +93,22 @@ CNEMOKokkosData::CNEMOKokkosData(CGeometry* geometry, const CConfig* config, CNE
   nSpecies = config->GetnSpecies();
   nVar = static_cast<int>(nodes->nVar);
   nPrimVar = static_cast<int>(nodes->nPrimVar);
+  nPrimVarGrad = static_cast<int>(nodes->nPrimVarGrad);
   nPoint = geometry->GetnPoint();
+  viscousVars = (dynamic_cast<CNEMONSVariable*>(nodes) != nullptr);
+  separateRecGradient = (&nodes->GetGradient_Reconstruction() != &nodes->GetGradient_Primitive());
   implicit = nodes->implicit;
   monoatomic = nodes->monoatomic;
   Tve_Freestream = monoatomic ? nodes->Tve_Freestream : 0.0;
 
-  if (nVar != nSpecies + nDim + 2 || nPrimVar > su2kokkos::nemo::MAXNPRIMVAR)
+  if (nVar != nSpecies + nDim + 2 || nPrimVar > su2kokkos::nemo::MAXNPRIMVAR || nPrimVarGrad > nPrimVar)
     SU2_MPI::Error("CNEMOKokkosData: unexpected NEMO variable sizes.", CURRENT_FUNCTION);
 
   gas = su2kokkos::nemo::BuildNEMOGasTables(*gasModel);
   if (gas.nSpecies != nSpecies) SU2_MPI::Error("CNEMOKokkosData: gas/config nSpecies mismatch.", CURRENT_FUNCTION);
 
   UploadGeometry(geometry);
+  UploadBoundaryInfo(geometry, config);
 
   /*--- State views. ---*/
   st.Solution = View2D<double>("NEMO::Solution", nPoint, nVar);
@@ -126,6 +130,7 @@ CNEMOKokkosData::CNEMOKokkosData(CGeometry* geometry, const CConfig* config, CNE
   /*--- Initial state mirror (not needed by SetPrimVar, which re-uploads, but keeps the device copy valid). ---*/
   UploadConservative();
   UploadPrimitive();
+  primDeviceValid = true;
   perf = Perf();
 
   const char* env = std::getenv("SU2_KOKKOS_SELFCHECK");
@@ -442,6 +447,11 @@ unsigned long CNEMOKokkosData::SetPrimVar() {
   perf.d2h += timer.seconds();
   perf.calls++;
 
+  /*--- The device Primitive now equals the host one (host SetVelocity2 recomputes the same U/rho velocity,
+   *    NS transport only writes columns >= nPrimVarGrad), so Steps 3-4 read it without re-uploading. ---*/
+  primDeviceValid = true;
+  gradPrimValid = gradRecValid = false;
+
   return nonPhysical;
 }
 
@@ -562,6 +572,23 @@ void CNEMOKokkosData::PrintPerf() const {
             << " | d2h " << perf.d2h << " s (" << perf.d2h / c << "/call, " << perf.bytes_d2h / c / 1e6
             << " MB/call)"
             << " | host post " << perf.host_post << " s (" << perf.host_post / c << "/call)" << std::endl;
+  static const char* names[N_STAGES] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue"};
+  for (int s = 0; s < N_STAGES; ++s) {
+    const auto& P = stagePerf[s];
+    if (P.calls == 0) continue;
+    const double n = double(P.calls);
+    std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " " << names[s] << " calls=" << P.calls << " | h2d " << P.h2d
+              << " s (" << P.bytes_h2d / n / 1e6 << " MB/call) | kernel " << P.kernel << " s (" << P.kernel / n
+              << "/call) | d2h " << P.d2h << " s (" << P.bytes_d2h / n / 1e6 << " MB/call) | host " << P.host
+              << " s (" << P.host / n << "/call)" << std::endl;
+    if (P.verifyCalls > 0)
+      std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " " << names[s] << " compares=" << P.verifyCalls
+                << " entries=" << P.verifyEntries << " non-bitwise=" << P.verifyNonBitwise
+                << " max rel diff=" << P.verifyMaxRel << std::endl;
+  }
+  if (residencyChecks > 0)
+    std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " device-resident Primitive checks=" << residencyChecks
+              << " mismatching entries=" << residencyMismatch << std::endl;
   if (verifyCalls > 0)
     std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " calls=" << verifyCalls
               << " non-bitwise entries=" << verifyMismatch << " max rel diff=" << verifyMaxRel << std::endl;
