@@ -32,3 +32,4 @@ option('librom_root', type : 'string', value : '', description: 'libROM base dir
 option('enable-librom', type : 'boolean', value : false, description: 'enable LLNL libROM support')
 option('static-cgns-deps', type : 'boolean', value : false, description: 'prefer static or dynamic (default) libraries for CGNS dependencies')
 option('tracy_enable', type: 'boolean', value: false, description: 'Enable Tracy profiling support')
+option('enable-fast-math', type : 'boolean', value : true, description: 'compile with -ffast-math (disable for strict IEEE reference/validation builds)')
