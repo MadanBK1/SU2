@@ -54,21 +54,6 @@ constexpr int MAXNVG = su2kokkos::nemo::MAXNPRIMVAR; /*!< >= nPrimVarGrad = nSpe
 KOKKOS_INLINE_FUNCTION double kmax(double a, double b) { return (a < b) ? b : a; }
 KOKKOS_INLINE_FUNCTION double kmin(double a, double b) { return (b < a) ? b : a; }
 
-/*!
- * \brief Value barrier: the compiler must materialise x as a rounded double here, so it cannot re-associate or
- *        FMA-contract across it (needed under -ffast-math to pin an evaluation order). No-op in device code.
- */
-KOKKOS_FORCEINLINE_FUNCTION double pinned(double x) {
-#if defined(__GNUC__) && !defined(__CUDA_ARCH__) && !defined(__HIP_DEVICE_COMPILE__) && !defined(__SYCL_DEVICE_ONLY__)
-#if defined(__x86_64__)
-  __asm__("" : "+x"(x));
-#elif defined(__aarch64__)
-  __asm__("" : "+w"(x));
-#endif
-#endif
-  return x;
-}
-
 /*! \brief DtoH of the first nRows rows of a LayoutRight device view into a contiguous host buffer. */
 template <class DView>
 double DownloadRows(double* host, const DView& d, size_t nRows) {
@@ -91,11 +76,11 @@ double UploadRows(const DView& d, const double* host, size_t nRows) {
 }
 
 /*
- * Note on exactness: under the production flags (-ffast-math -march=native) GCC may re-associate and
- * contract (FMA) floating point expressions, and it makes those choices per code shape. To obtain the same
- * bits as the CPU templates, the kernels below mirror their code shape: results are accumulated in the
- * output views (memory), not in register arrays, with the same temporaries, loop nests and pass structure
- * (edges, then boundary vertices, then symmetry corrections as separate passes).
+ * Note on exactness: every kernel evaluates the same statements in the same order as the CPU template (results
+ * accumulated in the output views, same temporaries, loop nests and pass structure: edges, then boundary
+ * vertices, then symmetry corrections). Nothing compiler-specific is pinned, so this is portable to nvcc/icpx/hipcc.
+ * In a strict IEEE build (-Denable-fast-math=false, -ffp-contract=off) the results are bitwise equal to the CPU;
+ * under -ffast-math they agree to a few ULP (each code shape is re-associated / FMA-contracted differently).
  */
 
 /*!
@@ -233,12 +218,9 @@ void KernelGreenGauss(const Geo& geo, const PrimField field, int nvg, int idxVel
  * \brief (Weighted) least squares (detail::computeGradientsLeastSquares, non-periodic branch) + solveLeastSquares,
  *        then (optionally) the symmetry pass. Rmatrix is accumulated in device memory as on the CPU.
  *
- * 2D is "CPU-exact": the production CPU build (GCC 13, -O3 -ffast-math -march=native) realizes the source as
- *   R00 += d0*(w*d0), R01 += d1*(w*d0), R11 += (d1*d1)*w (FMA), grad += d*((fj-fi)*w) (FMA), r22^2 -> max(t,eps),
- *   r11^2 -> max(R00,eps), C_d = fma(S_d0, c0, S_d1*c1)   (read from its disassembly, confirmed bitwise by A/B).
- * The MUSCL non-physical-reconstruction switch of NEMO turns 1-ULP differences of trace-species gradients into
- * O(1e-4) solution differences (invwedge_ausm), so the kernel pins that form with fma() and value barriers.
- * 3D uses the source order (ULP-level vs CPU).
+ * Plain source-order arithmetic, statement by statement as the CPU template (portable: no compiler-specific
+ * evaluation order is pinned). Bitwise vs CPU in strict IEEE builds (-Denable-fast-math=false, -ffp-contract=off);
+ * ULP-level under -ffast-math, where the compiler re-associates/contracts each code shape differently.
  */
 template <int ND>
 void KernelLeastSquares(const Geo& geo, const PrimField field, int nvg, int idxVel, bool weighted, double eps,
@@ -269,30 +251,10 @@ void KernelLeastSquares(const Geo& geo, const PrimField field, int nvg, int idxV
           /*--- Compute inverse weight, default 1 (unweighted). ---*/
           double weight = 1.0;
           if (weighted) {
-            if constexpr (ND == 2) {
-              weight = pinned(dist_ij[0] * dist_ij[0]) + pinned(dist_ij[1] * dist_ij[1]);
-            } else {
-              double sq = 0.0;
-              for (int iDim = 0; iDim < ND; ++iDim) sq += dist_ij[iDim] * dist_ij[iDim];
-              weight = sq;
-            }
-          }
-
-          if constexpr (ND == 2) {
-            /*--- CPU-exact 2D form (see the note on KernelLeastSquares). ---*/
-            if (weight > 0.0) {
-              weight = 1.0 / weight;
-              const double wd0 = pinned(weight * dist_ij[0]);
-              Rmatrix(iPoint, 0, 0) = Kokkos::fma(dist_ij[0], wd0, Rmatrix(iPoint, 0, 0));
-              Rmatrix(iPoint, 0, 1) = Kokkos::fma(dist_ij[1], wd0, Rmatrix(iPoint, 0, 1));
-              Rmatrix(iPoint, 1, 1) = Kokkos::fma(pinned(dist_ij[1] * dist_ij[1]), weight, Rmatrix(iPoint, 1, 1));
-              for (int iVar = 0; iVar < nvg; ++iVar) {
-                const double delta_ij = pinned(pinned(field(jPoint, iVar) - field(iPoint, iVar)) * weight);
-                for (int iDim = 0; iDim < ND; ++iDim)
-                  gradient(iPoint, iVar, iDim) = Kokkos::fma(dist_ij[iDim], delta_ij, gradient(iPoint, iVar, iDim));
-              }
-            }
-            continue;
+            /*--- GeometryToolbox::SquaredNorm. ---*/
+            double sq = 0.0;
+            for (int iDim = 0; iDim < ND; ++iDim) sq += dist_ij[iDim] * dist_ij[iDim];
+            weight = sq;
           }
 
           /*--- Summations for entries of upper triangular matrix R. ---*/
@@ -311,33 +273,6 @@ void KernelLeastSquares(const Geo& geo, const PrimField field, int nvg, int idxV
               for (int iDim = 0; iDim < ND; ++iDim) gradient(iPoint, iVar, iDim) += dist_ij[iDim] * delta_ij;
             }
           }
-        }
-
-        if constexpr (ND == 2) {
-          /*--- CPU-exact 2D solveLeastSquares<2,false>: GCC uses sqrt(x)^2 = x and S*c = fma(S_d0, c0, S_d1*c1). ---*/
-          const double R00 = Rmatrix(iPoint, 0, 0), R01 = Rmatrix(iPoint, 0, 1), R11 = Rmatrix(iPoint, 1, 1);
-          const double m00 = kmax(R00, eps);
-          const double r11 = Kokkos::sqrt(m00);
-          const double r12 = R01 / r11;
-          const double r12sq = pinned(r12 * r12);
-          const double m22 = kmax(pinned(R11 - r12sq), eps);
-          const double r22 = Kokkos::sqrt(m22);
-          const double det = pinned(r11 * r22);
-          const double detR2 = pinned(det * det);
-          double S00 = 0.0, S01 = 0.0, S11 = 0.0;
-          if (detR2 > eps) {
-            S00 = pinned(m22 + r12sq) / detR2;
-            S01 = -pinned(r12 * r11) / detR2;
-            S11 = m00 / detR2;
-          }
-          for (int iVar = 0; iVar < nvg; ++iVar) {
-            const double c0 = gradient(iPoint, iVar, 0), c1 = gradient(iPoint, iVar, 1);
-            const double C0 = Kokkos::fma(S00, c0, pinned(S01 * c1));
-            const double C1 = Kokkos::fma(S01, c0, pinned(S11 * c1));
-            gradient(iPoint, iVar, 0) = C0;
-            gradient(iPoint, iVar, 1) = C1;
-          }
-          return;
         }
 
         /*--- detail::solveLeastSquares<ND, false>. ---*/
