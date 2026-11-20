@@ -489,10 +489,31 @@ class CNEMOKokkosData {
   void TimeSteppingFill(double cfl, double dt);
   /*! \brief Last point's Primitive row + Cons2Prim status / first-attempt Density, Pressure (host gas-state replay). */
   void ReplayGasStateLastPoint(bool full);
-  /*! \brief Halo rows (MPI) of a resident group: download the send rows, host comms by the caller, upload the
-   *         receive rows (KokkosHostStagedHaloExchange pattern). Without halos (this build) a no-op. */
-  void DownloadGroupRows(Group g, const unsigned long* rows, unsigned long n);
-  void UploadGroupRows(Group g, const unsigned long* rows, unsigned long n);
+  /*====================== Step 10: MPI halo exchange of device-resident arrays ======================*/
+
+  /*! \brief The device arrays the NEMO host comms (InitiateComms / CompleteComms) exchange in device-resident mode:
+   *         SOLUTION (Solution, nVar), PRIMITIVE_GRADIENT (Gradient_Primitive, nPrimVarGrad*nDim),
+   *         PRIMITIVE_GRAD_REC (Gradient_Reconstruction, == Gradient_Primitive if not separate), PRIMITIVE_LIMITER
+   *         (Limiter_Primitive only: Solution_Max / Solution_Min are not communicated by the CPU either). */
+  enum class HaloQuantity : int { SOLUTION = 0, GRADIENT_PRIMITIVE, GRADIENT_RECONSTRUCTION, LIMITER, N };
+  /*!
+   * \brief Device halo exchange with the SU2 point-to-point layout (CGeometry nP2PSend / nPoint_P2PSend /
+   *        Neighbors_P2PSend / Local_Point_P2PSend, same message order, offsets and tags as CGeometry::PostP2PSends /
+   *        PostP2PRecvs): device gather of the send rows into a persistent buffer, MPI, device scatter of the receive
+   *        rows. Only the halo rows move: host-staged (default: send / receive buffers DtoH / HtoD) or GPU-aware
+   *        (gpuAware: MPI on the device buffers, KOKKOS_GPU_AWARE_MPI= YES; on host backends the same memory).
+   *        Receive rows are copies of the owner's values -> bitwise the same as the host comms.
+   */
+  void HaloExchange(CGeometry* geometry, HaloQuantity q, bool gpuAware);
+  /*! \brief Legacy / A/B path (SU2_KOKKOS_NEMO_HALO=host): download the send rows into the host container, host
+   *         comms by the caller, upload the receive rows. */
+  void DownloadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n);
+  void UploadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n);
+  struct HaloPerf {
+    unsigned long calls = 0;
+    double time = 0, bytesMsg = 0; /*!< wall time, MPI message bytes sent (both paths) */
+  };
+  mutable HaloPerf haloPerf[static_cast<int>(HaloQuantity::N)];
 
   /*! \brief Transfer ledger: totals (bytes) including the linear-algebra backend, per-iteration bookkeeping. */
   void LedgerIterationBoundary(bool outputIteration);
@@ -502,7 +523,11 @@ class CNEMOKokkosData {
     double h2d = 0, d2h = 0, bytes_h2d = 0, bytes_d2h = 0;
     unsigned long calls = 0;
   };
-  mutable SyncPerf syncPerf[N_GROUPS + 1]; /*!< + boundary primitive (+ viscous-wall gradient / transport) */
+  /*! \brief Per group, + [N_GROUPS] boundary primitive (+ viscous-wall gradient / transport), + [SYNC_HALO] halo rows
+   *         (Step 10, MPI: host-staged send / receive buffers). */
+  static constexpr int SYNC_HALO = N_GROUPS + 1;
+  static constexpr int N_SYNC = N_GROUPS + 2;
+  mutable SyncPerf syncPerf[N_SYNC];
   struct UpdatePerf {
     double prepare = 0, complete = 0, explicitUpd = 0, oldSol = 0, norm = 0;
     unsigned long nPrepare = 0, nComplete = 0, nExplicit = 0, nOldSol = 0, nNorm = 0;
@@ -566,6 +591,15 @@ class CNEMOKokkosData {
   std::vector<unsigned long> h_viscWallPoints;
   std::vector<double> bstateViscCache;
   void ComputeTransportStage(); /*!< DP carry + transport kernel (end of SetPrimVar) */
+  /*--- Step 10: halo plan (device send / receive point indices, persistent buffers). ---*/
+  const CGeometry* haloGeometry = nullptr;
+  unsigned long haloSend = 0, haloRecv = 0;
+  View1D<unsigned long> haloSendIdx, haloRecvIdx;
+  View1D<double> haloSendBuf, haloRecvBuf;
+  std::vector<double> haloHostSend, haloHostRecv;
+  void HaloPlan(CGeometry* geometry);
+  double* HaloDevicePtr(HaloQuantity q, size_t& rowLen, Group& g);
+  double* HaloHostPtr(HaloQuantity q);
   void DownloadGroup(Group g);
   void UploadGroup(Group g);
   void PoisonGroup(Group g);

@@ -12,6 +12,7 @@
 
 #include "../../../include/solvers/kokkos/CNEMOKokkosData.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <iomanip>
@@ -710,7 +711,7 @@ const char* GroupName(int g) {
   static const char* names[] = {"Solution",  "Solution_Old", "Primitive+secondaries", "Gradient",
                                 "Limiter",   "TimeStep",     "LocalCFL",              "Non_Physical",
                                 "UnderRelaxation", "Res_TruncError", "LinSysRes+LinSysSol",
-                                "boundary Primitive (+ viscous-wall gradient/transport)"};
+                                "boundary Primitive (+ viscous-wall gradient/transport)", "halo rows (MPI)"};
   return names[g];
 }
 const char* StageName(int s) {
@@ -729,7 +730,7 @@ std::vector<double> CNEMOKokkosData::LedgerCategories() const {
     c.push_back(stagePerf[k].bytes_h2d);
     c.push_back(stagePerf[k].bytes_d2h);
   }
-  for (int k = 0; k <= N_GROUPS; ++k) {
+  for (int k = 0; k < N_SYNC; ++k) {
     c.push_back(syncPerf[k].bytes_h2d);
     c.push_back(syncPerf[k].bytes_d2h);
   }
@@ -740,7 +741,7 @@ std::vector<double> CNEMOKokkosData::LedgerCategories() const {
 
 double CNEMOKokkosData::TotalH2D() const {
   const auto c = LedgerCategories();
-  const size_t nPairs = 1 + N_STAGES + N_GROUPS + 1;
+  const size_t nPairs = 1 + N_STAGES + N_SYNC;
   double t = 0.0;
   for (size_t k = 0; k < nPairs; ++k) t += c[2 * k];
   using L = KokkosTransferLedger::Category;
@@ -750,7 +751,7 @@ double CNEMOKokkosData::TotalH2D() const {
 
 double CNEMOKokkosData::TotalD2H() const {
   const auto c = LedgerCategories();
-  const size_t nPairs = 1 + N_STAGES + N_GROUPS + 1;
+  const size_t nPairs = 1 + N_STAGES + N_SYNC;
   double t = 0.0;
   for (size_t k = 0; k < nPairs; ++k) t += c[2 * k + 1];
   using L = KokkosTransferLedger::Category;
@@ -773,7 +774,31 @@ void CNEMOKokkosData::LedgerIterationBoundary(bool) {
 }
 
 void CNEMOKokkosData::PrintPerf() const {
-  if (SU2_MPI::GetRank() != MASTER_NODE || perf.calls == 0) return;
+  if (perf.calls == 0) return; /*--- same on every rank (one SetPrimVar per iteration) ---*/
+
+  /*--- Step 10: per-rank ledger of the steady iteration (the same iteration index on every rank), gathered to the
+   *    master: collective, so before the rank filter. ---*/
+  const int nRanks = SU2_MPI::GetSize();
+  std::vector<double> rankLedger;
+  long rankPick = -1;
+  if (nRanks > 1 && !ledgerCat.empty()) {
+    for (long it = long(ledgerCat.size()) - 1; it >= 1; --it)
+      if (!ledgerOutput[it]) {
+        rankPick = it;
+        break;
+      }
+    const size_t nc = ledgerCat[0].size();
+    std::vector<double> mine(nc + 1, 0.0);
+    if (rankPick >= 0) std::copy(ledgerCat[rankPick].begin(), ledgerCat[rankPick].end(), mine.begin());
+    mine[nc] = 0.0;
+    for (const auto& H : haloPerf) mine[nc] += H.bytesMsg;
+    /*--- MPI halo message bytes per iteration (one SOLUTION exchange per iteration). ---*/
+    mine[nc] /= std::max<double>(1.0, double(haloPerf[static_cast<int>(HaloQuantity::SOLUTION)].calls));
+    rankLedger.resize((nc + 1) * nRanks);
+    SU2_MPI::Gather(mine.data(), int(nc + 1), MPI_DOUBLE, rankLedger.data(), int(nc + 1), MPI_DOUBLE, MASTER_NODE,
+                    SU2_MPI::GetComm());
+  }
+  if (SU2_MPI::GetRank() != MASTER_NODE) return;
   const double c = double(perf.calls);
   std::cout << std::scientific << std::setprecision(3) << "[KOKKOS_NEMO_PERF] MG " << iMesh
             << " SetPrimVar calls=" << perf.calls << " nPoint=" << nPoint << " | h2d " << perf.h2d << " s ("
@@ -821,7 +846,7 @@ void CNEMOKokkosData::PrintPerf() const {
               << (U.nComplete ? U.complete / U.nComplete : 0.0) << "/call) | explicit " << U.explicitUpd << " s ("
               << (U.nExplicit ? U.explicitUpd / U.nExplicit : 0.0) << "/call) | old solution " << U.oldSol
               << " s | residual norm " << U.norm << " s (" << U.nNorm << " calls)" << std::endl;
-  for (int g = 0; g <= N_GROUPS; ++g) {
+  for (int g = 0; g < N_SYNC; ++g) {
     const auto& P = syncPerf[g];
     if (P.calls == 0) continue;
     std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " sync " << GroupName(g) << " calls=" << P.calls << " | h2d "
@@ -829,7 +854,7 @@ void CNEMOKokkosData::PrintPerf() const {
               << " s)" << std::endl;
   }
   if (!ledgerCat.empty()) {
-    const size_t nPairs = 1 + N_STAGES + N_GROUPS + 1;
+    const size_t nPairs = 1 + N_STAGES + N_SYNC;
     auto label = [&](size_t k) -> std::string {
       if (k < 2 * nPairs) {
         const size_t pr = k / 2;
@@ -879,6 +904,40 @@ void CNEMOKokkosData::PrintPerf() const {
         if (ledgerCat[pick][k] != 0.0)
           std::cout << "[KOKKOS_NEMO_LEDGER]     " << label(k) << ": " << ledgerCat[pick][k] << " B" << std::endl;
     }
+  }
+  if (!rankLedger.empty() && rankPick >= 0) {
+    const size_t nPairs = 1 + N_STAGES + N_SYNC;
+    const size_t nc = rankLedger.size() / nRanks - 1;
+    for (int r = 0; r < nRanks; ++r) {
+      const double* c = &rankLedger[r * (nc + 1)];
+      double h = 0, d = 0;
+      for (size_t k = 0; k < nc; ++k) {
+        bool h2d;
+        if (k < 2 * nPairs) {
+          h2d = (k % 2) == 0;
+        } else {
+          using L = KokkosTransferLedger::Category;
+          const auto cat = static_cast<L>(k - 2 * nPairs);
+          h2d = cat == L::VECTOR_H2D || cat == L::MATRIX_H2D || cat == L::PRECOND_H2D || cat == L::HALO_H2D;
+        }
+        (h2d ? h : d) += c[k];
+      }
+      const double haloNemoH = c[2 * (1 + N_STAGES + SYNC_HALO)], haloNemoD = c[2 * (1 + N_STAGES + SYNC_HALO) + 1];
+      const double haloLinH = c[2 * nPairs + KokkosTransferLedger::HALO_H2D];
+      const double haloLinD = c[2 * nPairs + KokkosTransferLedger::HALO_D2H];
+      std::cout << "[KOKKOS_NEMO_LEDGER] MG " << iMesh << " rank " << r << " steady iteration " << rankPick
+                << ": HtoD " << h << " B, DtoH " << d << " B; of which halo rows: NEMO HtoD " << haloNemoH
+                << " B / DtoH " << haloNemoD << " B, linear algebra HtoD " << haloLinH << " B / DtoH " << haloLinD
+                << " B; other " << (h + d - haloNemoH - haloNemoD - haloLinH - haloLinD)
+                << " B; NEMO halo MPI messages " << c[nc] << " B/iteration (avg)" << std::endl;
+    }
+  }
+  for (int q = 0; q < static_cast<int>(HaloQuantity::N); ++q) {
+    static const char* hn[] = {"SOLUTION", "PRIMITIVE_GRADIENT", "PRIMITIVE_GRAD_REC", "PRIMITIVE_LIMITER"};
+    if (haloPerf[q].calls > 0)
+      std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " halo " << hn[q] << " calls=" << haloPerf[q].calls
+                << " | " << haloPerf[q].time << " s | MPI send " << haloPerf[q].bytesMsg / 1e6 << " MB (rank 0)"
+                << std::endl;
   }
   std::cout << std::defaultfloat;
 }

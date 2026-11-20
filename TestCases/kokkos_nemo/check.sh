@@ -14,6 +14,14 @@
 #   (zero-velocity / trace-species columns are otherwise pure round-off relative to themselves).
 # RES_NOISE_ORDERS=N: residual columns more than N orders below the row maximum (in NO and YES) are round-off
 #   (e.g. rms[RhoU] of the 0-D thermal bath) and are not compared.
+# Step 10 (MPI builds):
+# NP=<n>: run both binaries under `mpirun --allow-run-as-root --oversubscribe $MPI_OPTS -np <n>` (default: no mpirun;
+#   MPI_OPTS default "--mca osc ^rdma").
+# REF_MODE=YES: the reference run is ENABLE_KOKKOS=YES device as well (use with REF_BIN / REF_NP: compare binaries).
+# REF_BIN=<path>, REF_NP=<n>: binary / rank count of the reference ("NO") run (default: BIN, NP; REF_NP=0: no mpirun).
+# RUN_TAG=<s>: suffix of the run directories (default: _np<NP> if NP is set, else empty).
+# EXTRA_CFG="KEY= VALUE;KEY2= VALUE2": options appended to both configs (e.g. KOKKOS_GPU_AWARE_MPI= YES).
+# Extra environment (e.g. SU2_KOKKOS_NEMO_POISON=1) is inherited by both runs.
 set -u
 SU2=/home/claude/su2
 BIN=${BIN:-$SU2/build-kokkos-serial/SU2_CFD/src/SU2_CFD}
@@ -22,6 +30,12 @@ FIELD_TOL=${FIELD_TOL:-1e-9}
 REF_MODE=${REF_MODE:-NO}
 PHYS_SCALE=${PHYS_SCALE:-0}            # 1: field diffs scaled physically (see below) instead of per-column max|field|
 RES_NOISE_ORDERS=${RES_NOISE_ORDERS:-} # e.g. 10: ignore residual columns > N orders below the row maximum (round-off)
+NP=${NP:-}
+REF_BIN=${REF_BIN:-$BIN}
+REF_NP=${REF_NP:-$NP}
+RUN_TAG=${RUN_TAG-${NP:+_np$NP}}
+MPI_OPTS=${MPI_OPTS---mca osc ^rdma}  # OpenMPI 4.1 in this container: the rdma one-sided component fails MPI_Win_create at -np 1
+mpiprefix() { [ -n "$1" ] && [ "$1" != 0 ] && echo "mpirun --allow-run-as-root --oversubscribe $MPI_OPTS -np $1"; }
 TC=$SU2/TestCases/nonequilibrium
 M=/home/claude/meshes
 declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
@@ -34,16 +48,20 @@ cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_c
 status=0
 for c in "${cases[@]}"; do
   for mode in NO YES; do
-    d=/home/claude/runs/chk_${c}_$mode; rm -rf "$d"; mkdir -p "$d"; cd "$d"
+    d=/home/claude/runs/chk_${c}${RUN_TAG}_$mode; rm -rf "$d"; mkdir -p "$d"; cd "$d"
     cp "${CFG[$c]}" run.cfg; ln -sf $M/*.su2 .
-    kmode=$mode; hostenv=""
+    kmode=$mode; hostenv=""; bin=$BIN; np=$NP
+    if [ "$mode" = NO ]; then bin=$REF_BIN; np=$REF_NP; fi
     if [ "$mode" = NO ] && [ "$REF_MODE" = HOST ]; then kmode=YES; hostenv=all; fi
+    if [ "$mode" = NO ] && [ "$REF_MODE" = YES ]; then kmode=YES; fi
     sed -i '/^ENABLE_KOKKOS/d' run.cfg; printf "\nENABLE_KOKKOS= %s\n" "$kmode" >> run.cfg  # leading newline: some cfgs lack a trailing one
-    t0=$(date +%s.%N); SU2_KOKKOS_NEMO_HOST=$hostenv "$BIN" run.cfg > log.txt 2>&1; rc=$?
-    echo "$c $mode${hostenv:+ (REF_MODE=HOST: YES, all NEMO stages host)} exit=$rc wall=$(printf '%.2f' "$(echo "$(date +%s.%N)-$t0" | bc)")s"
+    if [ -n "${EXTRA_CFG:-}" ]; then echo "$EXTRA_CFG" | tr ';' '\n' | while read -r l; do
+      [ -n "$l" ] && { sed -i "/^${l%%=*}[ =]/d" run.cfg; echo "$l" >> run.cfg; }; done; fi
+    t0=$(date +%s.%N); SU2_KOKKOS_NEMO_HOST=$hostenv $(mpiprefix "$np") "$bin" run.cfg > log.txt 2>&1; rc=$?
+    echo "$c $mode${hostenv:+ (REF_MODE=HOST: YES, all NEMO stages host)}${np:+ np=$np} exit=$rc wall=$(printf '%.2f' "$(echo "$(date +%s.%N)-$t0" | bc)")s"
     [ $rc -ne 0 ] && { status=1; tail -5 log.txt; }
   done
-  python3 - "$c" "$RES_TOL" "$FIELD_TOL" "${REF[$c]:-}" "$PHYS_SCALE" "${RES_NOISE_ORDERS:-inf}" <<'EOF' || status=1
+  python3 - "$c$RUN_TAG" "$RES_TOL" "$FIELD_TOL" "${REF[$c]:-}" "$PHYS_SCALE" "${RES_NOISE_ORDERS:-inf}" <<'EOF' || status=1
 import sys, re, glob, numpy as np
 c, rtol, ftol, ref = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
 phys, noise = sys.argv[5] == '1', float(sys.argv[6])

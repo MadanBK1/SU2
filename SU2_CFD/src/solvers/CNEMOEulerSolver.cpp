@@ -3859,17 +3859,38 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
 void CNEMOEulerSolver::Device_StagedComms(CGeometry *geometry, const CConfig *config, MPI_QUANTITIES comm,
                                           int group) {
 #ifdef HAVE_KOKKOS
-  /*--- KokkosHostStagedHaloExchange pattern: only halo rows cross the host boundary. The host comms read the send
-   *    rows and write the receive rows of the host container of the group. Without MPI halos (this build): no-op.
-   *    TODO(Step 10): device pack/unpack + (GPU-aware) MPI directly on the device views. ---*/
+  /*--- Step 10: halo exchange of a device-resident array. Only halo rows move: default = device gather/scatter +
+   *    MPI on compact send / receive buffers (host-staged, or GPU-aware with KOKKOS_GPU_AWARE_MPI= YES);
+   *    SU2_KOKKOS_NEMO_HALO=host = legacy A/B path (send rows -> host container, host InitiateComms / CompleteComms,
+   *    receive rows -> device). Both give the host comms' values (copies). Without MPI halos: no-op. ---*/
+  (void)group;
   const auto nSend = geometry->nP2PSend > 0 ? static_cast<unsigned long>(geometry->nPoint_P2PSend[geometry->nP2PSend]) : 0ul;
   const auto nRecv = geometry->nP2PRecv > 0 ? static_cast<unsigned long>(geometry->nPoint_P2PRecv[geometry->nP2PRecv]) : 0ul;
   if (nSend == 0 && nRecv == 0) return;
-  const auto g = static_cast<CNEMOKokkosData::Group>(group);
-  kokkosData->DownloadGroupRows(g, geometry->Local_Point_P2PSend, nSend);
+  using HQ = CNEMOKokkosData::HaloQuantity;
+  HQ q;
+  switch (comm) {
+    case MPI_QUANTITIES::SOLUTION: q = HQ::SOLUTION; break;
+    case MPI_QUANTITIES::PRIMITIVE_GRADIENT: q = HQ::GRADIENT_PRIMITIVE; break;
+    case MPI_QUANTITIES::PRIMITIVE_GRAD_REC: q = HQ::GRADIENT_RECONSTRUCTION; break;
+    case MPI_QUANTITIES::PRIMITIVE_LIMITER: q = HQ::LIMITER; break;
+    default:
+      SU2_MPI::Error("Device-resident NEMO: no device halo exchange for this MPI quantity.", CURRENT_FUNCTION);
+      return;
+  }
+  static const std::string haloMode = [] {
+    const char* e = std::getenv("SU2_KOKKOS_NEMO_HALO");
+    return std::string(e ? e : "");
+  }();
+  if (haloMode == "none") return; /*--- debug negative control only: stale halos must change the results ---*/
+  if (haloMode != "host") {
+    kokkosData->HaloExchange(geometry, q, config->GetKokkosGPUAwareMPI());
+    return;
+  }
+  kokkosData->DownloadHaloRows(q, geometry->Local_Point_P2PSend, nSend);
   InitiateComms(geometry, config, comm);
   CompleteComms(geometry, config, comm);
-  kokkosData->UploadGroupRows(g, geometry->Local_Point_P2PRecv, nRecv);
+  kokkosData->UploadHaloRows(q, geometry->Local_Point_P2PRecv, nRecv);
 #else
   (void)geometry; (void)config; (void)comm; (void)group;
 #endif

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Strict-build per-stage A/B (SU2_KOKKOS_STAGE_VERIFY=1) over config variants. Usage: ab_variants.sh [name ...]
 BIN=${BIN:-/home/claude/su2/build-kokkos-strict/SU2_CFD/src/SU2_CFD}
+# Step 10: NP=<n> runs under `mpirun --allow-run-as-root --oversubscribe -np <n>` (MPI build), dirs runs/ab_np<n>/;
+#   the VERIFY counts are those of rank 0.
+NP=${NP:-}
+MPI_OPTS=${MPI_OPTS---mca osc ^rdma}  # see check.sh
+MPIRUN=""; [ -n "$NP" ] && MPIRUN="mpirun --allow-run-as-root --oversubscribe $MPI_OPTS -np $NP"
 TC=/home/claude/su2/TestCases/nonequilibrium
 declare -A BASE MOD
 BASE[ausm]=$TC/invwedge/invwedge_ausm.cfg;                 MOD[ausm]=""
@@ -43,13 +48,13 @@ BASE[axi_visccone]=$TC/visc_wedge/axi_visccone.cfg;  MOD[axi_visccone]=""
 names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm ausmplusm amimpl vanalbada nolim bj_gg wang explicit first air7 air7ion ns_muscl supercat up2 tb tb_impl tb_frozen tb_vtlim tb_air5 supersonic subout subout_am sc_cat sc_partcat sc_gy sc_suth sc_gg sc_heatflux sc_explicit sc_n2 sc_jacobi partial_cat axi_visccone)
 st=0
 for n in "${names[@]}"; do
-  d=/home/claude/runs/ab/$n; rm -rf $d; mkdir -p $d; cd $d; ln -sf /home/claude/meshes/*.su2 .
+  d=/home/claude/runs/ab${NP:+_np$NP}/$n; rm -rf $d; mkdir -p $d; cd $d; ln -sf /home/claude/meshes/*.su2 .
   cp "${BASE[$n]}" run.cfg; printf "\n" >> run.cfg
   IFS='|' read -ra kv <<< "${MOD[$n]}"
   for x in "${kv[@]}"; do [ -z "$x" ] && continue; k=${x%%=*}; sed -i "/^$k *=/d" run.cfg; [ "${x#*= }" = DELETE ] || echo "$x" >> run.cfg; done
   sed -i '/^ENABLE_KOKKOS/d; /^OUTPUT_FILES/d' run.cfg; printf "ENABLE_KOKKOS= YES\nOUTPUT_FILES= (RESTART_ASCII)\n" >> run.cfg
   grep -qE "^(TIME_)?ITER" run.cfg || echo "ITER= 11" >> run.cfg
-  SU2_KOKKOS_STAGE_VERIFY=1 $BIN run.cfg > log.txt 2>&1; rc=$?
+  SU2_KOKKOS_STAGE_VERIFY=1 $MPIRUN $BIN run.cfg > log.txt 2>&1; rc=$?
   echo "== $n exit=$rc $(grep 'stage upwind' log.txt | sed 's/.*stage upwind//')"
   grep -E "stage (source|bc:)" log.txt | sed 's/\[KOKKOS_NEMO\] stage /   /' | sed 's/ (eager download after the stage)//'
   grep -c "Warning!! Instances of NaN" log.txt | sed 's/^/   NaN-warning lines: /'

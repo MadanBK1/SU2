@@ -5,7 +5,13 @@
 # SU2_KOKKOS_PRECOND_VERIFY=1 (device ILU/Jacobi build vs the host build on the same values, bitwise) and, with
 # POISON=1, SU2_KOKKOS_NEMO_POISON=1 (stale host copies are NaN: a missed host sync changes the results).
 # Usage: ab_resident.sh [name ...]
+# Step 10: NP=<n> runs both modes under `mpirun --allow-run-as-root --oversubscribe -np <n>` (MPI build, e.g.
+#   BIN=.../build-kokkos-strict-mpi/...), run directories /home/claude/runs/abres_np<n>/.
 BIN=${BIN:-/home/claude/su2/build-kokkos-strict/SU2_CFD/src/SU2_CFD}
+NP=${NP:-}
+MPI_OPTS=${MPI_OPTS---mca osc ^rdma}  # see check.sh
+MPIRUN=""; [ -n "$NP" ] && MPIRUN="mpirun --allow-run-as-root --oversubscribe $MPI_OPTS -np $NP"
+R=/home/claude/runs/abres${NP:+_np$NP}
 POISON=${POISON:-1}
 TC=/home/claude/su2/TestCases/nonequilibrium
 declare -A BASE MOD
@@ -50,7 +56,7 @@ names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm jacobi fgmres ilu1 vanalbada
 st=0
 for n in "${names[@]}"; do
   for mode in ON OFF; do
-    d=/home/claude/runs/abres/${n}_$mode; rm -rf $d; mkdir -p $d; cd $d; ln -sf /home/claude/meshes/*.su2 .
+    d=$R/${n}_$mode; rm -rf $d; mkdir -p $d; cd $d; ln -sf /home/claude/meshes/*.su2 .
     cp "${BASE[$n]}" run.cfg; printf "\n" >> run.cfg
     sed -i '/^ENABLE_KOKKOS/d; /^OUTPUT_FILES/d; /^SCREEN_OUTPUT/d' run.cfg
     printf "ENABLE_KOKKOS= YES\nOUTPUT_FILES= (RESTART_ASCII)\n" >> run.cfg
@@ -58,14 +64,14 @@ for n in "${names[@]}"; do
     for x in "${kv[@]}"; do [ -z "$x" ] && continue; k=${x%%=*}; sed -i "/^$k *=/d" run.cfg; [ "${x#*= }" = DELETE ] || echo "$x" >> run.cfg; done
     grep -qE "^(TIME_)?ITER" run.cfg || echo "ITER= 11" >> run.cfg
     if [ $mode = ON ]; then
-      SU2_KOKKOS_PRECOND_VERIFY=1 SU2_KOKKOS_NEMO_POISON=$POISON $BIN run.cfg > log.txt 2>&1; rc=$?
+      SU2_KOKKOS_PRECOND_VERIFY=1 SU2_KOKKOS_NEMO_POISON=$POISON $MPIRUN $BIN run.cfg > log.txt 2>&1; rc=$?
     else
-      SU2_KOKKOS_NEMO_RESIDENT=0 $BIN run.cfg > log.txt 2>&1; rc=$?
+      SU2_KOKKOS_NEMO_RESIDENT=0 $MPIRUN $BIN run.cfg > log.txt 2>&1; rc=$?
     fi
     [ $rc -ne 0 ] && { echo "== $n $mode exit=$rc"; tail -3 log.txt; st=1; }
     grep -E '^\|\s+[0-9]+\|' log.txt > hist.txt
   done
-  a=/home/claude/runs/abres/${n}_ON; b=/home/claude/runs/abres/${n}_OFF
+  a=$R/${n}_ON; b=$R/${n}_OFF
   res=$(grep -m1 "device-resident state" $a/log.txt | sed 's/.*Step 6): //' | cut -c1-90)
   r1=same; nf=0
   for f in $b/restart_flow*.csv $b/*.vtu $b/*.vtk; do [ -e "$f" ] || continue; nf=$((nf+1)); cmp -s $f $a/$(basename $f) || r1=DIFF; done
@@ -73,8 +79,9 @@ for n in "${names[@]}"; do
   r2=$(cmp -s $a/hist.txt $b/hist.txt && echo same || echo DIFF)
   pv=$(grep "preconditioner device build vs host" $a/log.txt | sed 's/.*: //')
   echo "== $n: resident $res | files($nf) $r1, history $r2 ($(wc -l < $a/hist.txt) rows) | precond A/B: ${pv:-none}"
-  grep "steady iteration" $a/log.txt | sed 's/\[KOKKOS_NEMO_LEDGER\] MG 0 /   ON  ledger /'
-  grep "steady iteration" $b/log.txt | sed 's/\[KOKKOS_NEMO_LEDGER\] MG 0 /   OFF ledger /'
+  grep "steady iteration" $a/log.txt | grep -v " rank " | sed 's/\[KOKKOS_NEMO_LEDGER\] MG 0 /   ON  ledger /'
+  grep "steady iteration" $b/log.txt | grep -v " rank " | sed 's/\[KOKKOS_NEMO_LEDGER\] MG 0 /   OFF ledger /'
+  [ -n "$NP" ] && grep " rank .*steady iteration" $a/log.txt | sed 's/.*MG 0 /   ON  /'
   [ "$r1$r2" = samesame ] || st=1
   case "$pv" in *non-bitwise=0) ;; "") ;; *) st=1;; esac
 done

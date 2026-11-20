@@ -1470,71 +1470,193 @@ void CNEMOKokkosData::EnsureHostAll() {
   for (int g = 0; g < N_GROUPS; ++g) EnsureHost(static_cast<Group>(g));
 }
 
-void CNEMOKokkosData::DownloadGroupRows(Group g, const unsigned long* rows, unsigned long n) {
-  if (!ResidentActive() || n == 0) return;
-  /*--- Halo rows only (MPI): small, through a gather on the device. Not exercised in this (serial) build. ---*/
-  auto& P = syncPerf[g];
-  auto one = [&](double* host, double* dev, size_t rowLen) {
-    View1D<unsigned long> idx("NEMO::haloIdx", n);
-    View2D<double> stage("NEMO::haloStage", n, rowLen);
-    Kokkos::deep_copy(idx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(rows, n));
-    Kokkos::parallel_for(
-        "NEMO::GatherRows", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
-          for (size_t v = 0; v < rowLen; ++v) stage(k, v) = dev[idx(k) * rowLen + v];
-        });
-    auto h = Kokkos::create_mirror_view_and_copy(HostSpace(), stage);
-    for (unsigned long k = 0; k < n; ++k) std::memcpy(host + rows[k] * rowLen, &h(k, 0), rowLen * sizeof(double));
-    P.bytes_d2h += double(n) * rowLen * sizeof(double);
-  };
-  const size_t gRow = size_t(nPrimVarGrad) * nDim;
-  switch (g) {
-    case G_SOLUTION: one(nodes->Solution.data(), st.Solution.data(), nVar); break;
-    case G_GRADIENT:
-      if (st.GradPrim.size()) one(nodes->GetGradient_Primitive().data(), st.GradPrim.data(), gRow);
-      if (separateRecGradient && st.GradRec.size())
-        one(nodes->GetGradient_Reconstruction().data(), st.GradRec.data(), gRow);
-      break;
-    case G_LIMITER:
-      one(nodes->GetLimiter_Primitive().data(), st.Limiter.data(), nPrimVarGrad);
-      one(nodes->GetSolution_Max().data(), st.PrimMax.data(), nPrimVarGrad);
-      one(nodes->GetSolution_Min().data(), st.PrimMin.data(), nPrimVarGrad);
-      break;
-    default: SU2_MPI::Error("CNEMOKokkosData: row staging not implemented for this group.", CURRENT_FUNCTION);
+/*====================== Step 10: MPI halo exchange of device-resident arrays ======================*/
+
+double* CNEMOKokkosData::HaloDevicePtr(HaloQuantity q, size_t& rowLen, Group& g) {
+  switch (q) {
+    case HaloQuantity::SOLUTION:
+      rowLen = nVar;
+      g = G_SOLUTION;
+      return st.Solution.data();
+    case HaloQuantity::GRADIENT_PRIMITIVE:
+      rowLen = size_t(nPrimVarGrad) * nDim;
+      g = G_GRADIENT;
+      return st.GradPrim.data();
+    case HaloQuantity::GRADIENT_RECONSTRUCTION:
+      rowLen = size_t(nPrimVarGrad) * nDim;
+      g = G_GRADIENT;
+      return st.GradRec.data(); /*--- == GradPrim if Gradient_Reconstruction is not a separate container ---*/
+    case HaloQuantity::LIMITER:
+      rowLen = nPrimVarGrad;
+      g = G_LIMITER;
+      return st.Limiter.data();
+    default: break;
   }
+  SU2_MPI::Error("CNEMOKokkosData: unknown halo quantity.", CURRENT_FUNCTION);
+  return nullptr;
 }
 
-void CNEMOKokkosData::UploadGroupRows(Group g, const unsigned long* rows, unsigned long n) {
-  if (!ResidentActive() || n == 0) return;
-  auto& P = syncPerf[g];
-  auto one = [&](const double* host, double* dev, size_t rowLen) {
-    View1D<unsigned long> idx("NEMO::haloIdx", n);
-    View2D<double> stage("NEMO::haloStage", n, rowLen);
-    auto h = Kokkos::create_mirror_view(stage);
-    for (unsigned long k = 0; k < n; ++k) std::memcpy(&h(k, 0), host + rows[k] * rowLen, rowLen * sizeof(double));
-    Kokkos::deep_copy(stage, h);
-    Kokkos::deep_copy(idx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(rows, n));
-    Kokkos::parallel_for(
-        "NEMO::ScatterRows", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
-          for (size_t v = 0; v < rowLen; ++v) dev[idx(k) * rowLen + v] = stage(k, v);
-        });
-    Kokkos::fence();
-    P.bytes_h2d += double(n) * rowLen * sizeof(double);
-  };
-  const size_t gRow = size_t(nPrimVarGrad) * nDim;
-  switch (g) {
-    case G_SOLUTION: one(nodes->Solution.data(), st.Solution.data(), nVar); break;
-    case G_GRADIENT:
-      if (st.GradPrim.size()) one(nodes->GetGradient_Primitive().data(), st.GradPrim.data(), gRow);
-      if (separateRecGradient && st.GradRec.size())
-        one(nodes->GetGradient_Reconstruction().data(), st.GradRec.data(), gRow);
-      break;
-    case G_LIMITER:
-      one(nodes->GetLimiter_Primitive().data(), st.Limiter.data(), nPrimVarGrad);
-      one(nodes->GetSolution_Max().data(), st.PrimMax.data(), nPrimVarGrad);
-      one(nodes->GetSolution_Min().data(), st.PrimMin.data(), nPrimVarGrad);
-      break;
-    default: SU2_MPI::Error("CNEMOKokkosData: row staging not implemented for this group.", CURRENT_FUNCTION);
+double* CNEMOKokkosData::HaloHostPtr(HaloQuantity q) {
+  switch (q) {
+    case HaloQuantity::SOLUTION: return nodes->Solution.data();
+    case HaloQuantity::GRADIENT_PRIMITIVE: return nodes->GetGradient_Primitive().data();
+    case HaloQuantity::GRADIENT_RECONSTRUCTION: return nodes->GetGradient_Reconstruction().data();
+    case HaloQuantity::LIMITER: return nodes->GetLimiter_Primitive().data();
+    default: break;
   }
+  return nullptr;
+}
+
+void CNEMOKokkosData::HaloPlan(CGeometry* geometry) {
+  /*--- Geometry metadata, uploaded once per (solver, geometry). A different geometry object (e.g. after a mesh
+   *    re-partition) or different halo counts rebuild the plan. ---*/
+  const auto nSend = geometry->nP2PSend > 0 ? static_cast<unsigned long>(geometry->nPoint_P2PSend[geometry->nP2PSend]) : 0ul;
+  const auto nRecv = geometry->nP2PRecv > 0 ? static_cast<unsigned long>(geometry->nPoint_P2PRecv[geometry->nP2PRecv]) : 0ul;
+  if (haloGeometry == geometry && haloSend == nSend && haloRecv == nRecv) return;
+  haloGeometry = geometry;
+  haloSend = nSend;
+  haloRecv = nRecv;
+  haloSendIdx = View1D<unsigned long>("NEMO::haloSendIdx", nSend);
+  haloRecvIdx = View1D<unsigned long>("NEMO::haloRecvIdx", nRecv);
+  if (nSend) Kokkos::deep_copy(haloSendIdx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(geometry->Local_Point_P2PSend, nSend));
+  if (nRecv) Kokkos::deep_copy(haloRecvIdx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(geometry->Local_Point_P2PRecv, nRecv));
+  /*--- Buffers sized for the widest row (gradient). ---*/
+  const size_t maxRow = std::max<size_t>(nVar, size_t(nPrimVarGrad) * nDim);
+  haloSendBuf = View1D<double>("NEMO::haloSendBuf", nSend * maxRow);
+  haloRecvBuf = View1D<double>("NEMO::haloRecvBuf", nRecv * maxRow);
+  haloHostSend.assign(nSend * maxRow, 0.0);
+  haloHostRecv.assign(nRecv * maxRow, 0.0);
+}
+
+void CNEMOKokkosData::HaloExchange(CGeometry* geometry, HaloQuantity q, bool gpuAware) {
+  if (!ResidentActive()) return;
+#ifdef HAVE_MPI
+  Kokkos::Timer timer;
+  HaloPlan(geometry);
+  if (haloSend == 0 && haloRecv == 0) return;
+  size_t rowLen = 0;
+  Group g = G_SOLUTION;
+  double* dev = HaloDevicePtr(q, rowLen, g);
+  if (dev == nullptr) SU2_MPI::Error("CNEMOKokkosData: halo exchange of an unallocated device array.", CURRENT_FUNCTION);
+  /*--- The device copy must be current (it is, after the stage that produced it). ---*/
+  EnsureDevice(g);
+  auto& P = syncPerf[SYNC_HALO];
+  auto& H = haloPerf[static_cast<int>(q)];
+
+  const int nMsgR = geometry->nP2PRecv, nMsgS = geometry->nP2PSend;
+  std::vector<SU2_MPI::Request> reqR(nMsgR), reqS(nMsgS);
+  double* recvBase = gpuAware ? haloRecvBuf.data() : haloHostRecv.data();
+  double* sendBase = gpuAware ? haloSendBuf.data() : haloHostSend.data();
+
+  /*--- Receives first (CGeometry::PostP2PRecvs: source = Neighbors_P2PRecv, tag = source + 1). ---*/
+  for (int iMsg = 0; iMsg < nMsgR; ++iMsg) {
+    const auto offset = static_cast<unsigned long>(geometry->nPoint_P2PRecv[iMsg]) * rowLen;
+    const int count = static_cast<int>((geometry->nPoint_P2PRecv[iMsg + 1] - geometry->nPoint_P2PRecv[iMsg]) * rowLen);
+    const int source = geometry->Neighbors_P2PRecv[iMsg];
+    SU2_MPI::Irecv(recvBase + offset, count, MPI_DOUBLE, source, source + 1, SU2_MPI::GetComm(), &reqR[iMsg]);
+  }
+
+  /*--- Device gather of the send rows (point-major, the CPU packing order of the row). ---*/
+  if (haloSend > 0) {
+    const auto idx = haloSendIdx;
+    const auto buf = haloSendBuf;
+    const size_t rl = rowLen;
+    Kokkos::parallel_for(
+        "NEMO::HaloPack", Kokkos::RangePolicy<exec_space>(0, haloSend * rl), KOKKOS_LAMBDA(const unsigned long k) {
+          buf(k) = dev[idx(k / rl) * rl + k % rl];
+        });
+    Kokkos::fence("NEMO::HaloPack");
+    if (!gpuAware) {
+      Kokkos::deep_copy(Kokkos::View<double*, HostSpace, Unmanaged>(haloHostSend.data(), haloSend * rl),
+                        Kokkos::subview(haloSendBuf, std::make_pair(size_t(0), haloSend * rl)));
+      P.bytes_d2h += double(haloSend) * rl * sizeof(double);
+    }
+  }
+  /*--- Sends (CGeometry::PostP2PSends: dest = Neighbors_P2PSend, tag = rank + 1). ---*/
+  const int rank = SU2_MPI::GetRank();
+  for (int iMsg = 0; iMsg < nMsgS; ++iMsg) {
+    const auto offset = static_cast<unsigned long>(geometry->nPoint_P2PSend[iMsg]) * rowLen;
+    const int count = static_cast<int>((geometry->nPoint_P2PSend[iMsg + 1] - geometry->nPoint_P2PSend[iMsg]) * rowLen);
+    SU2_MPI::Isend(sendBase + offset, count, MPI_DOUBLE, geometry->Neighbors_P2PSend[iMsg], rank + 1,
+                   SU2_MPI::GetComm(), &reqS[iMsg]);
+  }
+  if (nMsgR > 0) SU2_MPI::Waitall(nMsgR, reqR.data(), MPI_STATUSES_IGNORE);
+
+  /*--- Device scatter of the receive rows. ---*/
+  if (haloRecv > 0) {
+    const size_t rl = rowLen;
+    if (!gpuAware) {
+      Kokkos::deep_copy(Kokkos::subview(haloRecvBuf, std::make_pair(size_t(0), haloRecv * rl)),
+                        Kokkos::View<const double*, HostSpace, Unmanaged>(haloHostRecv.data(), haloRecv * rl));
+      P.bytes_h2d += double(haloRecv) * rl * sizeof(double);
+    }
+    const auto idx = haloRecvIdx;
+    const auto buf = haloRecvBuf;
+    Kokkos::parallel_for(
+        "NEMO::HaloUnpack", Kokkos::RangePolicy<exec_space>(0, haloRecv * rl), KOKKOS_LAMBDA(const unsigned long k) {
+          dev[idx(k / rl) * rl + k % rl] = buf(k);
+        });
+    Kokkos::fence("NEMO::HaloUnpack");
+  }
+  if (nMsgS > 0) SU2_MPI::Waitall(nMsgS, reqS.data(), MPI_STATUSES_IGNORE);
+
+  /*--- The host copy (if it was current) no longer has the received rows. ---*/
+  if (residency[g] != Residency::DEVICE) MarkDeviceWritten(g);
+  P.calls++;
+  H.calls++;
+  H.bytesMsg += double(haloSend) * rowLen * sizeof(double);
+  H.time += timer.seconds();
+#else
+  (void)geometry;
+  (void)q;
+  (void)gpuAware;
+#endif
+}
+
+void CNEMOKokkosData::DownloadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n) {
+  if (!ResidentActive() || n == 0) return;
+  /*--- Legacy path: send rows into the host container (device gather + one compact DtoH), host comms next. ---*/
+  size_t rowLen = 0;
+  Group g = G_SOLUTION;
+  double* dev = HaloDevicePtr(q, rowLen, g);
+  double* host = HaloHostPtr(q);
+  EnsureDevice(g);
+  auto& P = syncPerf[SYNC_HALO];
+  View1D<unsigned long> idx("NEMO::haloIdx", n);
+  View2D<double> stage("NEMO::haloStage", n, rowLen);
+  Kokkos::deep_copy(idx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(rows, n));
+  Kokkos::parallel_for(
+      "NEMO::GatherRows", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
+        for (size_t v = 0; v < rowLen; ++v) stage(k, v) = dev[idx(k) * rowLen + v];
+      });
+  auto h = Kokkos::create_mirror_view_and_copy(HostSpace(), stage);
+  for (unsigned long k = 0; k < n; ++k) std::memcpy(host + rows[k] * rowLen, &h(k, 0), rowLen * sizeof(double));
+  P.bytes_d2h += double(n) * rowLen * sizeof(double);
+  haloPerf[static_cast<int>(q)].bytesMsg += double(n) * rowLen * sizeof(double);
+}
+
+void CNEMOKokkosData::UploadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n) {
+  if (!ResidentActive() || n == 0) return;
+  size_t rowLen = 0;
+  Group g = G_SOLUTION;
+  double* dev = HaloDevicePtr(q, rowLen, g);
+  const double* host = HaloHostPtr(q);
+  auto& P = syncPerf[SYNC_HALO];
+  View1D<unsigned long> idx("NEMO::haloIdx", n);
+  View2D<double> stage("NEMO::haloStage", n, rowLen);
+  auto h = Kokkos::create_mirror_view(stage);
+  for (unsigned long k = 0; k < n; ++k) std::memcpy(&h(k, 0), host + rows[k] * rowLen, rowLen * sizeof(double));
+  Kokkos::deep_copy(stage, h);
+  Kokkos::deep_copy(idx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(rows, n));
+  Kokkos::parallel_for(
+      "NEMO::ScatterRows", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
+        for (size_t v = 0; v < rowLen; ++v) dev[idx(k) * rowLen + v] = stage(k, v);
+      });
+  Kokkos::fence();
+  P.bytes_h2d += double(n) * rowLen * sizeof(double);
+  if (residency[g] != Residency::DEVICE) MarkDeviceWritten(g);
+  P.calls++;
+  haloPerf[static_cast<int>(q)].calls++;
 }
 
 void CNEMOKokkosData::PrepareImplicit(bool impl, ResidualReduction& red) {

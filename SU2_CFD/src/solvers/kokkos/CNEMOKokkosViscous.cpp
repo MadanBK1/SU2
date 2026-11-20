@@ -113,6 +113,17 @@ void CNEMOKokkosData::ComputeViscousResidual(const ViscousParams& p, bool upload
     P.bytes_h2d += double(st.GradPrim.size()) * sizeof(double);
     gradPrimValid = true;
     if (!separateRecGradient) gradRecValid = true;
+  } else if (!ResidentActive() && geo.nPoint > geo.nPointDomain) {
+    /*--- Step 10 fix (MPI, host-authoritative mode): the device gradient stage downloads only domain rows and the
+     *    host comms fill the halo rows of the host gradient; the edge kernel reads both end points -> refresh the
+     *    device halo rows (as the upwind stage does for the reconstruction gradient). Resident mode: the halo rows
+     *    were exchanged on the device. ---*/
+    const size_t gRow = size_t(nPrimVarGrad) * nDim, first = geo.nPointDomain * gRow;
+    const size_t count = (geo.nPoint - geo.nPointDomain) * gRow;
+    Kokkos::deep_copy(Kokkos::View<double*, mem_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>(st.GradPrim.data() + first, count),
+                      Kokkos::View<const double*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>(
+                          nodes->GetGradient_Primitive().data() + first, count));
+    P.bytes_h2d += double(count) * sizeof(double);
   }
   if (uploadInputs || !transportDeviceValid) {
     if (ResidentActive()) SU2_MPI::Error("CNEMOKokkosData: device-resident transport not valid.", CURRENT_FUNCTION);
