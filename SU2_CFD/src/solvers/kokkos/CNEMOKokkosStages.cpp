@@ -769,12 +769,36 @@ void CNEMOKokkosData::ComputeGradient(GradMethod method, bool massFractions, boo
   P.kernel += timer.seconds();
   timer.reset();
 
-  P.bytes_d2h += DownloadRows(hostGrad, grad, geo.nPointDomain);
+  if (ResidentActive()) MarkDeviceWritten(G_GRADIENT); /*--- downloaded on demand (EnsureHost) ---*/
+  else P.bytes_d2h += DownloadRows(hostGrad, grad, geo.nPointDomain);
   P.d2h += timer.seconds();
   P.calls++;
 
   if (reconstruction || !separateRecGradient) gradRecValid = true;
   if (!reconstruction || !separateRecGradient) gradPrimValid = true;
+}
+
+void CNEMOKokkosData::DownloadSymmetryRows(bool reconstruction, double* hostGrad) {
+  const size_t ns = h_symPoints.size();
+  if (ns == 0) return;
+  auto& P = stagePerf[ST_GRADIENT];
+  Kokkos::Timer timer;
+  const size_t row = size_t(nPrimVarGrad) * nDim;
+  if (symStage.extent(0) != ns) symStage = View3D<double>("NEMO::symStage", ns, nPrimVarGrad, nDim);
+  const auto grad = reconstruction ? st.GradRec : st.GradPrim;
+  const auto stage = symStage;
+  const auto pts = symPoints;
+  const int nvg = nPrimVarGrad, nd = nDim;
+  Kokkos::parallel_for(
+      "NEMO::GatherSymmetryRows", Kokkos::RangePolicy<exec_space>(0, ns), KOKKOS_LAMBDA(const size_t k) {
+        const auto i = pts(k);
+        for (int v = 0; v < nvg; ++v)
+          for (int d = 0; d < nd; ++d) stage(k, v, d) = grad(i, v, d);
+      });
+  auto hs = Kokkos::create_mirror_view_and_copy(HostSpace(), symStage);
+  for (size_t k = 0; k < ns; ++k) std::memcpy(hostGrad + h_symPoints[k] * row, &hs(k, 0, 0), row * sizeof(double));
+  P.bytes_d2h += double(ns * row) * sizeof(double);
+  P.d2h += timer.seconds();
 }
 
 bool CNEMOKokkosData::DeviceSymmetryEnabled() {
@@ -874,9 +898,13 @@ void CNEMOKokkosData::ComputeLimiter(int kind, double umusclKappa, double epsVen
   P.kernel += timer.seconds();
   timer.reset();
 
-  P.bytes_d2h += DownloadRows(hostLim, st.Limiter, geo.nPointDomain);
-  P.bytes_d2h += DownloadRows(hostMax, st.PrimMax, geo.nPointDomain);
-  P.bytes_d2h += DownloadRows(hostMin, st.PrimMin, geo.nPointDomain);
+  if (ResidentActive()) {
+    MarkDeviceWritten(G_LIMITER);
+  } else {
+    P.bytes_d2h += DownloadRows(hostLim, st.Limiter, geo.nPointDomain);
+    P.bytes_d2h += DownloadRows(hostMax, st.PrimMax, geo.nPointDomain);
+    P.bytes_d2h += DownloadRows(hostMin, st.PrimMin, geo.nPointDomain);
+  }
   P.d2h += timer.seconds();
   P.calls++;
   limValid = true;
@@ -900,8 +928,10 @@ void CNEMOKokkosData::ComputeTimeStep(bool viscous, double maxDeltaTime, double&
     UploadPrimitiveOnly();
     P.bytes_h2d += double(nPoint) * nPrimVar * sizeof(double);
   }
-  /*--- LocalCFL is adapted on the host (AdaptCFLNumber); NS transport is computed on the host (Step 8). ---*/
-  P.bytes_h2d += UploadRows(st.LocalCFL, nodes->LocalCFL.data(), nPoint);
+  /*--- LocalCFL is adapted on the host (AdaptCFLNumber); NS transport is computed on the host (Step 8).
+   *    Device-resident mode: LocalCFL is uploaded only when the host changed it. ---*/
+  if (ResidentActive()) EnsureDevice(G_LOCALCFL);
+  else P.bytes_h2d += UploadRows(st.LocalCFL, nodes->LocalCFL.data(), nPoint);
   if (viscous) {
     auto* ns = static_cast<CNEMONSVariable*>(nodes);
     P.bytes_h2d += UploadRows(st.LamVisc, ns->LaminarViscosity.data(), nPoint);
@@ -929,9 +959,13 @@ void CNEMOKokkosData::ComputeTimeStep(bool viscous, double maxDeltaTime, double&
   P.kernel += timer.seconds();
   timer.reset();
 
-  P.bytes_d2h += DownloadRows(nodes->Max_Lambda_Inv.data(), st.MaxLambdaInv, geo.nPointDomain);
-  if (viscous) P.bytes_d2h += DownloadRows(nodes->Max_Lambda_Visc.data(), st.MaxLambdaVisc, geo.nPointDomain);
-  P.bytes_d2h += DownloadRows(nodes->Delta_Time.data(), st.DeltaTime, geo.nPointDomain);
+  if (ResidentActive()) {
+    MarkDeviceWritten(G_TIMESTEP);
+  } else {
+    P.bytes_d2h += DownloadRows(nodes->Max_Lambda_Inv.data(), st.MaxLambdaInv, geo.nPointDomain);
+    if (viscous) P.bytes_d2h += DownloadRows(nodes->Max_Lambda_Visc.data(), st.MaxLambdaVisc, geo.nPointDomain);
+    P.bytes_d2h += DownloadRows(nodes->Delta_Time.data(), st.DeltaTime, geo.nPointDomain);
+  }
   P.d2h += timer.seconds();
   P.calls++;
 }

@@ -31,7 +31,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -406,6 +408,7 @@ void CNEMOKokkosData::AccumulatorToDevice(bool impl, const double* hostRes, cons
   Kokkos::fence();
   accOnDevice = true;
   hostAccZero = false;
+  MarkDeviceWritten(G_LINSYS); /*--- resident mode: st.Res is the device LinSysRes ---*/
   P.h2d += timer.seconds();
 }
 
@@ -596,6 +599,630 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   P.d2h += timer.seconds();
   P.calls++;
   return out;
+}
+
+
+/*====================== Step 6: device-resident state, implicit / explicit solution update ======================*/
+
+namespace {
+
+using RR = CNEMOKokkosData::ResidualReduction;
+
+KOKKOS_INLINE_FUNCTION void RRInit(RR& v) {
+  for (int k = 0; k < su2kokkos::nemo::MAXNVAR; ++k) {
+    v.rms[k] = 0.0;
+    v.max[k] = 0.0;
+    v.idx[k] = 0;
+  }
+}
+/*--- Ordered chunks (Serial: a single chunk) give the CPU result; the index tie-break keeps the first maximum
+ *    (CPU: strict ">") for any join order. ---*/
+KOKKOS_INLINE_FUNCTION void RRJoin(RR& d, const RR& s, int nVar) {
+  for (int k = 0; k < nVar; ++k) {
+    d.rms[k] += s.rms[k];
+    if (s.max[k] > d.max[k] || (s.max[k] == d.max[k] && s.idx[k] < d.idx[k])) {
+      d.max[k] = s.max[k];
+      d.idx[k] = s.idx[k];
+    }
+  }
+}
+/*--- CSolver::ResidualReductions_PerThread. ---*/
+KOKKOS_INLINE_FUNCTION void RRAdd(RR& v, unsigned long iPoint, int iVar, double res) {
+  res = Kokkos::fabs(res);
+  v.rms[iVar] += res * res;
+  if (res > v.max[iVar]) {
+    v.max[iVar] = res;
+    v.idx[iVar] = iPoint;
+  }
+}
+
+/*--- PrepareImplicitIteration_impl (DummyPrec: AddVal2Diag / SetVal2Diag) fused with the RHS loop (per point
+ *    independent, same statements per entry). ---*/
+struct PrepareFunctor {
+  using value_type = RR;
+  View1D<double> vol, pvol, dt, jac;
+  View1D<unsigned long> dia;
+  View2D<double> res, sol, trunc;
+  int nVar = 0;
+  bool implicit = false;
+
+  KOKKOS_INLINE_FUNCTION void init(value_type& v) const { RRInit(v); }
+  KOKKOS_INLINE_FUNCTION void join(value_type& d, const value_type& s) const { RRJoin(d, s, nVar); }
+  KOKKOS_INLINE_FUNCTION void operator()(const unsigned long iPoint, value_type& v) const {
+    const unsigned long nv = nVar;
+    const double dti = dt(iPoint);
+    if (implicit) {
+      const unsigned long base = dia(iPoint) * nv * nv;
+      if (dti != 0.0) {
+        const double Vol = vol(iPoint) + pvol(iPoint);
+        const double Delta = Vol / dti;
+        for (unsigned long iVar = 0; iVar < nv; iVar++) jac(base + iVar * (nv + 1)) += Delta;
+      } else {
+        for (unsigned long k = 0; k < nv * nv; k++) jac(base + k) = 0.0;
+        for (unsigned long iVar = 0; iVar < nv; iVar++) jac(base + iVar * (nv + 1)) = 1.0;
+      }
+    }
+    if (dti == 0.0) {
+      for (int iVar = 0; iVar < nVar; iVar++) {
+        res(iPoint, iVar) = 0.0;
+        trunc(iPoint, iVar) = 0.0;
+      }
+    }
+    for (int iVar = 0; iVar < nVar; iVar++) {
+      res(iPoint, iVar) = -(res(iPoint, iVar) + trunc(iPoint, iVar));
+      sol(iPoint, iVar) = 0.0;
+      RRAdd(v, iPoint, iVar, res(iPoint, iVar));
+    }
+  }
+};
+
+/*--- Explicit_Iteration_impl<EULER_EXPLICIT> with the Identity residual "preconditioner". ---*/
+struct ExplicitFunctor {
+  using value_type = RR;
+  View1D<double> vol, pvol, dt;
+  View2D<double> res, trunc, U;
+  int nVar = 0;
+
+  KOKKOS_INLINE_FUNCTION void init(value_type& v) const { RRInit(v); }
+  KOKKOS_INLINE_FUNCTION void join(value_type& d, const value_type& s) const { RRJoin(d, s, nVar); }
+  KOKKOS_INLINE_FUNCTION void operator()(const unsigned long iPoint, value_type& v) const {
+    const double Vol = vol(iPoint) + pvol(iPoint);
+    const double Delta = dt(iPoint) / Vol;
+    for (int iVar = 0; iVar < nVar; iVar++) {
+      const double Res = res(iPoint, iVar) + trunc(iPoint, iVar);
+      U(iPoint, iVar) += -Res * Delta;
+      RRAdd(v, iPoint, iVar, Res);
+    }
+  }
+};
+
+template <class DView>
+double GroupBytes(const DView& d) {
+  return double(d.span()) * sizeof(typename DView::value_type);
+}
+
+}  // namespace
+
+void CNEMOKokkosData::EnableResident(double* linSysRes, double* linSysSol, double* jacValues, double* hostRes,
+                                     double* hostSol) {
+  resident = true;
+  hostLinSysRes = hostRes;
+  hostLinSysSol = hostSol;
+  /*--- The accumulator / linear-system views alias the CSysVector / CSysMatrix device storage (same row-major /
+   *    CSysMatrix block layout), so the device solver reads them without any copy. ---*/
+  st.Res = View2D<double>(linSysRes, nPoint, nVar); /*--- unmanaged (pointer constructor) ---*/
+  st.Sol = View2D<double>(linSysSol, nPoint, nVar);
+  if (jacValues != nullptr) st.JacVal = View1D<double>(jacValues, geo.nnz * size_t(nVar) * nVar);
+  st.TruncErr = View2D<double>("NEMO::Res_TruncError", nPoint, nVar);
+  st.UnderRelax = View1D<double>("NEMO::UnderRelaxation", nPoint);
+  for (auto& r : residency) r = Residency::HOST;
+  const char* env = std::getenv("SU2_KOKKOS_NEMO_POISON");
+  poison = (env != nullptr && std::atoi(env) != 0);
+
+  /*--- Unique marker-vertex points (force / traction computations read their Primitive). ---*/
+  auto hm = Kokkos::create_mirror_view_and_copy(HostSpace(), geo.vtx_node);
+  std::vector<char> seen(nPoint, 0);
+  for (size_t k = 0; k < hm.size(); ++k)
+    if (!seen[hm(k)]) {
+      seen[hm(k)] = 1;
+      h_bndPoints.push_back(hm(k));
+    }
+  std::sort(h_bndPoints.begin(), h_bndPoints.end());
+  st.bndPoints = View1D<unsigned long>("NEMO::bndPoints", h_bndPoints.size());
+  st.bndStage = View2D<double>("NEMO::bndStage", h_bndPoints.size(), nPrimVar);
+  Kokkos::deep_copy(st.bndPoints, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(h_bndPoints.data(),
+                                                                                           h_bndPoints.size()));
+}
+
+void CNEMOKokkosData::ActivateResident() {
+  if (!resident || residentActive) return;
+  residentActive = true;
+  for (auto& r : residency) r = Residency::HOST;
+  /*--- Device copies of the accumulator inputs that SetPrimVar's previous uploads may have left: none are trusted. ---*/
+  primDeviceValid = secDeviceValid = consDeviceValid = false;
+  gradPrimValid = gradRecValid = limValid = sensorValid = false;
+}
+
+void CNEMOKokkosData::DownloadGroup(Group g) {
+  auto& P = syncPerf[g];
+  Kokkos::Timer timer;
+  double b = 0.0;
+  const auto nd = geo.nPointDomain;
+  auto rows = [&](double* host, const auto& d, size_t n) {
+    if (d.size() == 0) return;
+    const size_t cnt = n * (d.size() / d.extent(0));
+    Kokkos::deep_copy(Kokkos::View<double*, HostSpace, Unmanaged>(host, cnt),
+                      Kokkos::View<const double*, mem_space, Unmanaged>(d.data(), cnt));
+    b += double(cnt) * sizeof(double);
+  };
+  switch (g) {
+    case G_SOLUTION: rows(nodes->Solution.data(), st.Solution, nPoint); break;
+    case G_SOLUTION_OLD: rows(nodes->Solution_Old.data(), st.Solution_Old, nPoint); break;
+    case G_PRIMITIVE:
+      rows(nodes->Primitive.data(), st.Primitive, nPoint);
+      if (implicit) {
+        rows(nodes->dPdU.data(), st.dPdU, nPoint);
+        rows(nodes->dTdU.data(), st.dTdU, nPoint);
+        rows(nodes->dTvedU.data(), st.dTvedU, nPoint);
+      }
+      rows(nodes->eves.data(), st.eves, nPoint);
+      rows(nodes->Cvves.data(), st.Cvves, nPoint);
+      rows(nodes->Gamma.data(), Kokkos::View<double**, Kokkos::LayoutRight, mem_space, Unmanaged>(st.Gamma.data(),
+                                                                                                    nPoint, 1), nPoint);
+      /*--- Host remainder of SetPrimVar (SetPrimitive_Variables): Velocity2 from the downloaded Primitive. ---*/
+      for (unsigned long i = 0; i < nPoint; ++i) nodes->SetVelocity2(i);
+      bndPrimHost = true;
+      break;
+    case G_GRADIENT:
+      if (st.GradPrim.size()) rows(nodes->GetGradient_Primitive().data(), st.GradPrim, nd);
+      if (separateRecGradient && st.GradRec.size()) rows(nodes->GetGradient_Reconstruction().data(), st.GradRec, nd);
+      break;
+    case G_LIMITER:
+      rows(nodes->GetLimiter_Primitive().data(), st.Limiter, nd);
+      rows(nodes->GetSolution_Max().data(), st.PrimMax, nd);
+      rows(nodes->GetSolution_Min().data(), st.PrimMin, nd);
+      break;
+    case G_TIMESTEP: {
+      auto as2 = [&](const View1D<double>& v) {
+        return Kokkos::View<double**, Kokkos::LayoutRight, mem_space, Unmanaged>(v.data(), v.size(), 1);
+      };
+      if (st.DeltaTime.size()) rows(nodes->Delta_Time.data(), as2(st.DeltaTime), nd);
+      if (st.MaxLambdaInv.size()) rows(nodes->Max_Lambda_Inv.data(), as2(st.MaxLambdaInv), nd);
+      if (st.MaxLambdaVisc.size()) rows(nodes->Max_Lambda_Visc.data(), as2(st.MaxLambdaVisc), nd);
+      break;
+    }
+    case G_LOCALCFL:
+      if (st.LocalCFL.size())
+        rows(nodes->LocalCFL.data(),
+             Kokkos::View<double**, Kokkos::LayoutRight, mem_space, Unmanaged>(st.LocalCFL.data(), nPoint, 1), nPoint);
+      break;
+    case G_NONPHYS:
+      if (st.NonPhys.size()) {
+        auto hnp = Kokkos::create_mirror_view_and_copy(HostSpace(), st.NonPhys);
+        auto hnc = Kokkos::create_mirror_view_and_copy(HostSpace(), st.NonPhysCount);
+        for (unsigned long i = 0; i < nPoint; ++i) {
+          nodes->Non_Physical(i) = (hnp(i) != 0);
+          nodes->Non_Physical_Counter(i) = hnc(i);
+        }
+        b += double(nPoint) * 3;
+      }
+      break;
+    case G_UNDERRELAX:
+      rows(nodes->UnderRelaxation.data(),
+           Kokkos::View<double**, Kokkos::LayoutRight, mem_space, Unmanaged>(st.UnderRelax.data(), nPoint, 1), nPoint);
+      break;
+    case G_TRUNCERR: rows(nodes->Res_TruncError.data(), st.TruncErr, nPoint); break;
+    case G_LINSYS:
+      rows(hostLinSysRes, st.Res, nPoint);
+      rows(hostLinSysSol, st.Sol, nPoint);
+      break;
+    default: break;
+  }
+  P.bytes_d2h += b;
+  P.d2h += timer.seconds();
+  P.calls++;
+}
+
+void CNEMOKokkosData::UploadGroup(Group g) {
+  auto& P = syncPerf[g];
+  Kokkos::Timer timer;
+  double b = 0.0;
+  auto rows = [&](const auto& d, const double* host, size_t n) {
+    if (d.size() == 0) return;
+    const size_t cnt = n * (d.size() / d.extent(0));
+    Kokkos::deep_copy(Kokkos::View<double*, mem_space, Unmanaged>(d.data(), cnt),
+                      Kokkos::View<const double*, HostSpace, Unmanaged>(host, cnt));
+    b += double(cnt) * sizeof(double);
+  };
+  auto as2 = [&](const View1D<double>& v) {
+    return Kokkos::View<double**, Kokkos::LayoutRight, mem_space, Unmanaged>(v.data(), v.size(), 1);
+  };
+  switch (g) {
+    case G_SOLUTION: rows(st.Solution, nodes->Solution.data(), nPoint); break;
+    case G_SOLUTION_OLD: rows(st.Solution_Old, nodes->Solution_Old.data(), nPoint); break;
+    case G_PRIMITIVE:
+      rows(st.Primitive, nodes->Primitive.data(), nPoint);
+      if (implicit) {
+        rows(st.dPdU, nodes->dPdU.data(), nPoint);
+        rows(st.dTdU, nodes->dTdU.data(), nPoint);
+        rows(st.dTvedU, nodes->dTvedU.data(), nPoint);
+      }
+      rows(st.eves, nodes->eves.data(), nPoint);
+      rows(st.Cvves, nodes->Cvves.data(), nPoint);
+      rows(as2(st.Gamma), nodes->Gamma.data(), nPoint);
+      break;
+    case G_GRADIENT:
+      AllocateGradients();
+      rows(st.GradPrim, nodes->GetGradient_Primitive().data(), nPoint);
+      if (separateRecGradient) rows(st.GradRec, nodes->GetGradient_Reconstruction().data(), nPoint);
+      break;
+    case G_LIMITER:
+      rows(st.Limiter, nodes->GetLimiter_Primitive().data(), nPoint);
+      rows(st.PrimMax, nodes->GetSolution_Max().data(), nPoint);
+      rows(st.PrimMin, nodes->GetSolution_Min().data(), nPoint);
+      break;
+    case G_TIMESTEP:
+      if (st.DeltaTime.size()) rows(as2(st.DeltaTime), nodes->Delta_Time.data(), nPoint);
+      if (st.MaxLambdaInv.size()) rows(as2(st.MaxLambdaInv), nodes->Max_Lambda_Inv.data(), nPoint);
+      if (st.MaxLambdaVisc.size()) rows(as2(st.MaxLambdaVisc), nodes->Max_Lambda_Visc.data(), nPoint);
+      break;
+    case G_LOCALCFL:
+      if (st.LocalCFL.size() == 0) st.LocalCFL = View1D<double>("NEMO::LocalCFL", nPoint);
+      rows(as2(st.LocalCFL), nodes->LocalCFL.data(), nPoint);
+      break;
+    case G_NONPHYS:
+      if (st.NonPhys.size()) {
+        auto hnp = Kokkos::create_mirror_view(st.NonPhys);
+        auto hnc = Kokkos::create_mirror_view(st.NonPhysCount);
+        for (unsigned long i = 0; i < nPoint; ++i) {
+          hnp(i) = nodes->Non_Physical(i) ? 1 : 0;
+          hnc(i) = nodes->Non_Physical_Counter(i);
+        }
+        Kokkos::deep_copy(st.NonPhys, hnp);
+        Kokkos::deep_copy(st.NonPhysCount, hnc);
+        b += double(nPoint) * 3;
+      }
+      break;
+    case G_UNDERRELAX: rows(as2(st.UnderRelax), nodes->UnderRelaxation.data(), nPoint); break;
+    case G_TRUNCERR: rows(st.TruncErr, nodes->Res_TruncError.data(), nPoint); break;
+    case G_LINSYS:
+      rows(st.Res, hostLinSysRes, nPoint);
+      rows(st.Sol, hostLinSysSol, nPoint);
+      break;
+    default: break;
+  }
+  P.bytes_h2d += b;
+  P.h2d += timer.seconds();
+  P.calls++;
+}
+
+void CNEMOKokkosData::PoisonGroup(Group g) {
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  auto fill = [&](double* p, size_t n) { std::fill(p, p + n, nan); };
+  const auto nd = geo.nPointDomain;
+  switch (g) {
+    case G_SOLUTION: fill(nodes->Solution.data(), nodes->Solution.size()); break;
+    case G_SOLUTION_OLD: fill(nodes->Solution_Old.data(), nodes->Solution_Old.size()); break;
+    case G_PRIMITIVE:
+      fill(nodes->Primitive.data(), nodes->Primitive.size());
+      if (implicit) {
+        fill(nodes->dPdU.data(), nodes->dPdU.size());
+        fill(nodes->dTdU.data(), nodes->dTdU.size());
+        fill(nodes->dTvedU.data(), nodes->dTvedU.size());
+      }
+      fill(nodes->eves.data(), nodes->eves.size());
+      fill(nodes->Cvves.data(), nodes->Cvves.size());
+      fill(nodes->Gamma.data(), nodes->Gamma.size());
+      fill(nodes->Velocity2.data(), nodes->Velocity2.size());
+      break;
+    case G_GRADIENT:
+      fill(nodes->GetGradient_Primitive().data(), nd * size_t(nPrimVarGrad) * nDim);
+      if (separateRecGradient) fill(nodes->GetGradient_Reconstruction().data(), nd * size_t(nPrimVarGrad) * nDim);
+      break;
+    case G_LIMITER:
+      fill(nodes->GetLimiter_Primitive().data(), nd * size_t(nPrimVarGrad));
+      fill(nodes->GetSolution_Max().data(), nd * size_t(nPrimVarGrad));
+      fill(nodes->GetSolution_Min().data(), nd * size_t(nPrimVarGrad));
+      break;
+    case G_TIMESTEP:
+      fill(nodes->Delta_Time.data(), nd);
+      fill(nodes->Max_Lambda_Inv.data(), nd);
+      if (st.MaxLambdaVisc.size()) fill(nodes->Max_Lambda_Visc.data(), nd);
+      break;
+    case G_LOCALCFL: fill(nodes->LocalCFL.data(), nPoint); break;
+    case G_NONPHYS:
+      for (unsigned long i = 0; i < nPoint; ++i) {
+        nodes->Non_Physical(i) = true;
+        nodes->Non_Physical_Counter(i) = 0xFFFF;
+      }
+      break;
+    case G_UNDERRELAX: fill(nodes->UnderRelaxation.data(), nPoint); break;
+    case G_TRUNCERR: fill(nodes->Res_TruncError.data(), nodes->Res_TruncError.size()); break;
+    case G_LINSYS:
+      fill(hostLinSysRes, size_t(nPoint) * nVar);
+      fill(hostLinSysSol, size_t(nPoint) * nVar);
+      break;
+    default: break;
+  }
+}
+
+void CNEMOKokkosData::EnsureHost(Group g) {
+  if (!ResidentActive() || residency[g] != Residency::DEVICE) return;
+  DownloadGroup(g);
+  residency[g] = Residency::BOTH;
+}
+
+void CNEMOKokkosData::EnsureDevice(Group g) {
+  if (!ResidentActive() || residency[g] != Residency::HOST) return;
+  UploadGroup(g);
+  residency[g] = Residency::BOTH;
+}
+
+void CNEMOKokkosData::MarkDeviceWritten(Group g) {
+  if (!ResidentActive()) return;
+  residency[g] = Residency::DEVICE;
+  if (g == G_PRIMITIVE) bndPrimHost = false;
+  if (poison) PoisonGroup(g);
+}
+
+void CNEMOKokkosData::EnsureHostBoundaryPrimitive() {
+  if (!ResidentActive() || residency[G_PRIMITIVE] != Residency::DEVICE || bndPrimHost) return;
+  auto& P = syncPerf[N_GROUPS];
+  Kokkos::Timer timer;
+  const auto nb = h_bndPoints.size();
+  if (nb > 0) {
+    const auto pts = st.bndPoints;
+    const auto stage = st.bndStage;
+    const auto V = st.Primitive;
+    const int npv = nPrimVar;
+    Kokkos::parallel_for(
+        "NEMO::GatherBoundaryPrimitive", Kokkos::RangePolicy<exec_space>(0, nb), KOKKOS_LAMBDA(const size_t k) {
+          for (int v = 0; v < npv; ++v) stage(k, v) = V(pts(k), v);
+        });
+    auto h = Kokkos::create_mirror_view_and_copy(HostSpace(), st.bndStage);
+    for (size_t k = 0; k < nb; ++k)
+      std::memcpy(&nodes->Primitive(h_bndPoints[k], 0), &h(k, 0), size_t(nPrimVar) * sizeof(double));
+    P.bytes_d2h += double(nb) * nPrimVar * sizeof(double);
+  }
+  bndPrimHost = true;
+  P.d2h += timer.seconds();
+  P.calls++;
+}
+
+void CNEMOKokkosData::EnsureHostAll() {
+  if (!ResidentActive()) return;
+  outputThisIteration = true;
+  for (int g = 0; g < N_GROUPS; ++g) EnsureHost(static_cast<Group>(g));
+}
+
+void CNEMOKokkosData::DownloadGroupRows(Group g, const unsigned long* rows, unsigned long n) {
+  if (!ResidentActive() || n == 0) return;
+  /*--- Halo rows only (MPI): small, through a gather on the device. Not exercised in this (serial) build. ---*/
+  auto& P = syncPerf[g];
+  auto one = [&](double* host, double* dev, size_t rowLen) {
+    View1D<unsigned long> idx("NEMO::haloIdx", n);
+    View2D<double> stage("NEMO::haloStage", n, rowLen);
+    Kokkos::deep_copy(idx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(rows, n));
+    Kokkos::parallel_for(
+        "NEMO::GatherRows", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
+          for (size_t v = 0; v < rowLen; ++v) stage(k, v) = dev[idx(k) * rowLen + v];
+        });
+    auto h = Kokkos::create_mirror_view_and_copy(HostSpace(), stage);
+    for (unsigned long k = 0; k < n; ++k) std::memcpy(host + rows[k] * rowLen, &h(k, 0), rowLen * sizeof(double));
+    P.bytes_d2h += double(n) * rowLen * sizeof(double);
+  };
+  const size_t gRow = size_t(nPrimVarGrad) * nDim;
+  switch (g) {
+    case G_SOLUTION: one(nodes->Solution.data(), st.Solution.data(), nVar); break;
+    case G_GRADIENT:
+      if (st.GradPrim.size()) one(nodes->GetGradient_Primitive().data(), st.GradPrim.data(), gRow);
+      if (separateRecGradient && st.GradRec.size())
+        one(nodes->GetGradient_Reconstruction().data(), st.GradRec.data(), gRow);
+      break;
+    case G_LIMITER:
+      one(nodes->GetLimiter_Primitive().data(), st.Limiter.data(), nPrimVarGrad);
+      one(nodes->GetSolution_Max().data(), st.PrimMax.data(), nPrimVarGrad);
+      one(nodes->GetSolution_Min().data(), st.PrimMin.data(), nPrimVarGrad);
+      break;
+    default: SU2_MPI::Error("CNEMOKokkosData: row staging not implemented for this group.", CURRENT_FUNCTION);
+  }
+}
+
+void CNEMOKokkosData::UploadGroupRows(Group g, const unsigned long* rows, unsigned long n) {
+  if (!ResidentActive() || n == 0) return;
+  auto& P = syncPerf[g];
+  auto one = [&](const double* host, double* dev, size_t rowLen) {
+    View1D<unsigned long> idx("NEMO::haloIdx", n);
+    View2D<double> stage("NEMO::haloStage", n, rowLen);
+    auto h = Kokkos::create_mirror_view(stage);
+    for (unsigned long k = 0; k < n; ++k) std::memcpy(&h(k, 0), host + rows[k] * rowLen, rowLen * sizeof(double));
+    Kokkos::deep_copy(stage, h);
+    Kokkos::deep_copy(idx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(rows, n));
+    Kokkos::parallel_for(
+        "NEMO::ScatterRows", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
+          for (size_t v = 0; v < rowLen; ++v) dev[idx(k) * rowLen + v] = stage(k, v);
+        });
+    Kokkos::fence();
+    P.bytes_h2d += double(n) * rowLen * sizeof(double);
+  };
+  const size_t gRow = size_t(nPrimVarGrad) * nDim;
+  switch (g) {
+    case G_SOLUTION: one(nodes->Solution.data(), st.Solution.data(), nVar); break;
+    case G_GRADIENT:
+      if (st.GradPrim.size()) one(nodes->GetGradient_Primitive().data(), st.GradPrim.data(), gRow);
+      if (separateRecGradient && st.GradRec.size())
+        one(nodes->GetGradient_Reconstruction().data(), st.GradRec.data(), gRow);
+      break;
+    case G_LIMITER:
+      one(nodes->GetLimiter_Primitive().data(), st.Limiter.data(), nPrimVarGrad);
+      one(nodes->GetSolution_Max().data(), st.PrimMax.data(), nPrimVarGrad);
+      one(nodes->GetSolution_Min().data(), st.PrimMin.data(), nPrimVarGrad);
+      break;
+    default: SU2_MPI::Error("CNEMOKokkosData: row staging not implemented for this group.", CURRENT_FUNCTION);
+  }
+}
+
+void CNEMOKokkosData::PrepareImplicit(bool impl, ResidualReduction& red) {
+  Kokkos::Timer timer;
+  EnsureDevice(G_TRUNCERR);
+  if (impl && st.JacVal.size() == 0) SU2_MPI::Error("CNEMOKokkosData: no device Jacobian.", CURRENT_FUNCTION);
+  PrepareFunctor f;
+  f.vol = geo.volume;
+  f.pvol = geo.periodic_volume;
+  f.dt = st.DeltaTime;
+  f.jac = st.JacVal;
+  f.dia = geo.dia_ptr;
+  f.res = st.Res;
+  f.sol = st.Sol;
+  f.trunc = st.TruncErr;
+  f.nVar = nVar;
+  f.implicit = impl;
+  Kokkos::parallel_reduce("NEMO::PrepareImplicitIteration", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain), f,
+                          red);
+  /*--- ImplicitEuler_Iteration: halo rows of the RHS and of the initial guess are zero. ---*/
+  if (geo.nPoint > geo.nPointDomain) {
+    const auto res = st.Res, sol = st.Sol;
+    const int nv = nVar;
+    Kokkos::parallel_for(
+        "NEMO::ZeroHaloRows", Kokkos::RangePolicy<exec_space>(geo.nPointDomain, geo.nPoint),
+        KOKKOS_LAMBDA(const unsigned long i) {
+          for (int v = 0; v < nv; ++v) res(i, v) = sol(i, v) = 0.0;
+        });
+  }
+  Kokkos::fence();
+  /*--- The accumulator has been consumed: st.Res now holds the RHS of the linear system. ---*/
+  accOnDevice = false;
+  hostAccZero = false;
+  MarkDeviceWritten(G_LINSYS);
+  MarkDeviceWritten(G_TRUNCERR);
+  updatePerf.prepare += timer.seconds();
+  updatePerf.nPrepare++;
+}
+
+void CNEMOKokkosData::ExplicitEulerUpdate(ResidualReduction& red) {
+  Kokkos::Timer timer;
+  EnsureDevice(G_TRUNCERR);
+  EnsureDevice(G_SOLUTION);
+  ExplicitFunctor f;
+  f.vol = geo.volume;
+  f.pvol = geo.periodic_volume;
+  f.dt = st.DeltaTime;
+  f.res = st.Res;
+  f.trunc = st.TruncErr;
+  f.U = st.Solution;
+  f.nVar = nVar;
+  Kokkos::parallel_reduce("NEMO::ExplicitEulerIteration", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain), f,
+                          red);
+  Kokkos::fence();
+  accOnDevice = false;
+  hostAccZero = false;
+  MarkDeviceWritten(G_LINSYS); /*--- the residual stays in st.Res (volume output reads LinSysRes) ---*/
+  MarkDeviceWritten(G_SOLUTION);
+  updatePerf.explicitUpd += timer.seconds();
+  updatePerf.nExplicit++;
+}
+
+void CNEMOKokkosData::CompleteImplicit(double allowableRatio) {
+  Kokkos::Timer timer;
+  EnsureDevice(G_SOLUTION);
+  const auto U = st.Solution, sol = st.Sol;
+  const auto UR = st.UnderRelax;
+  const int nv = nVar, ns = nSpecies;
+  const double eps = EPS;
+  /*--- CNEMOEulerSolver::ComputeUnderRelaxationFactor then AddSolution(UR * LinSysSol), per point (the factor of a
+   *    point reads only that point's Solution and LinSysSol, before its update). ---*/
+  Kokkos::parallel_for(
+      "NEMO::CompleteImplicitIteration", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
+      KOKKOS_LAMBDA(const unsigned long iPoint) {
+        double localUnderRelaxation = 1.0;
+        double num = 0.0;
+        double denom = 0.0;
+        for (int iVar = 0; iVar < nv; iVar++) {
+          if (iVar < ns) {
+            num += Kokkos::fabs(sol(iPoint, iVar));
+            denom += Kokkos::fabs(U(iPoint, iVar));
+            if (iVar == (ns - 1)) {
+              const double ratio = (num / (denom + eps));
+              if (ratio > allowableRatio) {
+                const double r = allowableRatio / ratio;
+                localUnderRelaxation = (localUnderRelaxation < r) ? localUnderRelaxation : r; /*--- std::min(r, ur) ---*/
+              }
+            }
+            /*--- The CPU energy branch (iVar == nVar-2) is nested in iVar < nSpecies and never taken. ---*/
+            if (iVar == (nv - 2)) {
+              const double ratio = Kokkos::fabs(sol(iPoint, iVar)) / (Kokkos::fabs(U(iPoint, iVar)) + eps);
+              if (ratio > allowableRatio) {
+                const double r = allowableRatio / ratio;
+                localUnderRelaxation = (localUnderRelaxation < r) ? localUnderRelaxation : r;
+              }
+            }
+          }
+        }
+        if (localUnderRelaxation < 1e-10) localUnderRelaxation = 0.0;
+        UR(iPoint) = localUnderRelaxation;
+        for (int iVar = 0; iVar < nv; iVar++) U(iPoint, iVar) += localUnderRelaxation * sol(iPoint, iVar);
+      });
+  Kokkos::fence();
+  MarkDeviceWritten(G_SOLUTION);
+  MarkDeviceWritten(G_UNDERRELAX);
+  updatePerf.complete += timer.seconds();
+  updatePerf.nComplete++;
+}
+
+void CNEMOKokkosData::SetOldSolution() {
+  Kokkos::Timer timer;
+  EnsureDevice(G_SOLUTION);
+  Kokkos::deep_copy(st.Solution_Old, st.Solution);
+  Kokkos::fence();
+  MarkDeviceWritten(G_SOLUTION_OLD);
+  updatePerf.oldSol += timer.seconds();
+  updatePerf.nOldSol++;
+}
+
+double CNEMOKokkosData::ResidualSquaredNorm(unsigned long nElmDomain) const {
+  Kokkos::Timer timer;
+  const double* r = st.Res.data();
+  double sum = 0.0;
+  Kokkos::parallel_reduce(
+      "NEMO::ResidualSquaredNorm", Kokkos::RangePolicy<exec_space>(0, nElmDomain),
+      KOKKOS_LAMBDA(const unsigned long k, double& a) { a += r[k] * r[k]; }, sum);
+  updatePerf.norm += timer.seconds();
+  updatePerf.nNorm++;
+  return sum;
+}
+
+void CNEMOKokkosData::TimeSteppingFill(double cfl, double dt) {
+  const auto c = st.LocalCFL, d = st.DeltaTime;
+  Kokkos::parallel_for(
+      "NEMO::TimeSteppingFill", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
+      KOKKOS_LAMBDA(const unsigned long i) {
+        c(i) = cfl;
+        d(i) = dt;
+      });
+  Kokkos::fence();
+  MarkDeviceWritten(G_LOCALCFL);
+  MarkDeviceWritten(G_TIMESTEP);
+}
+
+double CNEMOKokkosData::DeviceGamma(unsigned long iPoint) {
+  double g = 0.0;
+  Kokkos::deep_copy(Kokkos::View<double, HostSpace, Unmanaged>(&g), Kokkos::subview(st.Gamma, iPoint));
+  syncPerf[G_PRIMITIVE].bytes_d2h += sizeof(double);
+  return g;
+}
+
+void CNEMOKokkosData::ReplayGasStateLastPoint(bool full) {
+  if (nPoint == 0) return;
+  auto& P = syncPerf[G_PRIMITIVE];
+  const auto i = nPoint - 1;
+  std::vector<double> V(nPrimVar), fdp(2);
+  unsigned char status = 0;
+  Kokkos::deep_copy(Kokkos::View<double*, HostSpace, Unmanaged>(V.data(), nPrimVar),
+                    Kokkos::subview(st.Primitive, i, Kokkos::ALL()));
+  Kokkos::deep_copy(Kokkos::View<double*, HostSpace, Unmanaged>(fdp.data(), 2), Kokkos::subview(st.FirstDP, i, Kokkos::ALL()));
+  Kokkos::deep_copy(Kokkos::View<unsigned char, HostSpace, Unmanaged>(&status), Kokkos::subview(st.Status, i));
+  P.bytes_d2h += double(nPrimVar + 2) * sizeof(double) + 1;
+  su2kokkos::nemo::ReplayHostGasState(*gasModel, nDim, V.data(), status, fdp.data(), full);
 }
 
 #endif  // HAVE_KOKKOS

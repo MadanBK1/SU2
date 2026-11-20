@@ -29,6 +29,7 @@
 #include "../../include/gradients/correctGradientsSymmetry.hpp"
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
 #include "../../include/variables/CNEMONSVariable.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
 #include "../../../Common/include/toolboxes/printing_toolbox.hpp"
@@ -239,6 +240,26 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
       deferResidualSync = Device_DeferralUnsupported(config).empty();
       deviceJacobianAllocated = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
       if (rank == MASTER_NODE && iMesh == MESH_0) PrintDeviceStages(config);
+
+      /*--- Step 6: device-resident state when every stage of the iteration is on the device. ---*/
+      const auto whyNotResident = (iMesh == MESH_0) ? Device_ResidentUnsupported(config) : std::string("MG level");
+      deviceResident = whyNotResident.empty();
+      if (deviceResident) {
+        const bool impl = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
+        kokkosData->EnableResident(LinSysRes.GetDevicePointer(), LinSysSol.GetDevicePointer(),
+                                   impl ? Jacobian.GetKokkosDeviceValues() : nullptr, LinSysRes.GetBlock(0),
+                                   LinSysSol.GetBlock(0));
+        /*--- The linear solver reads / writes the device copies directly (no HtoD of b, x, matrix; no DtoH of x). ---*/
+        LinSysRes.SetKokkosDeviceAuthoritative(true);
+        LinSysSol.SetKokkosDeviceAuthoritative(true);
+        if (impl) Jacobian.SetKokkosValuesOnDevice(true);
+      }
+      if (rank == MASTER_NODE && iMesh == MESH_0)
+        cout << "[KOKKOS_NEMO] device-resident state (Step 6): "
+             << (deviceResident ? std::string("ON (U, V, secondaries, gradient, limiter, dt, Non_Physical, residual, "
+                                               "Jacobian, LinSysSol stay on the device; host copies on demand)")
+                                : "OFF (" + whyNotResident + ")")
+             << endl;
     } else if (rank == MASTER_NODE && iMesh == MESH_0) {
       cout << "[KOKKOS_NEMO] gas model is not SU2_NONEQ, device Cons2Prim disabled (host path)." << endl;
     }
@@ -254,6 +275,14 @@ CNEMOEulerSolver::~CNEMOEulerSolver() {
   SU2_ZONE_SCOPED
 
 #ifdef HAVE_KOKKOS
+  if (kokkosData && rank == MASTER_NODE && Jacobian.GetKokkosDeviceBuilds() > 0) {
+    cout << "[KOKKOS_NEMO_PERF] device preconditioner builds="
+         << Jacobian.GetKokkosDeviceBuilds() << " (" << Jacobian.GetKokkosBuildSeconds() << " s incl. verification)"
+         << endl;
+    if (Jacobian.GetKokkosVerifyBuilds() > 0)
+      cout << "[KOKKOS_NEMO_VERIFY] preconditioner device build vs host build: compares="
+           << Jacobian.GetKokkosVerifyBuilds() << " non-bitwise=" << Jacobian.GetKokkosVerifyNonBitwise() << endl;
+  }
   kokkosData.reset(); /*--- Prints [KOKKOS_NEMO_PERF]; must go before the gas model it references. ---*/
 #endif
 
@@ -306,10 +335,19 @@ void CNEMOEulerSolver::CommonPreprocessing(CGeometry *geometry, CSolver **solver
    *    as we set blocks (including diagonal ones) and completely overwrite. ---*/
 
   if(!ReducerStrategy && !Output) {
+#ifdef HAVE_KOKKOS
+    /*--- Device-resident: the device accumulator is zero-filled by the first device stage; the stale host copies
+     *    are zeroed only if a host stage ever needs them (Device_BeginHostStage). ---*/
+    if (Device_ResidentActive()) {
+      hostAccNeedsZero = true;
+    } else {
+      LinSysRes.SetValZero();
+      if (implicit) Jacobian.SetValZero();
+    }
+    if (kokkosData) kokkosData->MarkHostAccumulatorZero();
+#else
     LinSysRes.SetValZero();
     if (implicit) Jacobian.SetValZero();
-#ifdef HAVE_KOKKOS
-    if (kokkosData) kokkosData->MarkHostAccumulatorZero();
 #endif
   }
 }
@@ -363,6 +401,21 @@ unsigned long CNEMOEulerSolver::SetPrimitive_Variables(CSolver **solver_containe
   unsigned long nonPhysDevice = 0;
   if (deviceC2P) {
     if (verify) kokkosData->Snapshot();
+
+    /*--- Step 6: the first call activates the device-resident mode (the host state is current now, after restart /
+     *    initialisation); every later non-output call closes one iteration of the transfer ledger. ---*/
+    if (deviceResident) kokkosData->ActivateResident();
+    if (!Output) kokkosData->LedgerIterationBoundary(false);
+
+    if (Device_ResidentActive()) {
+      /*--- Device Cons2Prim on the resident state, nothing downloaded; Velocity2 is recomputed with the host
+       *    Primitive when it is downloaded; LinSysRes is the device accumulator (zero-filled by the first stage). ---*/
+      nonPhysicalPoints = kokkosData->SetPrimVar();
+      Kokkos::Timer timer;
+      kokkosData->ReplayGasStateLastPoint(true);
+      kokkosData->perf.host_post += timer.seconds();
+      return nonPhysicalPoints;
+    }
 
     /*--- Device Cons2Prim + rollback + Gamma (uploads U/V, downloads V, secondaries, U). ---*/
     nonPhysicalPoints = kokkosData->SetPrimVar();
@@ -455,9 +508,13 @@ void CNEMOEulerSolver::SetTime_Step(CGeometry *geometry, CSolver **solver_contai
       else Global_Delta_Time = Min_Delta_Time;
       Max_Delta_Time = Global_Delta_Time;
       config->SetDelta_UnstTimeND(Global_Delta_Time);
-      for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++) {
-        nodes->SetLocalCFL(iPoint, config->GetUnst_CFL());
-        nodes->SetDelta_Time(iPoint, Global_Delta_Time);
+      if (Device_ResidentActive()) {
+        kokkosData->TimeSteppingFill(config->GetUnst_CFL(), Global_Delta_Time);
+      } else {
+        for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++) {
+          nodes->SetLocalCFL(iPoint, config->GetUnst_CFL());
+          nodes->SetDelta_Time(iPoint, Global_Delta_Time);
+        }
       }
     }
 
@@ -1140,6 +1197,19 @@ void CNEMOEulerSolver::ClassicalRK4_Iteration(CGeometry *geometry, CSolver **sol
 void CNEMOEulerSolver::ExplicitEuler_Iteration(CGeometry *geometry, CSolver **solver_container, CConfig *config) {
   SU2_ZONE_SCOPED
 
+#ifdef HAVE_KOKKOS
+  if (Device_ResidentActive()) {
+    /*--- Device Explicit_Iteration_impl<EULER_EXPLICIT>: U -= (R + truncation error) dt/Vol, residual reductions
+     *    (scalars) into the CPU SetResidual_RMS / MPI logic, staged SOLUTION comms. ---*/
+    CNEMOKokkosData::ResidualReduction red;
+    kokkosData->ExplicitEulerUpdate(red);
+    ResidualReductions_FromAllThreads(geometry, config, red.rms, red.max, red.idx);
+    Device_StagedComms(geometry, config, MPI_QUANTITIES::SOLUTION, CNEMOKokkosData::G_SOLUTION);
+    ComputeVerificationError(geometry, config);
+    return;
+  }
+#endif
+
   Device_ResidualToHost(geometry); /*--- no-op unless a device residual is pending ---*/
 
   Explicit_Iteration<EULER_EXPLICIT>(geometry, solver_container, config, 0);
@@ -1147,6 +1217,18 @@ void CNEMOEulerSolver::ExplicitEuler_Iteration(CGeometry *geometry, CSolver **so
 
 void CNEMOEulerSolver::PrepareImplicitIteration(CGeometry *geometry, CSolver**, CConfig *config) {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  if (Device_ResidentActive()) {
+    /*--- Device PrepareImplicitIteration_impl: diagonal += Vol/dt into the device Jacobian (= CSysMatrix d_matrix),
+     *    RHS / initial guess in the device LinSysRes / LinSysSol, residual reductions -> host scalars. The linear
+     *    solver then uses the device values directly (CSysMatrix::SetKokkosValuesOnDevice). ---*/
+    CNEMOKokkosData::ResidualReduction red;
+    kokkosData->PrepareImplicit(config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT, red);
+    ResidualReductions_FromAllThreads(geometry, config, red.rms, red.max, red.idx);
+    return;
+  }
+#endif
 
   Device_ResidualToHost(geometry); /*--- no-op unless a device residual is pending ---*/
 
@@ -1160,6 +1242,16 @@ void CNEMOEulerSolver::PrepareImplicitIteration(CGeometry *geometry, CSolver**, 
 
 void CNEMOEulerSolver::CompleteImplicitIteration(CGeometry *geometry, CSolver**, CConfig *config) {
   SU2_ZONE_SCOPED
+
+#ifdef HAVE_KOKKOS
+  if (Device_ResidentActive()) {
+    /*--- Device ComputeUnderRelaxationFactor + AddSolution into the resident U, staged SOLUTION comms. ---*/
+    kokkosData->CompleteImplicit(config->GetMaxUpdateFractionFlow());
+    Device_StagedComms(geometry, config, MPI_QUANTITIES::SOLUTION, CNEMOKokkosData::G_SOLUTION);
+    ComputeVerificationError(geometry, config);
+    return;
+  }
+#endif
 
   CompleteImplicitIteration_impl<true>(geometry, config);
 }
@@ -2938,7 +3030,9 @@ bool CNEMOEulerSolver::Device_PrimitiveGradient(CGeometry *geometry, const CConf
 
   if (!deviceSym) {
     /*--- Symmetry / Euler-wall correction with the CPU routine itself (boundary-local work, bitwise by
-     *    construction), then refresh those rows of the device gradient (read by the device limiter). ---*/
+     *    construction), then refresh those rows of the device gradient (read by the device limiter).
+     *    Device-resident: only the symmetry rows are downloaded (the correction reads and writes only them). ---*/
+    if (Device_ResidentActive()) kokkosData->DownloadSymmetryRows(reconstruction, gradient.data());
     Kokkos::Timer timer;
     CorrectGradientsSymmetryHost(geometry, config, gradient);
     kokkosData->stagePerf[K::ST_GRADIENT].host += timer.seconds();
@@ -2963,8 +3057,12 @@ bool CNEMOEulerSolver::Device_PrimitiveGradient(CGeometry *geometry, const CConf
       CompletePeriodicComms(geometry, config, iPeriodic, commPer);
     }
   }
-  InitiateComms(geometry, config, comm);
-  CompleteComms(geometry, config, comm);
+  if (Device_ResidentActive()) {
+    Device_StagedComms(geometry, config, comm, K::G_GRADIENT);
+  } else {
+    InitiateComms(geometry, config, comm);
+    CompleteComms(geometry, config, comm);
+  }
   kokkosData->stagePerf[K::ST_GRADIENT].host += timer.seconds();
   return true;
 #else
@@ -3014,8 +3112,12 @@ bool CNEMOEulerSolver::Device_PrimitiveLimiter(CGeometry *geometry, const CConfi
   }
 
   Kokkos::Timer timer;
-  InitiateComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER);
-  CompleteComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER);
+  if (Device_ResidentActive()) {
+    Device_StagedComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER, K::G_LIMITER);
+  } else {
+    InitiateComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER);
+    CompleteComms(geometry, config, MPI_QUANTITIES::PRIMITIVE_LIMITER);
+  }
   kokkosData->stagePerf[K::ST_LIMITER].host += timer.seconds();
   return true;
 #else
@@ -3252,6 +3354,9 @@ void CNEMOEulerSolver::Device_ResidualToHost(CGeometry *geometry) {
 void CNEMOEulerSolver::Device_BeginHostStage(CGeometry *geometry) {
 #ifdef HAVE_KOKKOS
   if (!kokkosData) return;
+  /*--- Device-resident mode is only enabled when no host residual stage exists (Device_ResidentUnsupported). ---*/
+  if (Device_ResidentActive())
+    SU2_MPI::Error("Kokkos NEMO device-resident mode: unexpected host residual stage.", CURRENT_FUNCTION);
   Device_ResidualToHost(geometry);
   kokkosData->HostAccumulatorTouched();
 #else
@@ -3260,6 +3365,8 @@ void CNEMOEulerSolver::Device_BeginHostStage(CGeometry *geometry) {
 }
 
 void CNEMOEulerSolver::FinalizeSpaceIntegration(CGeometry *geometry, CConfig*, unsigned short) {
+  /*--- Device-resident: the accumulator stays on the device (consumed by the device implicit / explicit update). ---*/
+  if (Device_ResidentActive()) return;
   Device_ResidualToHost(geometry);
 }
 
@@ -3406,7 +3513,8 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
     for (long iVertex = long(geometry->nVertex[val_marker]) - 1; iVertex >= 0; iVertex--) {
       const auto iPoint = geometry->vertex[val_marker][iVertex]->GetNode();
       if (geometry->nodes->GetDomain(iPoint)) {
-        Gamma = nodes->GetGamma(iPoint);
+        /*--- Device-resident: the host Gamma is stale, read the one value from the device. ---*/
+        Gamma = Device_ResidentActive() ? kokkosData->DeviceGamma(iPoint) : nodes->GetGamma(iPoint);
         Gamma_Minus_One = Gamma - 1.0;
         break;
       }
@@ -3477,4 +3585,147 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
   (void)kind;
   return false;
 #endif
+}
+
+/*============================ Device (Kokkos) Step 6: device-resident state ============================*/
+
+bool CNEMOEulerSolver::Device_ResidentActive() const {
+#ifdef HAVE_KOKKOS
+  return kokkosData && kokkosData->ResidentActive();
+#else
+  return false;
+#endif
+}
+
+std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) const {
+#ifdef HAVE_KOKKOS
+  using K = CNEMOKokkosData;
+  if (!kokkosData) return "no device data";
+  if (!std::is_same<su2mixedfloat, su2double>::value) return "mixed-precision linear solver";
+  if (const char* e = std::getenv("SU2_KOKKOS_NEMO_RESIDENT")) {
+    if (std::atoi(e) == 0) return "SU2_KOKKOS_NEMO_RESIDENT=0";
+  }
+  if (K::StageVerifyEnabled()) return "SU2_KOKKOS_STAGE_VERIFY";
+  if (K::VerifyEnabled()) return "SU2_KOKKOS_C2P_VERIFY";
+  if (std::getenv("SU2_KOKKOS_NEMO_HOST") && std::string(std::getenv("SU2_KOKKOS_NEMO_HOST")).size())
+    return "SU2_KOKKOS_NEMO_HOST";
+  if (MixedAllowed()) return "SU2_KOKKOS_NEMO_MIXED";
+  const auto defer = Device_DeferralUnsupported(config);
+  if (!defer.empty()) return "residual sync not deferred: " + defer;
+  if (config->GetnMGLevels() > 0) return "multigrid";
+  if (config->GetDiscrete_Adjoint() || config->GetContinuous_Adjoint()) return "adjoint";
+  if (dynamic_grid) return "dynamic grid";
+  if (config->GetViscous()) return "viscous residual / NS walls on the host (Step 8)";
+  if (VerificationSolution) return "verification solution";
+  if (config->GetCFL_Adapt()) return "CFL adaptation on the host (TODO: device AdaptCFLNumber)";
+  if (config->GetnMarker_Analyze() > 0) return "MARKER_ANALYZE (host surface analysis each iteration)";
+  if (config->GetInvDesign_Cp()) return "inverse design";
+  if (config->GetWind_Gust()) return "wind gust";
+  const auto tm = config->GetTime_Marching();
+  if (tm != TIME_MARCHING::STEADY && tm != TIME_MARCHING::TIME_STEPPING) return "dual time stepping";
+  const auto ti = config->GetKind_TimeIntScheme_Flow();
+  if (ti != EULER_IMPLICIT && ti != EULER_EXPLICIT) return "Runge-Kutta time integration";
+  if (ti == EULER_IMPLICIT) {
+    const auto ls = config->GetKind_Linear_Solver();
+    if (ls != BCGSTAB && ls != FGMRES && ls != RESTARTED_FGMRES && ls != CONJUGATE_GRADIENT)
+      return "linear solver without a Kokkos device-resident branch";
+    const auto pc = config->GetKind_Linear_Solver_Prec();
+    if (pc != ILU && pc != JACOBI) return "preconditioner without a device build (ILU / JACOBI only)";
+    if (config->GetKind_Linear_Solver_Inner() != LINEAR_SOLVER_INNER::NONE) return "nested linear solver";
+    if (Jacobian.GetNumNonZeros() != kokkosData->geo.nnz) return "Jacobian pattern != FV pattern";
+  }
+
+  /*--- Every stage of the iteration on the device. ---*/
+  if (CNEMOKokkosData::HostForced("c2p")) return "Cons2Prim on the host";
+  if (config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "centered scheme (host)";
+  if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) return "AUSM+M pressure sensor computed on the host";
+  auto why = Device_UpwindUnsupported(config, MESH_0);
+  if (!why.empty()) return "upwind: " + why;
+  const bool muscl = config->GetMUSCL_Flow();
+  if (muscl) {
+    const auto gm = config->GetKind_Gradient_Method();
+    if (gm != GREEN_GAUSS && gm != WEIGHTED_LEAST_SQUARES) return "gradient method";
+    why = Device_GradientUnsupported(config, true, gm == GREEN_GAUSS);
+    if (!why.empty()) return "gradient: " + why;
+    const auto lim = config->GetKind_SlopeLimit_Flow();
+    if (lim != LIMITER::NONE && lim != LIMITER::VAN_ALBADA_EDGE) {
+      why = Device_LimiterUnsupported(config);
+      if (!why.empty()) return "limiter: " + why;
+    }
+  }
+  why = Device_TimeStepUnsupported(config);
+  if (!why.empty()) return "time step: " + why;
+  why = Device_SourceUnsupported(config);
+  if (!why.empty()) return "source: " + why;
+  for (unsigned short iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
+    int k = -1;
+    switch (config->GetMarker_All_KindBC(iMarker)) {
+      case FAR_FIELD: k = static_cast<int>(K::BCKind::FAR_FIELD); break;
+      case OUTLET_FLOW: k = static_cast<int>(K::BCKind::OUTLET); break;
+      case SUPERSONIC_INLET: k = static_cast<int>(K::BCKind::SUPERSONIC_INLET); break;
+      case SUPERSONIC_OUTLET: k = static_cast<int>(K::BCKind::SUPERSONIC_OUTLET); break;
+      case SYMMETRY_PLANE: case EULER_WALL: k = static_cast<int>(K::BCKind::SYMMETRY); break;
+      case SEND_RECEIVE: continue;
+      default: return "marker " + config->GetMarker_All_TagBound(iMarker) + ": BC not ported";
+    }
+    why = Device_BCUnsupported(config, k);
+    if (!why.empty()) return "marker " + config->GetMarker_All_TagBound(iMarker) + ": " + why;
+  }
+  return "";
+#else
+  (void)config;
+  return "no Kokkos";
+#endif
+}
+
+void CNEMOEulerSolver::Device_StagedComms(CGeometry *geometry, const CConfig *config, MPI_QUANTITIES comm,
+                                          int group) {
+#ifdef HAVE_KOKKOS
+  /*--- KokkosHostStagedHaloExchange pattern: only halo rows cross the host boundary. The host comms read the send
+   *    rows and write the receive rows of the host container of the group. Without MPI halos (this build): no-op.
+   *    TODO(Step 10): device pack/unpack + (GPU-aware) MPI directly on the device views. ---*/
+  const auto nSend = geometry->nP2PSend > 0 ? static_cast<unsigned long>(geometry->nPoint_P2PSend[geometry->nP2PSend]) : 0ul;
+  const auto nRecv = geometry->nP2PRecv > 0 ? static_cast<unsigned long>(geometry->nPoint_P2PRecv[geometry->nP2PRecv]) : 0ul;
+  if (nSend == 0 && nRecv == 0) return;
+  const auto g = static_cast<CNEMOKokkosData::Group>(group);
+  kokkosData->DownloadGroupRows(g, geometry->Local_Point_P2PSend, nSend);
+  InitiateComms(geometry, config, comm);
+  CompleteComms(geometry, config, comm);
+  kokkosData->UploadGroupRows(g, geometry->Local_Point_P2PRecv, nRecv);
+#else
+  (void)geometry; (void)config; (void)comm; (void)group;
+#endif
+}
+
+void CNEMOEulerSolver::Set_OldSolution() {
+#ifdef HAVE_KOKKOS
+  if (Device_ResidentActive()) {
+    kokkosData->SetOldSolution();
+    return;
+  }
+#endif
+  CSolver::Set_OldSolution();
+}
+
+void CNEMOEulerSolver::SyncHostData(CGeometry *geometry, HostSyncScope scope) {
+#ifdef HAVE_KOKKOS
+  if (!Device_ResidentActive()) return;
+  if (scope == HostSyncScope::BOUNDARY) kokkosData->EnsureHostBoundaryPrimitive();
+  else kokkosData->EnsureHostAll();
+#else
+  (void)geometry;
+  (void)scope;
+#endif
+}
+
+su2double CNEMOEulerSolver::LinSysResSquaredNorm() const {
+#ifdef HAVE_KOKKOS
+  if (Device_ResidentActive() && kokkosData->GetResidency(CNEMOKokkosData::G_LINSYS) == CNEMOKokkosData::Residency::DEVICE) {
+    /*--- Same reduction as CSysVector::dot (ordered on Serial) + the MPI sum. ---*/
+    su2double sum = kokkosData->ResidualSquaredNorm(LinSysRes.GetNElmDomain()), res = 0.0;
+    SU2_MPI::Allreduce(&sum, &res, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+    return res;
+  }
+#endif
+  return LinSysRes.squaredNorm();
 }

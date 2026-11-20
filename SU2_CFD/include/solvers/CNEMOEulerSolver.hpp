@@ -124,6 +124,20 @@ protected:
   std::string Device_TimeStepUnsupported(const CConfig *config) const;
   void PrintDeviceStages(const CConfig *config) const;
 
+  /*!
+   * \brief Device (Kokkos) Step 6: device-resident mode. When every stage of the iteration runs on the device
+   *        (Device_ResidentUnsupported() == ""), the device state is authoritative: no per-iteration state transfers,
+   *        device PrepareImplicitIteration / CompleteImplicitIteration / ExplicitEuler_Iteration / Set_OldSolution,
+   *        LinSysRes / LinSysSol / Jacobian handed to the Kokkos linear solver on the device, host copies refreshed
+   *        lazily (SyncHostData, LinSysResSquaredNorm).
+   */
+  std::string Device_ResidentUnsupported(const CConfig *config) const;
+  bool deviceResident = false;   /*!< \brief Device-resident mode (decided at construction). */
+  bool hostAccNeedsZero = false; /*!< \brief Resident: host LinSysRes / Jacobian were not zeroed (stale). */
+  bool Device_ResidentActive() const;
+  /*! \brief Device-resident MPI comms: download the send rows of the group, host comms, upload the receive rows. */
+  void Device_StagedComms(CGeometry *geometry, const CConfig *config, MPI_QUANTITIES comm, int group);
+
   /*! \brief Host implementations (unchanged CPU code), used by the fallback and the A/B verification. */
   void SetTime_Step_Host(CGeometry *geometry, CSolver **solver_container, CConfig *config,
                          unsigned short iMesh, unsigned long Iteration);
@@ -403,6 +417,21 @@ public:
    * \brief End of CIntegration::Space_Integration: download the device residual accumulator (Kokkos Step 7).
    */
   void FinalizeSpaceIntegration(CGeometry *geometry, CConfig *config, unsigned short iMesh) override;
+
+  /*!
+   * \brief Solution_Old = Solution (on the device in device-resident mode).
+   */
+  void Set_OldSolution() override;
+
+  /*!
+   * \brief Device-resident mode: refresh the host copies read by host code (Kokkos Step 6).
+   */
+  void SyncHostData(CGeometry *geometry, HostSyncScope scope) override;
+
+  /*!
+   * \brief Squared norm of LinSysRes, reduced on the device in device-resident mode.
+   */
+  su2double LinSysResSquaredNorm() const override;
 
   /*!
    * \brief Complete an implicit iteration.

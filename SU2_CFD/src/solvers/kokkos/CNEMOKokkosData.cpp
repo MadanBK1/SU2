@@ -16,11 +16,13 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <string>
 #include <type_traits>
 
 #include "../../../../Common/include/CConfig.hpp"
 #include "../../../../Common/include/geometry/CGeometry.hpp"
 #include "../../../../Common/include/toolboxes/allocation_toolbox.hpp"
+#include "../../../../Common/include/linear_algebra/CSysVector.hpp"
 #include "../../../include/fluid/CSU2TCLib.hpp"
 #include "../../../include/variables/CNEMOEulerVariable.hpp"
 #include "../../../include/variables/CNEMONSVariable.hpp"
@@ -383,9 +385,16 @@ void CNEMOKokkosData::DownloadState() {
 unsigned long CNEMOKokkosData::SetPrimVar() {
   Kokkos::Timer timer;
 
-  /*--- HtoD (deep_copy from host memory is synchronous with respect to the host). ---*/
-  UploadConservative();
-  UploadPrimitive();
+  /*--- HtoD (deep_copy from host memory is synchronous with respect to the host). Device-resident mode: only what
+   *    the host changed since the last device write (first call; nothing in steady state). ---*/
+  if (ResidentActive()) {
+    EnsureDevice(G_SOLUTION); /*--- bytes counted in syncPerf ---*/
+    EnsureDevice(G_SOLUTION_OLD);
+    EnsureDevice(G_PRIMITIVE);
+  } else {
+    UploadConservative();
+    UploadPrimitive();
+  }
   perf.h2d += timer.seconds();
   timer.reset();
 
@@ -445,7 +454,13 @@ unsigned long CNEMOKokkosData::SetPrimVar() {
   perf.kernel += timer.seconds();
   timer.reset();
 
-  DownloadState();
+  if (ResidentActive()) {
+    /*--- Device authoritative; host copies are refreshed on demand (EnsureHost). ---*/
+    MarkDeviceWritten(G_SOLUTION);
+    MarkDeviceWritten(G_PRIMITIVE);
+  } else {
+    DownloadState();
+  }
   perf.d2h += timer.seconds();
   perf.calls++;
 
@@ -567,6 +582,72 @@ unsigned long CNEMOKokkosData::SelfCheck(CGeometry* geometry) const {
   return bad;
 }
 
+namespace {
+const char* GroupName(int g) {
+  static const char* names[] = {"Solution",  "Solution_Old", "Primitive+secondaries", "Gradient",
+                                "Limiter",   "TimeStep",     "LocalCFL",              "Non_Physical",
+                                "UnderRelaxation", "Res_TruncError", "LinSysRes+LinSysSol", "boundary Primitive"};
+  return names[g];
+}
+const char* StageName(int s) {
+  static const char* names[] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue",
+                                "Upwind",   "Source",  "BC",       "ResidualSync"};
+  return names[s];
+}
+}  // namespace
+
+std::vector<double> CNEMOKokkosData::LedgerCategories() const {
+  /*--- (h2d, d2h) pairs: SetPrimVar, stages, residency syncs; then the linear-algebra backend categories. ---*/
+  std::vector<double> c;
+  c.push_back(perf.bytes_h2d);
+  c.push_back(perf.bytes_d2h);
+  for (int k = 0; k < N_STAGES; ++k) {
+    c.push_back(stagePerf[k].bytes_h2d);
+    c.push_back(stagePerf[k].bytes_d2h);
+  }
+  for (int k = 0; k <= N_GROUPS; ++k) {
+    c.push_back(syncPerf[k].bytes_h2d);
+    c.push_back(syncPerf[k].bytes_d2h);
+  }
+  for (int k = 0; k < KokkosTransferLedger::N_CATEGORIES; ++k)
+    c.push_back(KokkosTransferLedger::Get(static_cast<KokkosTransferLedger::Category>(k)));
+  return c;
+}
+
+double CNEMOKokkosData::TotalH2D() const {
+  const auto c = LedgerCategories();
+  const size_t nPairs = 1 + N_STAGES + N_GROUPS + 1;
+  double t = 0.0;
+  for (size_t k = 0; k < nPairs; ++k) t += c[2 * k];
+  using L = KokkosTransferLedger::Category;
+  for (auto k : {L::VECTOR_H2D, L::MATRIX_H2D, L::PRECOND_H2D, L::HALO_H2D}) t += c[2 * nPairs + k];
+  return t;
+}
+
+double CNEMOKokkosData::TotalD2H() const {
+  const auto c = LedgerCategories();
+  const size_t nPairs = 1 + N_STAGES + N_GROUPS + 1;
+  double t = 0.0;
+  for (size_t k = 0; k < nPairs; ++k) t += c[2 * k + 1];
+  using L = KokkosTransferLedger::Category;
+  for (auto k : {L::VECTOR_D2H, L::MATRIX_D2H, L::PRECOND_D2H, L::HALO_D2H}) t += c[2 * nPairs + k];
+  return t;
+}
+
+void CNEMOKokkosData::LedgerIterationBoundary(bool) {
+  /*--- Called at the start of every (non-output) SetPrimitive_Variables: closes the previous iteration. The output
+   *    of the previous iteration (EnsureHostAll) happened before this call, so it is attributed to that iteration. ---*/
+  const auto c = LedgerCategories();
+  if (!ledgerLast.empty()) {
+    std::vector<double> d(c.size());
+    for (size_t k = 0; k < c.size(); ++k) d[k] = c[k] - ledgerLast[k];
+    ledgerCat.push_back(d);
+    ledgerOutput.push_back(outputThisIteration);
+  }
+  ledgerLast = c;
+  outputThisIteration = false;
+}
+
 void CNEMOKokkosData::PrintPerf() const {
   if (SU2_MPI::GetRank() != MASTER_NODE || perf.calls == 0) return;
   const double c = double(perf.calls);
@@ -607,6 +688,74 @@ void CNEMOKokkosData::PrintPerf() const {
   if (verifyCalls > 0)
     std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " calls=" << verifyCalls
               << " non-bitwise entries=" << verifyMismatch << " max rel diff=" << verifyMaxRel << std::endl;
+
+  /*--- Step 6: device update kernels, residency syncs, per-iteration transfer ledger. ---*/
+  const auto& U = updatePerf;
+  if (U.nPrepare + U.nExplicit + U.nOldSol > 0)
+    std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " Update | prepare " << U.prepare << " s ("
+              << (U.nPrepare ? U.prepare / U.nPrepare : 0.0) << "/call) | complete " << U.complete << " s ("
+              << (U.nComplete ? U.complete / U.nComplete : 0.0) << "/call) | explicit " << U.explicitUpd << " s ("
+              << (U.nExplicit ? U.explicitUpd / U.nExplicit : 0.0) << "/call) | old solution " << U.oldSol
+              << " s | residual norm " << U.norm << " s (" << U.nNorm << " calls)" << std::endl;
+  for (int g = 0; g <= N_GROUPS; ++g) {
+    const auto& P = syncPerf[g];
+    if (P.calls == 0) continue;
+    std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " sync " << GroupName(g) << " calls=" << P.calls << " | h2d "
+              << P.bytes_h2d / 1e6 << " MB (" << P.h2d << " s) | d2h " << P.bytes_d2h / 1e6 << " MB (" << P.d2h
+              << " s)" << std::endl;
+  }
+  if (!ledgerCat.empty()) {
+    const size_t nPairs = 1 + N_STAGES + N_GROUPS + 1;
+    auto label = [&](size_t k) -> std::string {
+      if (k < 2 * nPairs) {
+        const size_t pr = k / 2;
+        std::string n = (pr == 0) ? "SetPrimVar" : (pr <= N_STAGES) ? StageName(int(pr - 1))
+                                                                     : std::string("sync ") + GroupName(int(pr - 1 - N_STAGES));
+        return n + ((k % 2) ? " DtoH" : " HtoD");
+      }
+      return std::string("linear algebra ") +
+             KokkosTransferLedger::Name(static_cast<KokkosTransferLedger::Category>(k - 2 * nPairs));
+    };
+    auto isH2D = [&](size_t k) {
+      if (k < 2 * nPairs) return (k % 2) == 0;
+      const auto c = static_cast<KokkosTransferLedger::Category>(k - 2 * nPairs);
+      using L = KokkosTransferLedger::Category;
+      return c == L::VECTOR_H2D || c == L::MATRIX_H2D || c == L::PRECOND_H2D || c == L::HALO_H2D;
+    };
+    /*--- Steady state: the last closed iteration that wrote no output (iteration index >= 1). ---*/
+    long pick = -1;
+    for (long it = long(ledgerCat.size()) - 1; it >= 1; --it)
+      if (!ledgerOutput[it]) {
+        pick = it;
+        break;
+      }
+    double maxH = 0, maxD = 0, outD = 0;
+    unsigned long nOut = 0;
+    for (size_t it = 1; it < ledgerCat.size(); ++it) {
+      double h = 0, d = 0;
+      for (size_t k = 0; k < ledgerCat[it].size(); ++k) (isH2D(k) ? h : d) += ledgerCat[it][k];
+      if (ledgerOutput[it]) {
+        outD += d;
+        nOut++;
+      } else {
+        maxH = std::max(maxH, h);
+        maxD = std::max(maxD, d);
+      }
+    }
+    std::cout << "[KOKKOS_NEMO_LEDGER] MG " << iMesh << " " << ledgerCat.size() << " closed iterations ("
+              << (resident ? "device-resident" : "host-authoritative") << "); non-output iterations >= 1: max HtoD "
+              << maxH << " B, max DtoH " << maxD << " B; output iterations: " << nOut << ", DtoH " << outD
+              << " B in total" << std::endl;
+    if (pick >= 0) {
+      double h = 0, d = 0;
+      for (size_t k = 0; k < ledgerCat[pick].size(); ++k) (isH2D(k) ? h : d) += ledgerCat[pick][k];
+      std::cout << "[KOKKOS_NEMO_LEDGER] MG " << iMesh << " steady iteration " << pick << ": HtoD " << h
+                << " B, DtoH " << d << " B" << std::endl;
+      for (size_t k = 0; k < ledgerCat[pick].size(); ++k)
+        if (ledgerCat[pick][k] != 0.0)
+          std::cout << "[KOKKOS_NEMO_LEDGER]     " << label(k) << ": " << ledgerCat[pick][k] << " B" << std::endl;
+    }
+  }
   std::cout << std::defaultfloat;
 }
 

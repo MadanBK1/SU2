@@ -246,7 +246,7 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
       uploadRange(st.GradRec.data(), hg, 0, nPoint * gRow);
       gradRecValid = true;
       if (!separateRecGradient) gradPrimValid = true;
-    } else {
+    } else if (!ResidentActive()) { /*--- resident: halo rows were staged by the gradient comms ---*/
       uploadRange(st.GradRec.data(), hg, geo.nPointDomain * gRow, (nPoint - geo.nPointDomain) * gRow);
     }
     if (p.limiter && !p.vanAlbada) {
@@ -259,21 +259,25 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
       if (uploadAll || !limValid) {
         uploadRange(st.Limiter.data(), hl, 0, nPoint * size_t(nPrimVarGrad));
         limValid = true;
-      } else {
+      } else if (!ResidentActive()) {
         uploadRange(st.Limiter.data(), hl, geo.nPointDomain * nPrimVarGrad,
                     (nPoint - geo.nPointDomain) * size_t(nPrimVarGrad));
       }
     }
-    /*--- Non_Physical / counter: host authoritative (CVariable), tiny. ---*/
-    auto hnp = Kokkos::create_mirror_view(st.NonPhys);
-    auto hnc = Kokkos::create_mirror_view(st.NonPhysCount);
-    for (unsigned long i = 0; i < nPoint; ++i) {
-      hnp(i) = nodes->Non_Physical(i) ? 1 : 0;
-      hnc(i) = nodes->Non_Physical_Counter(i);
+    /*--- Non_Physical / counter: host authoritative (CVariable), tiny; device authoritative when resident. ---*/
+    if (ResidentActive()) {
+      EnsureDevice(G_NONPHYS);
+    } else {
+      auto hnp = Kokkos::create_mirror_view(st.NonPhys);
+      auto hnc = Kokkos::create_mirror_view(st.NonPhysCount);
+      for (unsigned long i = 0; i < nPoint; ++i) {
+        hnp(i) = nodes->Non_Physical(i) ? 1 : 0;
+        hnc(i) = nodes->Non_Physical_Counter(i);
+      }
+      Kokkos::deep_copy(st.NonPhys, hnp);
+      Kokkos::deep_copy(st.NonPhysCount, hnc);
+      P.bytes_h2d += double(nPoint) * 3;
     }
-    Kokkos::deep_copy(st.NonPhys, hnp);
-    Kokkos::deep_copy(st.NonPhysCount, hnc);
-    P.bytes_h2d += double(nPoint) * 3;
   }
   if (p.scheme == UpwindScheme::AUSMPLUSM) {
     if (st.Sensor.size() == 0) st.Sensor = View1D<double>("NEMO::Sensor", nPoint);
@@ -349,17 +353,22 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
   /*--- The residual / Jacobian stay in the device accumulator (Step 7): downloaded once after the last device stage
    *    (CNEMOEulerSolver::Device_ResidualToHost), or before the next host stage. ---*/
   if (p.muscl) {
-    auto hnp = Kokkos::create_mirror_view_and_copy(HostSpace(), st.NonPhys);
-    auto hnc = Kokkos::create_mirror_view_and_copy(HostSpace(), st.NonPhysCount);
-    for (unsigned long i = 0; i < nPoint; ++i) {
-      nodes->Non_Physical(i) = (hnp(i) != 0);
-      nodes->Non_Physical_Counter(i) = hnc(i);
+    if (ResidentActive()) {
+      MarkDeviceWritten(G_NONPHYS);
+    } else {
+      auto hnp = Kokkos::create_mirror_view_and_copy(HostSpace(), st.NonPhys);
+      auto hnc = Kokkos::create_mirror_view_and_copy(HostSpace(), st.NonPhysCount);
+      for (unsigned long i = 0; i < nPoint; ++i) {
+        nodes->Non_Physical(i) = (hnp(i) != 0);
+        nodes->Non_Physical_Counter(i) = hnc(i);
+      }
+      P.bytes_d2h += double(nPoint) * 3;
     }
-    P.bytes_d2h += double(nPoint) * 3;
     if (lastKey >= 0) {
       auto hr = Kokkos::create_mirror_view_and_copy(HostSpace(), st.LastRec);
       out.haveLastRec = true;
       out.lastRec.assign(hr.data(), hr.data() + nPrimVar);
+      P.bytes_d2h += double(nPrimVar) * sizeof(double);
     }
   }
   P.d2h += timer.seconds();

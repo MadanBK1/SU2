@@ -18,6 +18,14 @@
  *  - Residual accumulator (Step 7: st.Res + st.JacVal): upwind, source and BC stages add into it on the device;
  *    exactly one of {host LinSysRes/Jacobian, device accumulator} is authoritative (AccumulatorToDevice/ToHost),
  *    downloaded once per space integration when the whole residual pipeline is on the device.
+ *  - Device-resident mode (Step 6, EnableResident): when every stage of the pipeline is on the device, the device
+ *    State becomes authoritative. Each array group (Group) carries a Residency {HOST, DEVICE, BOTH}: device kernels
+ *    EnsureDevice() their inputs (upload only if the host copy is newer) and MarkDeviceWritten() their outputs (no
+ *    download); host consumers call EnsureHost() (output / restart: everything, force and traction computations:
+ *    EnsureHostBoundaryPrimitive()). LinSysRes / LinSysSol / Jacobian values are the device accumulator itself
+ *    (st.Res and st.JacVal alias the CSysVector / CSysMatrix device storage) and are handed to the Kokkos linear
+ *    solver without transfers. SU2_KOKKOS_NEMO_POISON=1 fills stale host copies with NaN (debug: any host read
+ *    that misses an EnsureHost shows up in the results).
  *
  * \version 8.5.0 "Harrier"
  *
@@ -139,6 +147,13 @@ class CNEMOKokkosData {
     /*--- Step 7 (allocated on first use). Res / JacVal above are the device residual accumulator. ---*/
     View2D<double> Charac;                 /*!< (nVertexTotal, nPrimVar) CharacPrimVar written by the device BC_Outlet */
     View1D<double> BState;                 /*!< far-field / supersonic-inlet state: V | eve | dPdU | Gamma */
+
+    /*--- Step 6 (device-resident mode). Res / JacVal alias LinSysRes / Jacobian device storage, Sol LinSysSol. ---*/
+    View2D<double> Sol;                    /*!< (nPoint, nVar) LinSysSol (device storage of the CSysVector) */
+    View2D<double> TruncErr;               /*!< (nPoint, nVar) Res_TruncError */
+    View1D<double> UnderRelax;             /*!< (nPoint) UnderRelaxation */
+    View1D<unsigned long> bndPoints;       /*!< unique marker-vertex points (EnsureHostBoundaryPrimitive) */
+    View2D<double> bndStage;               /*!< (nBndPoints, nPrimVar) staging */
   };
 
   Geometry geo;
@@ -221,6 +236,8 @@ class CNEMOKokkosData {
   bool HasSymmetryPoints() const { return !h_symPoints.empty(); }
   /*! \brief HtoD of the gradient rows of the (domain) points on symmetry/Euler markers. */
   void UploadSymmetryRows(bool reconstruction, const double* hostGrad);
+  /*! \brief DtoH of the same rows (device-resident mode: the host correction needs only them). */
+  void DownloadSymmetryRows(bool reconstruction, double* hostGrad);
 
   /*!
    * \brief Device slope limiter (computeLimiters_impl without periodicity) for kinds BARTH_JESPERSEN,
@@ -356,6 +373,90 @@ class CNEMOKokkosData {
   void GetNonPhysical(std::vector<double>& flag, std::vector<double>& count) const;
   void SetNonPhysical(const std::vector<double>& flag, const std::vector<double>& count);
 
+  /*====================== Step 6: device-resident state, implicit / explicit update ======================*/
+
+  /*! \brief Host-array groups with a residency state (device-resident mode only). */
+  enum Group : int {
+    G_SOLUTION = 0, /*!< Solution */
+    G_SOLUTION_OLD, /*!< Solution_Old */
+    G_PRIMITIVE,    /*!< Primitive, dPdU/dTdU/dTvedU, eves, Cvves, Gamma (+ host Velocity2 recomputed on download) */
+    G_GRADIENT,     /*!< Gradient_Primitive (and Gradient_Reconstruction if separate), domain rows */
+    G_LIMITER,      /*!< Limiter_Primitive, Solution_Max, Solution_Min, domain rows */
+    G_TIMESTEP,     /*!< Delta_Time, Max_Lambda_Inv (+ Max_Lambda_Visc), domain rows */
+    G_LOCALCFL,     /*!< LocalCFL */
+    G_NONPHYS,      /*!< Non_Physical, Non_Physical_Counter */
+    G_UNDERRELAX,   /*!< UnderRelaxation */
+    G_TRUNCERR,     /*!< Res_TruncError */
+    G_LINSYS,       /*!< LinSysRes and LinSysSol (CSysVector host copies) */
+    N_GROUPS
+  };
+  enum class Residency : unsigned char { HOST, DEVICE, BOTH };
+
+  /*!
+   * \brief Switch to device-resident mode: st.Res / st.Sol / st.JacVal alias the device storage of LinSysRes /
+   *        LinSysSol / the Jacobian values (jacValues may be nullptr: explicit). Called once, at construction.
+   */
+  void EnableResident(double* linSysRes, double* linSysSol, double* jacValues, double* hostRes, double* hostSol);
+  bool Resident() const { return resident; }
+  /*! \brief First device call of the run: every group is current on the host (restart / initialisation were done
+   *         there after construction), the device copies are refreshed on first use. */
+  void ActivateResident();
+  bool ResidentActive() const { return resident && residentActive; }
+  Residency GetResidency(Group g) const { return residency[g]; }
+  void EnsureHost(Group g);
+  void EnsureDevice(Group g);
+  void MarkDeviceWritten(Group g);
+  void MarkHostWritten(Group g) { if (resident) residency[g] = Residency::HOST; }
+  /*! \brief DtoH of the Primitive rows of every marker-vertex point (force / traction computations). */
+  void EnsureHostBoundaryPrimitive();
+  void EnsureHostAll();
+  /*! \brief One device Gamma value (host replay of BC_Outlet's solver Gamma in device-resident mode). */
+  double DeviceGamma(unsigned long iPoint);
+
+  /*! \brief Per-variable residual RMS (sum of squares) / max / argmax, CPU ResidualReductions_PerThread semantics. */
+  struct ResidualReduction {
+    double rms[su2kokkos::nemo::MAXNVAR];
+    double max[su2kokkos::nemo::MAXNVAR];
+    unsigned long idx[su2kokkos::nemo::MAXNVAR];
+  };
+  /*!
+   * \brief Device PrepareImplicitIteration_impl (no diagonal preconditioner): diagonal += Vol/dt (or SetVal2Diag 1
+   *        if dt == 0), RHS = -(R + truncation error), LinSysSol = 0, halo rows of both zeroed (the host loop of
+   *        ImplicitEuler_Iteration), residual reduction (ordered loop on Serial: bitwise with the CPU).
+   */
+  void PrepareImplicit(bool implicit, ResidualReduction& red);
+  /*! \brief Device Explicit_Iteration_impl<EULER_EXPLICIT>: U -= (R + truncErr) dt/Vol, residual reduction. */
+  void ExplicitEulerUpdate(ResidualReduction& red);
+  /*! \brief Device ComputeUnderRelaxationFactor (NEMO) + AddSolution(UR * LinSysSol). */
+  void CompleteImplicit(double allowableRatio);
+  /*! \brief Solution_Old = Solution on the device. */
+  void SetOldSolution();
+  /*! \brief Squared norm of the first nElmDomain entries of the device residual (CSysVector::squaredNorm order). */
+  double ResidualSquaredNorm(unsigned long nElmDomain) const;
+  /*! \brief Time-stepping branch of SetTime_Step: LocalCFL = cfl, Delta_Time = dt for the domain points. */
+  void TimeSteppingFill(double cfl, double dt);
+  /*! \brief Last point's Primitive row + Cons2Prim status / first-attempt Density, Pressure (host gas-state replay). */
+  void ReplayGasStateLastPoint(bool full);
+  /*! \brief Halo rows (MPI) of a resident group: download the send rows, host comms by the caller, upload the
+   *         receive rows (KokkosHostStagedHaloExchange pattern). Without halos (this build) a no-op. */
+  void DownloadGroupRows(Group g, const unsigned long* rows, unsigned long n);
+  void UploadGroupRows(Group g, const unsigned long* rows, unsigned long n);
+
+  /*! \brief Transfer ledger: totals (bytes) including the linear-algebra backend, per-iteration bookkeeping. */
+  void LedgerIterationBoundary(bool outputIteration);
+  double TotalH2D() const;
+  double TotalD2H() const;
+  struct SyncPerf {
+    double h2d = 0, d2h = 0, bytes_h2d = 0, bytes_d2h = 0;
+    unsigned long calls = 0;
+  };
+  mutable SyncPerf syncPerf[N_GROUPS + 1]; /*!< + boundary primitive */
+  struct UpdatePerf {
+    double prepare = 0, complete = 0, explicitUpd = 0, oldSol = 0, norm = 0;
+    unsigned long nPrepare = 0, nComplete = 0, nExplicit = 0, nOldSol = 0, nNorm = 0;
+  };
+  mutable UpdatePerf updatePerf;
+
   /*! \brief Debug: env SU2_KOKKOS_NEMO_HOST contains stage ("c2p", "grad", "lim", "dt", "upwind", "all"). */
   static bool HostForced(const char* stage);
   bool LimiterOnDevice() const { return limValid; }
@@ -401,6 +502,22 @@ class CNEMOKokkosData {
   std::vector<double> bstateCache; /*!< host copy of st.BState */
   std::vector<unsigned long> h_markerPtr; /*!< host copy of geo.marker_ptr */
   void EnsureAccumulator(bool implicit);
+  /*--- Step 6. ---*/
+  bool resident = false, residentActive = false, poison = false;
+  Residency residency[N_GROUPS];
+  bool bndPrimHost = false;             /*!< host Primitive rows of the marker-vertex points are current */
+  double* hostLinSysRes = nullptr;      /*!< host storage of LinSysRes / LinSysSol (resident mode) */
+  double* hostLinSysSol = nullptr;
+  std::vector<unsigned long> h_bndPoints;
+  void DownloadGroup(Group g);
+  void UploadGroup(Group g);
+  void PoisonGroup(Group g);
+  /*--- Ledger: totals at the start of the current iteration, per-iteration deltas (non-output iterations). ---*/
+  std::vector<double> ledgerLast;
+  std::vector<bool> ledgerOutput;
+  std::vector<std::vector<double>> ledgerCat; /*!< per iteration: per-category bytes (see PrintPerf) */
+  std::vector<double> LedgerCategories() const;
+  bool outputThisIteration = false;
   void EnsureInputsOnDevice(bool upload, bool needSolution, bool needSensor);
   void UploadUpwindStatic();   /*!< pside CSR (once) */
   bool separateRecGradient = false;
