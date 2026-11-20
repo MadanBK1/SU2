@@ -111,6 +111,16 @@ struct NEMOGasTables {
                                       time (the CPU re-fills its member table with std::string compares per call). */
   RealView2D MW_A, MW_B;         /*!< (nSpecies, nSpecies) Millikan-White A_sr, B_sr of ComputeEveSourceTerm. */
   RealView1D Diss;               /*!< (nSpecies) dissociation potential (not used by the source terms, kept for Step 8). */
+
+  /*--- Step 8: transport properties (CSU2TCLib, viscous gas objects only). ---*/
+  enum TransportModel : int { TRANSPORT_NONE = -1, TRANSPORT_WILKE = 0, TRANSPORT_GUPTAYOS = 1, TRANSPORT_SUTHERLAND = 2 };
+  int transModel = TRANSPORT_NONE; /*!< CSU2TCLib::Kind_TransCoeffModel (NONE: inviscid gas object, no tables). */
+  RealView2D Blottner;           /*!< (nSpecies, 3) Blottner viscosity coefficients. */
+  RealView2D Omega11, Omega22;   /*!< (nSpecies*nSpecies, 4) collision-integral fits, row i*nSpecies+j. */
+  double muRef = 0.0, kRef = 0.0, SmRef = 0.0, SkRef = 0.0, TRefSuth = 0.0; /*!< Sutherland constants */
+  double coul[12] = {0.0};       /*!< D1_a, C1_a, c1_a, D2_a, C2_a, c2_a, D1_r, C1_r, c1_r, D2_r, C2_r, c2_r */
+  double eCGS = 0.0, kB = 0.0, eps = 0.0; /*!< FUND_ELEC_CHARGE_CGS, BOLTZMANN_CONSTANT, EPS */
+  IntView2D CatRecomb;           /*!< (nSpecies, 2) CNEMOGas::GetCatalyticRecombination() */
 };
 
 /*!
@@ -142,6 +152,19 @@ enum NEMOCons2PrimStatus : unsigned char {
  */
 void ReplayHostGasState(CSU2TCLib& gas, int nDim, const double* V, unsigned char status, const double* firstDP,
                         bool full);
+
+/*!
+ * \brief Step 8: the gas Density / Pressure members at the moment the CPU transport routines of a point run
+ *        (CNEMONSVariable::SetTransportProperties after Cons2PrimVar), i.e. the values of the LAST SetTDStateRhosTTv:
+ *        this point (final attempt), its first attempt (FirstDP), or an earlier point (carry, also across calls).
+ * \param[in,out] dp - Effective {Density, Pressure} of this point; set by the caller for non-full states (carry).
+ * \note Defined in SU2_CFD/src/fluid/kokkos/NEMOGasKokkos.cpp: host replay of the members CSU2TCLib transport reads and
+ *       of what SetTransportProperties leaves (mus, phis, MolarFracWBE, Cvves, Mu, ...), for the last point.
+ */
+void ReplayHostTransportState(CSU2TCLib& gas, int nDim, const double* V, unsigned char status, const double* dp,
+                              const double* eves);
+/*! \brief Host gas Density / Pressure members (initial carry of the device transport stage). */
+void HostGasDensityPressure(const CSU2TCLib& gas, double* dp);
 
 /*! \brief True if V (after Cons2Prim) passed the temperature checks, i.e. the full path was taken. */
 KOKKOS_INLINE_FUNCTION
@@ -879,6 +902,333 @@ void GetEveSourceTermJacobian(const NEMOGasTables& g, int nDim, const double* rh
 
   for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++)
     jac[nEv * nVar + iSpecies] += (eve_eq[iSpecies] - eve[iSpecies]) / taus[iSpecies];
+}
+
+/*--------------------------------------------------------------------------------------*/
+/*--- Step 8: transport properties (CSU2TCLib, CPU statement order).                 ---*/
+/*--- The gas "state" (members rhos, T, Tve, Density, Pressure of the CPU object) is  ---*/
+/*--- passed explicitly; the hidden ViscosityWBE -> ThermalConductivitiesWBE          ---*/
+/*--- dependency (mus, phis, MolarFracWBE members) is made explicit by computing both ---*/
+/*--- in ComputeTransport.                                                            ---*/
+/*--------------------------------------------------------------------------------------*/
+
+/*! \brief The gas object state the CPU transport routines read. */
+struct GasState {
+  const double* rhos;
+  double T, Tve, Density, Pressure;
+};
+
+/*! \brief CSU2TCLib::ComputeCollisionCrossSection. */
+KOKKOS_INLINE_FUNCTION
+double ComputeCollisionCrossSection(const NEMOGasTables& g, const GasState& s, int iSpecies, int jSpecies, double T,
+                                    bool d1, bool coulomb) {
+  const double pi = g.Pi;
+  const double Na = g.Avogadro;
+  const int ij = iSpecies * g.nSpecies + jSpecies;
+
+  if (coulomb) {
+    const double e_cgs = g.eCGS;
+    const double kb_cgs = g.kB * 1E7;
+    const double ne_cgs = Na * s.rhos[0] / g.MolarMass(0) * 1E-6;
+
+    /*--- pow(x, 2) is x*x (exactly rounded, what GCC emits for std::pow(double, int 2)). ---*/
+    const double debyeLength = Kokkos::sqrt(kb_cgs * T / 4 / pi / ne_cgs / (e_cgs * e_cgs));
+    const double T_star = debyeLength / ((e_cgs * e_cgs) / (kb_cgs * T));
+    const double dl = debyeLength / T;
+    const double* c = g.coul;
+
+    if (g.Omega11(ij, 0) == 1.0 && d1) {
+      return 1E-20 * 5E15 * pi * (dl * dl) * Kokkos::log(c[0] * T_star * (1 - c[1] * Kokkos::exp(-c[2] * T_star)) + 1);
+    }
+    if (g.Omega11(ij, 0) == -1.0 && d1) {
+      return 1E-20 * 5E15 * pi * (dl * dl) * Kokkos::log(c[6] * T_star * (1 - c[7] * Kokkos::exp(-c[8] * T_star)) + 1);
+    } else if (g.Omega22(ij, 0) == 1.0 && !d1) {
+      return 1E-20 * 5E15 * pi * (dl * dl) * Kokkos::log(c[3] * T_star * (1 - c[4] * Kokkos::exp(-c[5] * T_star)) + 1);
+    } else {
+      return 1E-20 * 5E15 * pi * (dl * dl) * Kokkos::log(c[9] * T_star * (1 - c[10] * Kokkos::exp(-c[11] * T_star)) + 1);
+    }
+  }
+  if (d1) {
+    return 1E-20 * g.Omega11(ij, 3) *
+           Kokkos::pow(T, g.Omega11(ij, 0) * Kokkos::log(T) * Kokkos::log(T) + g.Omega11(ij, 1) * Kokkos::log(T) +
+                              g.Omega11(ij, 2));
+  }
+  return 1E-20 * g.Omega22(ij, 3) *
+         Kokkos::pow(T, g.Omega22(ij, 0) * Kokkos::log(T) * Kokkos::log(T) + g.Omega22(ij, 1) * Kokkos::log(T) +
+                            g.Omega22(ij, 2));
+}
+
+/*! \brief CSU2TCLib::ComputeCollisionDelta. */
+KOKKOS_INLINE_FUNCTION
+double ComputeCollisionDelta(const NEMOGasTables& g, const GasState& s, int iSpecies, int jSpecies, double Mi,
+                             double Mj, double T, bool d1) {
+  bool coulomb = false;
+  if (Kokkos::fabs(g.Omega11(iSpecies * g.nSpecies + jSpecies, 0)) == 1.0 && g.ionization) coulomb = true;
+
+  const double Omega_ij = ComputeCollisionCrossSection(g, s, iSpecies, jSpecies, T, d1, coulomb);
+  const double pi = g.Pi;
+  const double Ru = g.Ru;
+  double delta = 0.0;
+
+  if (d1) {
+    delta = 8.0 / 3.0 * Kokkos::sqrt((2.0 * Mi * Mj) / (pi * Ru * T * (Mi + Mj))) * Omega_ij;
+  } else {
+    delta = 16.0 / 5.0 * Kokkos::sqrt((2.0 * Mi * Mj) / (pi * Ru * T * (Mi + Mj))) * Omega_ij;
+  }
+  return Kokkos::fmin(delta, 1E16);
+}
+
+/*! \brief Mole fractions as MolarFracWBE (DiffusionCoeffWBE / ViscosityWBE recompute them identically). */
+KOKKOS_INLINE_FUNCTION
+void MolarFractionsWBE(const NEMOGasTables& g, const double* rhos, double* X) {
+  double conc = 0.0;
+  for (int s = 0; s < g.nSpecies; s++) {
+    X[s] = rhos[s] / g.MolarMass(s);
+    conc += X[s];
+  }
+  for (int s = 0; s < g.nSpecies; s++) X[s] = X[s] / conc;
+}
+
+/*! \brief CSU2TCLib::DiffusionCoeffWBE. */
+KOKKOS_INLINE_FUNCTION
+void DiffusionCoeffWBE(const NEMOGasTables& g, const GasState& st, double* Ds) {
+  const int nSpecies = g.nSpecies;
+  double X[MAXNS];
+  MolarFractionsWBE(g, st.rhos, X);
+
+  double M = 0.0;
+  for (int s = 0; s < nSpecies; s++) M += g.MolarMass(s) * X[s];
+  M = M * 1E-3;
+
+  double Dij[MAXNS * MAXNS];
+  for (int k = 0; k < nSpecies * nSpecies; k++) Dij[k] = 0.0;
+
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    const double Mi = g.MolarMass(iSpecies) * 1E-3;
+    for (int jSpecies = iSpecies; jSpecies < nSpecies; jSpecies++) {
+      const double Mj = g.MolarMass(jSpecies) * 1E-3;
+
+      bool coulomb = false;
+      if (Kokkos::fabs(g.Omega11(iSpecies * nSpecies + jSpecies, 0)) == 1.0 && g.ionization) coulomb = true;
+
+      const double T_col = (iSpecies == 0 && g.ionization) ? st.Tve : st.T;
+      const double Omega_ij = ComputeCollisionCrossSection(g, st, iSpecies, jSpecies, T_col, true, coulomb) / g.Pi;
+
+      Dij[iSpecies * nSpecies + jSpecies] = 7.1613E-25 * M * Kokkos::sqrt(st.T * (1 / Mi + 1 / Mj)) / (st.Density * Omega_ij);
+      Dij[jSpecies * nSpecies + iSpecies] = 7.1613E-25 * M * Kokkos::sqrt(st.T * (1 / Mi + 1 / Mj)) / (st.Density * Omega_ij);
+    }
+  }
+
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    Ds[iSpecies] = 0.0;
+    double denom = 0.0;
+    for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) {
+      if (jSpecies != iSpecies) denom += X[jSpecies] / Dij[iSpecies * nSpecies + jSpecies];
+    }
+    if (nSpecies == 1) Ds[0] = 0;
+    else Ds[iSpecies] = (1 - X[iSpecies]) / denom;
+  }
+}
+
+/*! \brief CSU2TCLib::ViscosityWBE (+ the mus, phis, MolarFracWBE members ThermalConductivitiesWBE reads). */
+KOKKOS_INLINE_FUNCTION
+double ViscosityWBE(const NEMOGasTables& g, const GasState& st, double* X, double* mus, double* phis) {
+  const int nSpecies = g.nSpecies;
+  MolarFractionsWBE(g, st.rhos, X);
+
+  for (int s = 0; s < nSpecies; s++)
+    mus[s] = 0.1 * Kokkos::exp((g.Blottner(s, 0) * Kokkos::log(st.T) + g.Blottner(s, 1)) * Kokkos::log(st.T) +
+                               g.Blottner(s, 2));
+
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    phis[iSpecies] = 0.0;
+    for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) {
+      const double tmp1 = 1.0 + Kokkos::sqrt(mus[iSpecies] / mus[jSpecies]) *
+                                    Kokkos::pow(g.MolarMass(jSpecies) / g.MolarMass(iSpecies), 0.25);
+      const double tmp2 = Kokkos::sqrt(8.0 * (1.0 + g.MolarMass(iSpecies) / g.MolarMass(jSpecies)));
+      phis[iSpecies] += X[jSpecies] * tmp1 * tmp1 / tmp2;
+    }
+  }
+
+  double Mu = 0.0;
+  for (int s = 0; s < nSpecies; s++) Mu += X[s] * mus[s] / phis[s];
+  return Mu;
+}
+
+/*! \brief CSU2TCLib::ThermalConductivitiesWBE (reads the mus / phis / MolarFracWBE of the preceding ViscosityWBE). */
+KOKKOS_INLINE_FUNCTION
+void ThermalConductivitiesWBE(const NEMOGasTables& g, const GasState& st, const double* X, const double* mus,
+                              const double* phis, double* k) {
+  const int nSpecies = g.nSpecies;
+  double cvves[MAXNS], ks[MAXNS], kves[MAXNS];
+  ComputeSpeciesCvVibEle(g, st.Tve, cvves);
+
+  for (int s = 0; s < nSpecies; s++) {
+    ks[s] = mus[s] * (15.0 / 4.0 + g.RotationModes(s) / 2.0) * g.Ru / g.MolarMass(s);
+    kves[s] = mus[s] * cvves[s];
+  }
+  double ktr = 0.0, kve = 0.0;
+  for (int s = 0; s < nSpecies; s++) {
+    ktr += X[s] * ks[s] / phis[s];
+    kve += X[s] * kves[s] / phis[s];
+  }
+  k[0] = ktr;
+  k[1] = kve;
+}
+
+/*! \brief CSU2TCLib::DiffusionCoeffGY. */
+KOKKOS_INLINE_FUNCTION
+void DiffusionCoeffGY(const NEMOGasTables& g, const GasState& st, double* Ds) {
+  const int nSpecies = g.nSpecies;
+  double gam_t = 0.0;
+  for (int s = 0; s < nSpecies; s++) gam_t += st.rhos[s] / (st.Density * g.MolarMass(s));
+
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    Ds[iSpecies] = 0.0;
+    const double Mi = (g.MolarMass(iSpecies) + g.eps);
+    const double gam_i = st.rhos[iSpecies] / (st.Density * Mi);
+    double denom = 0.0;
+
+    for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) {
+      if (jSpecies != iSpecies) {
+        const double Mj = (g.MolarMass(jSpecies) + g.eps);
+        const double gam_j = st.rhos[jSpecies] / (st.Density * Mj);
+        const double kb = g.kB;
+        const double T_col = (iSpecies == 0 && g.ionization) ? st.Tve : st.T;
+        const double d1_ij = ComputeCollisionDelta(g, st, iSpecies, jSpecies, Mi, Mj, T_col, true);
+        const double D_ij = kb * T_col / (st.Pressure * d1_ij);
+        denom += gam_j / D_ij;
+      }
+    }
+    Ds[iSpecies] = (gam_t * gam_t * Mi * (1 - Mi * gam_i) / denom);
+  }
+}
+
+/*! \brief CSU2TCLib::ViscosityGY. */
+KOKKOS_INLINE_FUNCTION
+double ViscosityGY(const NEMOGasTables& g, const GasState& st) {
+  const int nSpecies = g.nSpecies;
+  const double Na = g.Avogadro;
+  double Mu = 0.0;
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    double denom = 0.0;
+    const double Mi = (g.MolarMass(iSpecies) + g.eps);
+    const double gam_i = st.rhos[iSpecies] / (st.Density * Mi);
+    for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) {
+      const double Mj = (g.MolarMass(jSpecies) + g.eps);
+      const double gam_j = st.rhos[jSpecies] / (st.Density * Mj);
+      const double T_col = (iSpecies == 0 && g.ionization) ? st.Tve : st.T;
+      const double d2_ij = ComputeCollisionDelta(g, st, iSpecies, jSpecies, Mi, Mj, T_col, false);
+      denom += gam_j * d2_ij;
+    }
+    Mu += (Mi / Na * gam_i) / denom;
+  }
+  return Mu;
+}
+
+/*! \brief CSU2TCLib::ThermalConductivitiesGY (gam_j uses rhos[iSpecies], as on the CPU). */
+KOKKOS_INLINE_FUNCTION
+void ThermalConductivitiesGY(const NEMOGasTables& g, const GasState& st, double* k) {
+  const int nSpecies = g.nSpecies;
+  const double Na = g.Avogadro;
+  const double kb = g.kB;
+  const bool ionization = g.ionization;
+
+  double Cvves[MAXNS];
+  ComputeSpeciesCvVibEle(g, st.Tve, Cvves);
+  double rhoCvve = 0.0;
+  for (int s = 0; s < nSpecies; s++) rhoCvve += st.rhos[s] * Cvves[s];
+  const double Cvve = rhoCvve / st.Density;
+
+  double R = 0.0;
+  for (int s = 0; s < nSpecies; s++) R += g.Ru / g.MolarMass(s) * st.rhos[s] / st.Density;
+
+  double ThermalCond_tr = 0.0;
+  double ThermalCond_ve = 0.0;
+  for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+    const double Mi = (g.MolarMass(iSpecies) + g.eps);
+    const double mi = Mi / Na;
+    const double gam_i = st.rhos[iSpecies] / (st.Density * Mi);
+    double denom_t = 0.0;
+    double denom_r = 0.0;
+    double denom_re = 0.0;
+
+    for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) {
+      const double Mj = (g.MolarMass(jSpecies) + g.eps);
+      const double mj = Mj / Na;
+      const double gam_j = st.rhos[iSpecies] / (st.Density * Mj);
+      const double a_ij = 1.0 + (1.0 - mi / mj) * (0.45 - 2.54 * mi / mj) / ((1.0 + mi / mj) * (1.0 + mi / mj));
+
+      const double T_col = ((iSpecies == 0 && ionization) || (jSpecies == 0 && ionization)) ? st.Tve : st.T;
+
+      const double d1_ij = ComputeCollisionDelta(g, st, iSpecies, jSpecies, Mi, Mj, T_col, true);
+      const double d2_ij = ComputeCollisionDelta(g, st, iSpecies, jSpecies, Mi, Mj, T_col, false);
+
+      if (jSpecies == 0 && ionization) {
+        denom_t += 3.54 * gam_j * d2_ij;
+      } else {
+        denom_t += a_ij * gam_j * d2_ij;
+      }
+      denom_r += gam_j * d1_ij;
+      denom_re += gam_j * d2_ij;
+    }
+
+    if (denom_t <= 0.0) denom_t = g.eps;
+    if (denom_r <= 0.0) denom_r = g.eps;
+    if (denom_re <= 0.0) denom_re = g.eps;
+
+    if (!ionization || iSpecies != 0) ThermalCond_tr += ((15.0 / 4.0) * kb * gam_i / denom_t);
+    if (g.RotationModes(iSpecies) != 0.0) ThermalCond_tr += (kb * gam_i / denom_r);
+    if ((!ionization || iSpecies != 0) && g.RotationModes(iSpecies) != 0.0)
+      ThermalCond_ve += (kb * Cvve / R * gam_i / denom_r);
+    if (ionization && iSpecies == 0) ThermalCond_ve += ((15.0 / 4.0) * kb * gam_i / (1.45 * denom_re));
+  }
+  k[0] = ThermalCond_tr;
+  k[1] = ThermalCond_ve;
+}
+
+/*! \brief CSU2TCLib::ViscositySuth. */
+KOKKOS_INLINE_FUNCTION
+double ViscositySuth(const NEMOGasTables& g, const GasState& st) {
+  const double T_nd = st.T / g.TRefSuth;
+  return g.muRef * T_nd * Kokkos::sqrt(T_nd) * ((g.TRefSuth + g.SmRef) / (st.T + g.SmRef));
+}
+
+/*! \brief CSU2TCLib::ThermalConductivitiesSuth. */
+KOKKOS_INLINE_FUNCTION
+void ThermalConductivitiesSuth(const NEMOGasTables& g, const GasState& st, double* k) {
+  double rho = 0.0;
+  for (int ii = 0; ii < g.nSpecies; ii++) rho += st.rhos[ii];
+  const double Cvtr = ComputerhoCvtr(g, st.rhos) / rho;
+  const double Cvve = ComputerhoCvve(g, st.rhos, st.Tve) / rho;
+  const double scl = Cvve / Cvtr;
+  const double T_nd = st.T / g.TRefSuth;
+  const double kk = g.kRef * T_nd * Kokkos::sqrt(T_nd) * ((g.TRefSuth + g.SkRef) / (st.T + g.SkRef));
+  k[0] = kk;
+  k[1] = scl * kk;
+}
+
+/*!
+ * \brief CNEMONSVariable::SetTransportProperties (gas part): GetDiffusionCoeff, GetViscosity,
+ *        GetThermalConductivities for the configured model, on the given gas state.
+ * \param[out] Ds - species diffusion coefficients; Mu - mixture viscosity; k - {k_tr, k_ve}.
+ */
+KOKKOS_INLINE_FUNCTION
+void ComputeTransport(const NEMOGasTables& g, const GasState& st, double* Ds, double& Mu, double* k) {
+  if (g.transModel == NEMOGasTables::TRANSPORT_GUPTAYOS) {
+    DiffusionCoeffGY(g, st, Ds);
+    Mu = ViscosityGY(g, st);
+    ThermalConductivitiesGY(g, st, k);
+  } else if (g.transModel == NEMOGasTables::TRANSPORT_SUTHERLAND) {
+    DiffusionCoeffWBE(g, st, Ds);
+    Mu = ViscositySuth(g, st);
+    ThermalConductivitiesSuth(g, st, k);
+  } else {
+    double X[MAXNS], mus[MAXNS], phis[MAXNS];
+    DiffusionCoeffWBE(g, st, Ds);
+    Mu = ViscosityWBE(g, st, X, mus, phis);
+    ThermalConductivitiesWBE(g, st, X, mus, phis, k);
+  }
 }
 
 /*--------------------------------------------------------------------------------------*/

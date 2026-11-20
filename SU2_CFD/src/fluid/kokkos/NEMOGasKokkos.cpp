@@ -170,6 +170,56 @@ struct NEMOGasTablesAccess {
     }
 
     NEMOGasTables t;
+
+    /*--- Step 8: transport tables, only for a viscous gas object (CSU2TCLib allocates mus/phis then). ---*/
+    const bool viscousGas = (static_cast<int>(gas.mus.size()) == ns);
+    t.transModel = NEMOGasTables::TRANSPORT_NONE;
+    if (viscousGas) {
+      switch (gas.Kind_TransCoeffModel) {
+        case TRANSCOEFFMODEL::WILKE: t.transModel = NEMOGasTables::TRANSPORT_WILKE; break;
+        case TRANSCOEFFMODEL::GUPTAYOS: t.transModel = NEMOGasTables::TRANSPORT_GUPTAYOS; break;
+        case TRANSCOEFFMODEL::SUTHERLAND: t.transModel = NEMOGasTables::TRANSPORT_SUTHERLAND; break;
+        default: t.transModel = NEMOGasTables::TRANSPORT_NONE; break; /*--- CHAPMANN_ENSKOG: Mutation++ only ---*/
+      }
+    }
+    {
+      Kokkos::View<double**, Kokkos::LayoutRight, mem> bl("NEMO::Blottner", ns, 3), o11("NEMO::Omega11", ns * ns, 4),
+          o22("NEMO::Omega22", ns * ns, 4);
+      Kokkos::View<int**, Kokkos::LayoutRight, mem> cat("NEMO::CatRecomb", ns, 2);
+      auto hbl = Kokkos::create_mirror_view(bl);
+      auto ho11 = Kokkos::create_mirror_view(o11);
+      auto ho22 = Kokkos::create_mirror_view(o22);
+      auto hcat = Kokkos::create_mirror_view(cat);
+      for (int i = 0; i < ns; i++) {
+        for (int c = 0; c < 3; c++) hbl(i, c) = gas.Blottner(i, c);
+        for (int c = 0; c < 2; c++) hcat(i, c) = gas.CatRecombTable(i, c);
+        for (int j = 0; j < ns; j++)
+          for (int c = 0; c < 4; c++) {
+            ho11(i * ns + j, c) = gas.Omega11(i, j, c);
+            ho22(i * ns + j, c) = gas.Omega22(i, j, c);
+          }
+      }
+      Kokkos::deep_copy(bl, hbl);
+      Kokkos::deep_copy(o11, ho11);
+      Kokkos::deep_copy(o22, ho22);
+      Kokkos::deep_copy(cat, hcat);
+      t.Blottner = bl;
+      t.Omega11 = o11;
+      t.Omega22 = o22;
+      t.CatRecomb = cat;
+    }
+    t.muRef = gas.mu_ref[0];
+    t.kRef = gas.k_ref[0];
+    t.SmRef = gas.Sm_ref[0];
+    t.SkRef = gas.Sk_ref[0];
+    t.TRefSuth = gas.T_ref_suth;
+    const double coul[12] = {gas.D1_a, gas.C1_a, gas.c1_a, gas.D2_a, gas.C2_a, gas.c2_a,
+                             gas.D1_r, gas.C1_r, gas.c1_r, gas.D2_r, gas.C2_r, gas.c2_r};
+    for (int c = 0; c < 12; c++) t.coul[c] = coul[c];
+    t.eCGS = FUND_ELEC_CHARGE_CGS;
+    t.kB = BOLTZMANN_CONSTANT;
+    t.eps = EPS;
+
     t.frozen = gas.frozen;
     t.Avogadro = AVOGAD_CONSTANT;
     t.Pi = PI_NUMBER;
@@ -237,6 +287,29 @@ struct NEMOGasTablesAccess {
     }
     if (full) gas.ComputeGamma();
   }
+
+  static void DensityPressure(const CSU2TCLib& gas, double* dp) {
+    dp[0] = gas.Density;
+    dp[1] = gas.Pressure;
+  }
+
+  static void ReplayTransport(CSU2TCLib& gas, int nDim, const double* V, unsigned char status, const double* dp,
+                              const double* eves) {
+    /*--- Gas state of the point (as Replay with full = true), with the effective Density / Pressure of a non-full
+     *    state, then the transport calls of CNEMONSVariable::SetTransportProperties (members mus, phis, MolarFracWBE,
+     *    Cvves, Mu, DiffusionCoeff, ThermalConductivities, hs, eves end as after the CPU loop). ---*/
+    Replay(gas, nDim, V, status, dp, true);
+    if (!(status & C2P_FINAL_FULL)) {
+      gas.Density = dp[0];
+      gas.Pressure = dp[1];
+    }
+    const NEMOPrimIndices idx(gas.nSpecies, nDim);
+    gas.GetDiffusionCoeff();
+    std::vector<double> ev(eves, eves + gas.nSpecies);
+    gas.ComputeSpeciesEnthalpy(V[idx.T()], V[idx.TVE()], ev.data());
+    gas.GetViscosity();
+    gas.GetThermalConductivities();
+  }
 };
 
 NEMOGasTables BuildNEMOGasTables(const CSU2TCLib& gas) { return NEMOGasTablesAccess::Build(gas); }
@@ -245,6 +318,13 @@ void ReplayHostGasState(CSU2TCLib& gas, int nDim, const double* V, unsigned char
                         bool full) {
   NEMOGasTablesAccess::Replay(gas, nDim, V, status, firstDP, full);
 }
+
+void ReplayHostTransportState(CSU2TCLib& gas, int nDim, const double* V, unsigned char status, const double* dp,
+                              const double* eves) {
+  NEMOGasTablesAccess::ReplayTransport(gas, nDim, V, status, dp, eves);
+}
+
+void HostGasDensityPressure(const CSU2TCLib& gas, double* dp) { NEMOGasTablesAccess::DensityPressure(gas, dp); }
 
 }  // namespace nemo
 }  // namespace su2kokkos

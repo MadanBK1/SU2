@@ -560,6 +560,108 @@ static bool RunGas(const std::string& gas_model, const std::string& composition,
   return all_ok;
 }
 
+/*=================== Step 8: transport properties (viscous gas object) ===================*/
+static bool RunTransport(const std::string& gas_model, const std::string& composition, int nDim,
+                         const std::string& model, bool ionization, int nStates, double tol, unsigned seed) {
+  std::stringstream cfg;
+  cfg << "SOLVER= NEMO_NAVIER_STOKES\n"
+      << "FLUID_MODEL= SU2_NONEQ\n"
+      << "GAS_MODEL= " << gas_model << "\n"
+      << "GAS_COMPOSITION= " << composition << "\n"
+      << "TRANSPORT_COEFF_MODEL= " << model << "\n"
+      << "IONIZATION= " << (ionization ? "YES" : "NO") << "\n"
+      << "TIME_DISCRE_FLOW= EULER_IMPLICIT\n";
+  auto config = std::make_unique<CConfig>(cfg, SU2_COMPONENT::SU2_CFD, false);
+  CSU2TCLib gas(config.get(), nDim, true);
+  const auto tables = nk::BuildNEMOGasTables(gas);
+  const int ns = tables.nSpecies;
+  std::printf("\n######## transport %s %s ionization=%d nSpecies=%d states=%d (device model %d)\n", gas_model.c_str(),
+              model.c_str(), int(tables.ionization), ns, nStates, tables.transModel);
+  if (tables.transModel == nk::NEMOGasTables::TRANSPORT_NONE) {
+    std::printf("no device transport model\n");
+    return false;
+  }
+  gas.GetSpeciesCvTraRot();
+  const std::vector<double> M = gas.GetSpeciesMolarMass();
+
+  std::mt19937_64 rng(seed);
+  std::vector<RandomState> states(nStates);
+  for (auto& st : states) st = MakeState(rng, ns, nDim, tables.ionization, M);
+
+  /*--- Columns in: rhos | T | Tve | Density | Pressure | eves; out: Ds | mu | k_tr | k_ve | hs ---*/
+  const int iR = 0, iT = ns, iTv = ns + 1, iD = ns + 2, iP = ns + 3, iE = ns + 4, nIn = 2 * ns + 4;
+  const int oDs = 0, oMu = ns, oK = ns + 1, oKv = ns + 2, oH = ns + 3, nOut = 2 * ns + 3;
+  DView2D din("in", nStates, nIn), dout("out", nStates, nOut);
+  auto hin = Kokkos::create_mirror_view(din);
+  std::vector<std::vector<double>> cpu(nStates, std::vector<double>(nOut, 0.0));
+  for (int i = 0; i < nStates; i++) {
+    auto& st = states[i];
+    std::vector<double> rhos = st.rhos;
+    /*--- Same call sequence as Cons2PrimVar (full path) + CNEMONSVariable::SetTransportProperties. ---*/
+    gas.SetTDStateRhosTTv(rhos, st.T, st.Tve);
+    std::vector<double> eve = gas.ComputeSpeciesEve(st.Tve);
+    double rho = 0.0;
+    for (int s = 0; s < ns; s++) rho += rhos[s];
+    const double P = gas.ComputePressure();
+    const auto& Ds = gas.GetDiffusionCoeff();
+    for (int s = 0; s < ns; s++) cpu[i][oDs + s] = Ds[s];
+    const auto& hs = gas.ComputeSpeciesEnthalpy(st.T, st.Tve, eve.data());
+    for (int s = 0; s < ns; s++) cpu[i][oH + s] = hs[s];
+    cpu[i][oMu] = gas.GetViscosity();
+    const auto& k = gas.GetThermalConductivities();
+    cpu[i][oK] = k[0];
+    cpu[i][oKv] = k[1];
+    for (int s = 0; s < ns; s++) {
+      hin(i, iR + s) = rhos[s];
+      hin(i, iE + s) = eve[s];
+    }
+    hin(i, iT) = st.T;
+    hin(i, iTv) = st.Tve;
+    hin(i, iD) = rho;
+    hin(i, iP) = P;
+  }
+  Kokkos::deep_copy(din, hin);
+  const auto g = tables;
+  Kokkos::parallel_for(
+      "NEMO::transport", Kokkos::RangePolicy<>(0, nStates), KOKKOS_LAMBDA(const int i) {
+        double rhos[nk::MAXNS], eve[nk::MAXNS], D[nk::MAXNS], h[nk::MAXNS], kk[2], mu;
+        for (int s = 0; s < ns; s++) {
+          rhos[s] = din(i, iR + s);
+          eve[s] = din(i, iE + s);
+        }
+        const nk::GasState st{rhos, din(i, iT), din(i, iTv), din(i, iD), din(i, iP)};
+        nk::ComputeTransport(g, st, D, mu, kk);
+        nk::ComputeSpeciesEnthalpy(g, st.T, st.Tve, eve, h);
+        for (int s = 0; s < ns; s++) {
+          dout(i, oDs + s) = D[s];
+          dout(i, oH + s) = h[s];
+        }
+        dout(i, oMu) = mu;
+        dout(i, oK) = kk[0];
+        dout(i, oKv) = kk[1];
+      });
+  Kokkos::fence();
+  auto hout = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), dout);
+  /*--- Gupta-Yos D_s = gam_t^2 M_s (1 - M_s gam_s) / denom: for a dominant species (Y_s -> 1, the others trace) both
+   *    (1 - Y_s) and denom are cancellations / trace sums, so an ULP change of gam_s is amplified by Y_s / (1 - Y_s)
+   *    (production -ffast-math codegen differs between the CPU and the inlined device path). The difference is measured
+   *    relative to |D_s| times that condition number. Strict IEEE builds are bitwise regardless (bitwise% = 100). ---*/
+  const bool gy = (tables.transModel == nk::NEMOGasTables::TRANSPORT_GUPTAYOS);
+  Report rep;
+  for (int i = 0; i < nStates; i++) {
+    for (int s = 0; s < ns; s++) {
+      const double Y = hin(i, iR + s) / hin(i, iD);
+      const double cond = (gy && Y < 1.0) ? std::max(1.0, Y / (1.0 - Y)) : 1.0;
+      rep.add("Ds", cpu[i][oDs + s], hout(i, oDs + s), s, i, gy ? std::fabs(cpu[i][oDs + s]) * cond : -1.0);
+      rep.add("hs", cpu[i][oH + s], hout(i, oH + s), s, i);
+    }
+    rep.add("mu", cpu[i][oMu], hout(i, oMu), -1, i);
+    rep.add("k_tr", cpu[i][oK], hout(i, oK), -1, i);
+    rep.add("k_ve", cpu[i][oKv], hout(i, oKv), -1, i);
+  }
+  return rep.print(gas_model + " " + model + ": transport properties", tol);
+}
+
 int main(int argc, char* argv[]) {
   SU2_MPI::Init(&argc, &argv);
   bool ok = true;
@@ -574,6 +676,17 @@ int main(int argc, char* argv[]) {
     ok = RunGas("AIR-5", "0.75, 0.25, 0.0, 0.0, 0.0", 3, nStates, tol, 5678u) && ok;
     ok = RunGas("AIR-7", "0.0, 0.75, 0.25, 0.0, 0.0, 0.0, 0.0", 3, nStates, tol, 4321u) && ok;
     ok = RunGas("ARGON", "1.0", 3, nStates / 4, tol, 777u) && ok;
+
+    /*--- Step 8: transport (WILKE default, GUPTAYOS incl. Coulomb collisions with ionization, SUTHERLAND). ---*/
+    for (const char* model : {"WILKE", "GUPTA-YOS", "SUTHERLAND"}) {
+      ok = RunTransport("N2", "0.75, 0.25", 2, model, false, nStates / 4, tol, 11u) && ok;
+      ok = RunTransport("AIR-5", "0.75, 0.25, 0.0, 0.0, 0.0", 3, model, false, nStates / 2, tol, 12u) && ok;
+      ok = RunTransport("ARGON", "1.0", 3, model, false, nStates / 8, tol, 15u) && ok;
+    }
+    /*--- AIR-7 (ionized mixture in CSU2TCLib): only Gupta-Yos is allowed (CConfig check); Coulomb collisions. ---*/
+    ok = RunTransport("AIR-7", "0.0, 0.75, 0.25, 0.0, 0.0, 0.0, 0.0", 3, "GUPTA-YOS", false, nStates / 4, tol, 13u) && ok;
+    ok = RunTransport("AIR-7", "1e-9, 0.75, 0.249999999, 0.0, 0.0, 0.0, 0.0", 3, "GUPTA-YOS", true, nStates / 4, tol, 14u) &&
+         ok;
   }
   std::printf("\nRESULT: %s\n", ok ? "PASS" : "FAIL");
   SU2_MPI::Finalize();
