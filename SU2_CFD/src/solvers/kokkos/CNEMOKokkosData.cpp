@@ -17,12 +17,14 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <type_traits>
 
 #include "../../../../Common/include/CConfig.hpp"
 #include "../../../../Common/include/geometry/CGeometry.hpp"
 #include "../../../../Common/include/toolboxes/allocation_toolbox.hpp"
+#include "../../../../Common/include/toolboxes/graph_toolbox.hpp"
 #include "../../../../Common/include/linear_algebra/CSysVector.hpp"
 #include "../../../include/fluid/CSU2TCLib.hpp"
 #include "../../../include/variables/CNEMOEulerVariable.hpp"
@@ -112,6 +114,7 @@ CNEMOKokkosData::CNEMOKokkosData(CGeometry* geometry, const CConfig* config, CNE
 
   UploadGeometry(geometry);
   UploadBoundaryInfo(geometry, config);
+  BuildEdgeColoring(geometry, config);
 
   /*--- State views. ---*/
   st.Solution = View2D<double>("NEMO::Solution", nPoint, nVar);
@@ -160,10 +163,127 @@ CNEMOKokkosData::CNEMOKokkosData(CGeometry* geometry, const CConfig* config, CNE
   if (SU2_MPI::GetRank() == MASTER_NODE && iMesh == MESH_0)
     std::cout << "[KOKKOS_NEMO] device Cons2Prim enabled (exec space " << exec_space::name() << ", nPoint " << nPoint
               << ", nEdge " << geo.nEdge << ", nSpecies " << nSpecies << (implicit ? ", implicit" : ", explicit")
-              << ")" << std::endl;
+              << ")" << std::endl
+              << "[KOKKOS_NEMO] edge assembly (upwind, viscous): " << EdgeColoringReport() << std::endl;
 }
 
 CNEMOKokkosData::~CNEMOKokkosData() { PrintPerf(); }
+
+void CNEMOKokkosData::BuildEdgeColoring(CGeometry* geometry, const CConfig* config) {
+  using nemo_edge::EdgeMode;
+  auto& C = edgeColoring;
+  const char* env = std::getenv("SU2_KOKKOS_NEMO_EDGE");
+  const std::string mode = env ? env : "";
+  C.mode = (mode == "color") ? EdgeMode::COLOR : (mode == "level") ? EdgeMode::LEVEL : EdgeMode::ATOMIC;
+  if (!mode.empty() && mode != "color" && mode != "level" && mode != "atomic")
+    SU2_MPI::Error("SU2_KOKKOS_NEMO_EDGE must be atomic, color or level.", CURRENT_FUNCTION);
+  if (C.Atomic()) return;
+
+  Kokkos::Timer timer;
+  const unsigned long nEdge = geometry->GetnEdge();
+  constexpr bool hostBackend = Kokkos::SpaceAccessibility<Kokkos::HostSpace, mem_space>::accessible;
+  C.groupSize = hostBackend ? std::max<unsigned long>(1ul, config->GetEdgeColoringGroupSize()) : 1ul;
+  if (const char* g = std::getenv("SU2_KOKKOS_NEMO_EDGE_GROUP")) C.groupSize = std::max(1l, std::atol(g));
+  std::vector<unsigned long> list;
+
+  if (C.mode == EdgeMode::LEVEL) {
+    /*--- Order-preserving levels: every point sees its edges in increasing edge order across the levels. ---*/
+    C.groupSize = 1;
+    std::vector<unsigned long> lastLevel(geometry->GetnPoint(), 0), level(nEdge);
+    unsigned long nLevel = 0;
+    for (unsigned long e = 0; e < nEdge; ++e) {
+      const auto i = geometry->edges->GetNode(e, 0), j = geometry->edges->GetNode(e, 1);
+      const auto l = std::max(lastLevel[i], lastLevel[j]) + 1;
+      lastLevel[i] = lastLevel[j] = l;
+      level[e] = l - 1;
+      nLevel = std::max(nLevel, l);
+    }
+    C.colorPtr.assign(nLevel + 1, 0);
+    for (unsigned long e = 0; e < nEdge; ++e) C.colorPtr[level[e] + 1]++;
+    for (unsigned long l = 0; l < nLevel; ++l) C.colorPtr[l + 1] += C.colorPtr[l];
+    list.resize(nEdge);
+    std::vector<unsigned long> fill(C.colorPtr.begin(), C.colorPtr.end() - 1);
+    for (unsigned long e = 0; e < nEdge; ++e) list[fill[level[e]]++] = e;
+  } else {
+    /*--- Balanced colouring of the edge -> node pattern (CGeometry::GetEdgeColoring without the OpenMP shortcut);
+     *    a failed colouring (> 255 colours) halves the group size. ---*/
+    su2vector<unsigned long> outerPtr(nEdge + 1), innerIdx(nEdge * 2);
+    for (unsigned long e = 0; e < nEdge; ++e) {
+      outerPtr(e) = 2 * e;
+      innerIdx(2 * e) = geometry->edges->GetNode(e, 0);
+      innerIdx(2 * e + 1) = geometry->edges->GetNode(e, 1);
+    }
+    outerPtr(nEdge) = 2 * nEdge;
+    CCompressedSparsePatternUL pattern(std::move(outerPtr), std::move(innerIdx));
+    CCompressedSparsePatternUL coloring;
+    while (true) {
+      coloring = colorSparsePattern(pattern, C.groupSize, false, true);
+      if (!coloring.empty() || C.groupSize == 1) break;
+      C.groupSize = std::max(1ul, C.groupSize / 2);
+    }
+    if (coloring.empty()) SU2_MPI::Error("CNEMOKokkosData: edge colouring failed.", CURRENT_FUNCTION);
+    const auto nColor = coloring.getOuterSize();
+    C.colorPtr.assign(nColor + 1, 0);
+    list.reserve(nEdge);
+    for (unsigned long c = 0; c < nColor; ++c) {
+      for (const auto e : coloring.getInnerIter(c)) list.push_back(e);
+      C.colorPtr[c + 1] = list.size();
+    }
+    C.efficiency = coloringEfficiency(coloring, std::max(1, int(exec_space().concurrency())), int(C.groupSize));
+    C.efficiencyGPU = coloringEfficiency(coloring, 1 << 16, int(C.groupSize));
+  }
+  if (list.size() != nEdge) SU2_MPI::Error("CNEMOKokkosData: edge colouring lost edges.", CURRENT_FUNCTION);
+
+  /*--- Check: the edges of a colour (whole groups) never share a point across groups. ---*/
+  std::vector<long> owner(geometry->GetnPoint(), -1);
+  C.minSize = nEdge;
+  C.maxSize = 0;
+  for (unsigned long c = 0; c + 1 < C.colorPtr.size(); ++c) {
+    const auto n = C.colorPtr[c + 1] - C.colorPtr[c];
+    C.minSize = std::min(C.minSize, n);
+    C.maxSize = std::max(C.maxSize, n);
+    for (unsigned long k = 0; k < n; ++k) {
+      const long grp = long(C.colorPtr[c] + (k / C.groupSize) * C.groupSize);
+      const auto e = list[C.colorPtr[c] + k];
+      for (int side = 0; side < 2; ++side) {
+        auto& o = owner[geometry->edges->GetNode(e, side)];
+        if (o >= long(C.colorPtr[c]) && o != grp)
+          SU2_MPI::Error("CNEMOKokkosData: invalid edge colouring (point shared within a colour).", CURRENT_FUNCTION);
+        o = grp;
+      }
+    }
+  }
+  if (C.mode == EdgeMode::LEVEL) {
+    /*--- coloringEfficiency for the level pattern (ideal / real work with unit chunks). ---*/
+    auto eff = [&](double nThreads) {
+      double real = 0;
+      for (unsigned long c = 0; c + 1 < C.colorPtr.size(); ++c)
+        real += std::ceil(double(C.colorPtr[c + 1] - C.colorPtr[c]) / nThreads);
+      return (double(nEdge) / nThreads) / std::max(1.0, real);
+    };
+    C.efficiency = eff(std::max(1, int(exec_space().concurrency())));
+    C.efficiencyGPU = eff(double(1 << 16));
+  }
+  C.edges = View1D<unsigned long>("NEMO::coloredEdges", nEdge);
+  Kokkos::deep_copy(C.edges, Kokkos::View<const unsigned long*, Kokkos::HostSpace,
+                                          Kokkos::MemoryTraits<Kokkos::Unmanaged>>(list.data(), nEdge));
+  C.buildSeconds = timer.seconds();
+}
+
+std::string CNEMOKokkosData::EdgeColoringReport() const {
+  const auto& C = edgeColoring;
+  std::ostringstream os;
+  if (C.Atomic()) {
+    os << "atomic (Kokkos atomics; SU2_KOKKOS_NEMO_EDGE=color|level for the deterministic coloured assembly)";
+    return os.str();
+  }
+  const double mean = C.NumColors() ? double(geo.nEdge) / C.NumColors() : 0.0;
+  os << (C.mode == nemo_edge::EdgeMode::COLOR ? "color" : "level (order-preserving)") << ": " << C.NumColors()
+     << " colours, group size " << C.groupSize << ", edges per colour min/mean/max " << C.minSize << "/" << mean << "/"
+     << C.maxSize << ", efficiency " << C.efficiency << " (exec concurrency " << exec_space().concurrency() << "), "
+     << C.efficiencyGPU << " (2^16 threads), built in " << C.buildSeconds << " s";
+  return os.str();
+}
 
 bool CNEMOKokkosData::VerifyEnabled() {
   static const bool on = [] {

@@ -4,7 +4,8 @@
  *        CNEMONSSolver::Viscous_Residual with CAvgGradCorrected_NEMO (the MESH_0 viscous numerics) per edge,
  *        CheckResidualNaNs, LinSysRes.SubtractBlock(i) / AddBlock(j) and Jacobian.UpdateBlocks(iEdge, i, j, J_i, J_j)
  *        into the device residual accumulator with atomics (Serial: edge order = CPU order -> bitwise in strict IEEE
- *        builds; GPUs: order-nondeterministic at ULP level, TODO edge colouring as for the upwind kernel).
+ *        builds; GPUs: order-nondeterministic at ULP level), or edge-coloured without atomics (Step 10 Task B,
+ *        SU2_KOKKOS_NEMO_EDGE=color|level: deterministic).
  * \version 8.5.0 "Harrier"
  *
  * SU2 is free software; you can redistribute it and/or modify it under the terms of the
@@ -42,58 +43,78 @@ struct EdgeArgs {
   int eddyIdx = 0;
 };
 
+/*! \brief One edge: CAvgGradCorrected_NEMO residual + Jacobians, accumulation (atomics or plain colour-safe writes). */
+template <int ND, bool ATOMIC>
+KOKKOS_INLINE_FUNCTION void ViscousEdge(const EdgeArgs& a, const unsigned long iEdge) {
+  using namespace nemo_visc;
+  const int nVar = a.c.nVar;
+  const bool implicit = a.c.implicit;
+  const auto iPoint = a.edge_nodes(iEdge, 0), jPoint = a.edge_nodes(iEdge, 1);
+  const double zero[MAXV] = {0.0};
+
+  auto point = [&](unsigned long p) {
+    ViscPoint q;
+    q.V = &a.V(p, 0);
+    q.G = &a.grad(p, 0, 0);
+    q.eve = &a.eves(p, 0);
+    q.cvve = &a.Cvves(p, 0);
+    q.dTdU = implicit ? &a.dTdU(p, 0) : zero;
+    q.dTvedU = implicit ? &a.dTvedU(p, 0) : zero;
+    q.Ds = &a.Ds(p, 0);
+    q.mu = a.mu(p);
+    q.eddy = a.V(p, a.eddyIdx);
+    q.k = a.k(p);
+    q.kve = a.kve(p);
+    return q;
+  };
+  const ViscPoint pi = point(iPoint), pj = point(jPoint);
+
+  double Flux[MAXV], Jac_i[MAXV * MAXV], Jac_j[MAXV * MAXV];
+  AvgGradResidual<ND>(a.c, true, &a.coord(iPoint, 0), &a.coord(jPoint, 0), &a.edge_normal(iEdge, 0), pi, pj, Flux,
+                      Jac_i, Jac_j);
+
+  if (ResidualNaN2(implicit, nVar, Flux, Jac_i, Jac_j)) return;
+
+  /*--- LinSysRes.SubtractBlock(iPoint), AddBlock(jPoint). ---*/
+  for (int iVar = 0; iVar < nVar; iVar++) nemo_edge::Sub<ATOMIC>(&a.res(iPoint, iVar), Flux[iVar]);
+  for (int iVar = 0; iVar < nVar; iVar++) nemo_edge::Add<ATOMIC>(&a.res(jPoint, iVar), Flux[iVar]);
+
+  if (!implicit) return;
+
+  /*--- Jacobian.UpdateBlocks(iEdge, iPoint, jPoint, jacobian_i, jacobian_j). ---*/
+  const unsigned long bs = static_cast<unsigned long>(nVar) * nVar;
+  double* bii = &a.jac(a.dia_ptr(iPoint) * bs);
+  double* bjj = &a.jac(a.dia_ptr(jPoint) * bs);
+  double* bij = &a.jac(a.edge_nnz(iEdge, 0) * bs);
+  double* bji = &a.jac(a.edge_nnz(iEdge, 1) * bs);
+  for (unsigned long q = 0; q < bs; ++q) {
+    nemo_edge::Add<ATOMIC>(&bii[q], Jac_i[q]);
+    nemo_edge::Add<ATOMIC>(&bij[q], Jac_j[q]);
+    nemo_edge::Sub<ATOMIC>(&bji[q], Jac_i[q]);
+    nemo_edge::Sub<ATOMIC>(&bjj[q], Jac_j[q]);
+  }
+}
+
 template <int ND>
-void KernelViscousEdges(const EdgeArgs& a, unsigned long nEdge) {
-  Kokkos::parallel_for(
-      "NEMO::ViscousAvgGradCorrected", Kokkos::RangePolicy<exec_space>(0, nEdge), KOKKOS_LAMBDA(const unsigned long iEdge) {
-        using namespace nemo_visc;
-        const int nVar = a.c.nVar;
-        const bool implicit = a.c.implicit;
-        const auto iPoint = a.edge_nodes(iEdge, 0), jPoint = a.edge_nodes(iEdge, 1);
-        const double zero[MAXV] = {0.0};
-
-        auto point = [&](unsigned long p) {
-          ViscPoint q;
-          q.V = &a.V(p, 0);
-          q.G = &a.grad(p, 0, 0);
-          q.eve = &a.eves(p, 0);
-          q.cvve = &a.Cvves(p, 0);
-          q.dTdU = implicit ? &a.dTdU(p, 0) : zero;
-          q.dTvedU = implicit ? &a.dTvedU(p, 0) : zero;
-          q.Ds = &a.Ds(p, 0);
-          q.mu = a.mu(p);
-          q.eddy = a.V(p, a.eddyIdx);
-          q.k = a.k(p);
-          q.kve = a.kve(p);
-          return q;
-        };
-        const ViscPoint pi = point(iPoint), pj = point(jPoint);
-
-        double Flux[MAXV], Jac_i[MAXV * MAXV], Jac_j[MAXV * MAXV];
-        AvgGradResidual<ND>(a.c, true, &a.coord(iPoint, 0), &a.coord(jPoint, 0), &a.edge_normal(iEdge, 0), pi, pj, Flux,
-                            Jac_i, Jac_j);
-
-        if (ResidualNaN2(implicit, nVar, Flux, Jac_i, Jac_j)) return;
-
-        /*--- LinSysRes.SubtractBlock(iPoint), AddBlock(jPoint). ---*/
-        for (int iVar = 0; iVar < nVar; iVar++) Kokkos::atomic_sub(&a.res(iPoint, iVar), Flux[iVar]);
-        for (int iVar = 0; iVar < nVar; iVar++) Kokkos::atomic_add(&a.res(jPoint, iVar), Flux[iVar]);
-
-        if (!implicit) return;
-
-        /*--- Jacobian.UpdateBlocks(iEdge, iPoint, jPoint, jacobian_i, jacobian_j). ---*/
-        const unsigned long bs = static_cast<unsigned long>(nVar) * nVar;
-        double* bii = &a.jac(a.dia_ptr(iPoint) * bs);
-        double* bjj = &a.jac(a.dia_ptr(jPoint) * bs);
-        double* bij = &a.jac(a.edge_nnz(iEdge, 0) * bs);
-        double* bji = &a.jac(a.edge_nnz(iEdge, 1) * bs);
-        for (unsigned long q = 0; q < bs; ++q) {
-          Kokkos::atomic_add(&bii[q], Jac_i[q]);
-          Kokkos::atomic_add(&bij[q], Jac_j[q]);
-          Kokkos::atomic_sub(&bji[q], Jac_i[q]);
-          Kokkos::atomic_sub(&bjj[q], Jac_j[q]);
-        }
-      });
+void KernelViscousEdges(const EdgeArgs& a, unsigned long nEdge, const CNEMOKokkosData::EdgeColoring& col) {
+  if (col.Atomic()) {
+    Kokkos::parallel_for(
+        "NEMO::ViscousAvgGradCorrected", Kokkos::RangePolicy<exec_space>(0, nEdge),
+        KOKKOS_LAMBDA(const unsigned long iEdge) { ViscousEdge<ND, true>(a, iEdge); });
+    return;
+  }
+  /*--- Step 10 Task B: colour by colour, no two edges of a launch share a point (deterministic). ---*/
+  const auto edges = col.edges;
+  const unsigned long gs = col.groupSize;
+  for (size_t c = 0; c + 1 < col.colorPtr.size(); ++c) {
+    const unsigned long first = col.colorPtr[c], n = col.colorPtr[c + 1] - first;
+    Kokkos::parallel_for(
+        "NEMO::ViscousAvgGradCorrected_color", Kokkos::RangePolicy<exec_space>(0, (n + gs - 1) / gs),
+        KOKKOS_LAMBDA(const unsigned long g) {
+          const unsigned long end = (g + 1) * gs < n ? (g + 1) * gs : n;
+          for (unsigned long k = g * gs; k < end; ++k) ViscousEdge<ND, false>(a, edges(first + k));
+        });
+  }
 }
 
 }  // namespace
@@ -161,8 +182,8 @@ void CNEMOKokkosData::ComputeViscousResidual(const ViscousParams& p, bool upload
   a.jac = st.JacVal;
   a.eddyIdx = nSpecies + nDim + 9;
 
-  if (nDim == 2) KernelViscousEdges<2>(a, geo.nEdge);
-  else KernelViscousEdges<3>(a, geo.nEdge);
+  if (nDim == 2) KernelViscousEdges<2>(a, geo.nEdge, edgeColoring);
+  else KernelViscousEdges<3>(a, geo.nEdge, edgeColoring);
   Kokkos::fence();
   P.kernel += timer.seconds();
   P.calls++;

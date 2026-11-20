@@ -50,6 +50,29 @@ class CConfig;
 class CNEMOEulerVariable;
 class CSU2TCLib;
 
+/*!
+ * \brief Step 10 (Task B): accumulation of the edge kernels (upwind, viscous) into the residual accumulator.
+ *        ATOMIC: Kokkos atomics (order of the edge loop on Serial = CPU order; nondeterministic on GPUs).
+ *        COLOR: edge colouring (colorSparsePattern on the edge -> node pattern, balanced): one launch per colour, the
+ *        edges of a colour share no point, plain += / -= (deterministic on every backend, different summation order
+ *        than the CPU: noise-floor exact). LEVEL: order-preserving colouring (colour of an edge = 1 + the highest colour
+ *        of the earlier edges of its two points): plain writes AND the per-entry CPU (edge) order -> bitwise vs ATOMIC on
+ *        Serial / vs the CPU (validation of the colour path; many colours, poor GPU occupancy).
+ */
+namespace nemo_edge {
+enum class EdgeMode : int { ATOMIC = 0, COLOR = 1, LEVEL = 2 };
+template <bool ATOMIC>
+KOKKOS_FORCEINLINE_FUNCTION void Add(double* p, double v) {
+  if (ATOMIC) Kokkos::atomic_add(p, v);
+  else *p += v;
+}
+template <bool ATOMIC>
+KOKKOS_FORCEINLINE_FUNCTION void Sub(double* p, double v) {
+  if (ATOMIC) Kokkos::atomic_sub(p, v);
+  else *p -= v;
+}
+}  // namespace nemo_edge
+
 class CNEMOKokkosData {
  public:
   using exec_space = Kokkos::DefaultExecutionSpace;
@@ -162,6 +185,26 @@ class CNEMOKokkosData {
     View1D<unsigned long> viscWallPoints;  /*!< unique points of the viscous-wall markers (forces / heat flux) */
     View2D<double> viscWallStage;          /*!< (n, nPrimVarGrad*nDim + 3 + 2*nSpecies) staging */
   };
+
+  /*! \brief Edge colouring of the edge kernels (Step 10, Task B; env SU2_KOKKOS_NEMO_EDGE=atomic|color|level,
+   *         group size env SU2_KOKKOS_NEMO_EDGE_GROUP, default 1 on device backends, EDGE_COLORING_GROUP_SIZE on host
+   *         backends). Colour c = edges[colorPtr[c], colorPtr[c+1]), increasing edge index; consecutive chunks of
+   *         groupSize edges are one work item (processed sequentially, in edge order). */
+  struct EdgeColoring {
+    nemo_edge::EdgeMode mode = nemo_edge::EdgeMode::ATOMIC;
+    unsigned long groupSize = 1;
+    std::vector<unsigned long> colorPtr;
+    View1D<unsigned long> edges;
+    unsigned long minSize = 0, maxSize = 0;
+    double efficiency = 1.0, efficiencyGPU = 1.0; /*!< coloringEfficiency at exec concurrency / at 2^16 threads */
+    double buildSeconds = 0.0;
+    bool Atomic() const { return mode == nemo_edge::EdgeMode::ATOMIC; }
+    unsigned long NumColors() const { return colorPtr.empty() ? 0 : colorPtr.size() - 1; }
+  };
+  EdgeColoring edgeColoring;
+  /*! \brief Build the edge colouring (constructor, if the mode is not ATOMIC). */
+  void BuildEdgeColoring(CGeometry* geometry, const CConfig* config);
+  std::string EdgeColoringReport() const;
 
   Geometry geo;
   State st;

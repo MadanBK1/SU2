@@ -96,93 +96,113 @@ void KernelStickyNonPhys(const CNEMOKokkosData::Geometry& geo, const View2D<unsi
       });
 }
 
-/*! \brief Kernel 3: flux + Jacobian per edge, CheckResidualNaNs, atomic accumulation. */
+/*! \brief Kernel 3 body: flux + Jacobian of one edge, CheckResidualNaNs, accumulation (atomic, or plain writes when the
+ *         caller guarantees that no other concurrent edge touches the same points: edge colouring). */
+template <int ND, bool ATOMIC>
+KOKKOS_INLINE_FUNCTION void UpwindEdge(const UpwArgs& a, const unsigned long iEdge, const long lastKey) {
+  const int nVar = a.nVar, ns = a.ns;
+  const auto iPoint = a.edge_nodes(iEdge, 0), jPoint = a.edge_nodes(iEdge, 1);
+  const double* Normal = &a.edge_normal(iEdge, 0);
+
+  /*--- Cell values (first order or non-physical reconstruction). ---*/
+  const double* V_i = &a.V(iPoint, 0);
+  const double* V_j = &a.V(jPoint, 0);
+  const double* eve_i = &a.eves(iPoint, 0);
+  const double* eve_j = &a.eves(jPoint, 0);
+  const double zero[MAXNV] = {0.0};
+  const double* dPdU_i = a.implicit ? &a.dPdU(iPoint, 0) : zero;
+  const double* dPdU_j = a.implicit ? &a.dPdU(jPoint, 0) : zero;
+  double Gamma_i = a.Gamma(iPoint), Gamma_j = a.Gamma(jPoint);
+
+  double Primitive_i[MAXNP], Primitive_j[MAXNP];
+  double Eve_i[MAXNS], Eve_j[MAXNS];
+
+  if (a.muscl) {
+    Reconstruct<ND>(a, iPoint, jPoint, Primitive_i, Primitive_j);
+    const bool chk_err_i = a.eflag(iEdge, 0), chk_err_j = a.eflag(iEdge, 1);
+
+    /*--- ComputeConsistentExtrapolation: Eve at Tve and Gamma of the reconstructed state only
+     *    (dPdU/dTdU/dTvedU/Cvve are not computed: the zero-initialised CPU arrays are used). ---*/
+    if (!chk_err_i) {
+      ComputeSpeciesEve(a.gas, Primitive_i[ns + 1], Eve_i);
+      Gamma_i = ComputeGamma(a.gas, Primitive_i);
+      V_i = Primitive_i;
+      eve_i = Eve_i;
+      dPdU_i = zero;
+      if (long(2 * iEdge) == lastKey)
+        for (int v = 0; v < a.nPrimVar; ++v) a.lastRec(v) = Primitive_i[v];
+    }
+    if (!chk_err_j) {
+      ComputeSpeciesEve(a.gas, Primitive_j[ns + 1], Eve_j);
+      Gamma_j = ComputeGamma(a.gas, Primitive_j);
+      V_j = Primitive_j;
+      eve_j = Eve_j;
+      dPdU_j = zero;
+      if (long(2 * iEdge + 1) == lastKey)
+        for (int v = 0; v < a.nPrimVar; ++v) a.lastRec(v) = Primitive_j[v];
+    }
+  }
+  const double Sensor_i = a.Sensor.size() ? a.Sensor(iPoint) : 0.0;
+  const double Sensor_j = a.Sensor.size() ? a.Sensor(jPoint) : 0.0;
+
+  double Flux[MAXNV];
+  double Jacobian_i[MAXNV * MAXNV], Jacobian_j[MAXNV * MAXNV];
+  AUSMResidual<ND>(a, Normal, V_i, V_j, eve_i, eve_j, dPdU_i, dPdU_j, Gamma_i, Gamma_j, Sensor_i, Sensor_j, Flux,
+                   Jacobian_i, Jacobian_j);
+
+  /*--- CNumerics::CheckResidualNaNs ---*/
+  bool err = false;
+  for (int iVar = 0; iVar < nVar; iVar++) {
+    if (Kokkos::isnan(Flux[iVar])) err = true;
+    if (a.implicit) {
+      for (int jVar = 0; jVar < nVar; jVar++) {
+        if (Kokkos::isnan(Jacobian_i[iVar * nVar + jVar])) err = true;
+        if (Kokkos::isnan(Jacobian_j[iVar * nVar + jVar])) err = true;
+      }
+    }
+  }
+  if (err) return;
+
+  /*--- LinSysRes.AddBlock(iPoint), SubtractBlock(jPoint). ---*/
+  for (int iVar = 0; iVar < nVar; iVar++) nemo_edge::Add<ATOMIC>(&a.res(iPoint, iVar), Flux[iVar]);
+  for (int iVar = 0; iVar < nVar; iVar++) nemo_edge::Sub<ATOMIC>(&a.res(jPoint, iVar), Flux[iVar]);
+
+  if (!a.implicit) return;
+
+  /*--- Jacobian.UpdateBlocks(iEdge, iPoint, jPoint, Ji, Jj). ---*/
+  const unsigned long bs = static_cast<unsigned long>(nVar) * nVar;
+  double* bii = &a.jac(a.dia_ptr(iPoint) * bs);
+  double* bjj = &a.jac(a.dia_ptr(jPoint) * bs);
+  double* bij = &a.jac(a.edge_nnz(iEdge, 0) * bs);
+  double* bji = &a.jac(a.edge_nnz(iEdge, 1) * bs);
+  for (unsigned long k = 0; k < bs; ++k) {
+    nemo_edge::Add<ATOMIC>(&bii[k], Jacobian_i[k]);
+    nemo_edge::Add<ATOMIC>(&bij[k], Jacobian_j[k]);
+    nemo_edge::Sub<ATOMIC>(&bji[k], Jacobian_i[k]);
+    nemo_edge::Sub<ATOMIC>(&bjj[k], Jacobian_j[k]);
+  }
+}
+
+/*! \brief Kernel 3: all edges (atomics, edge order on Serial), or colour by colour (Step 10 Task B: deterministic). */
 template <int ND>
-void KernelUpwindFlux(const UpwArgs& a, unsigned long nEdge, long lastKey) {
-  Kokkos::parallel_for(
-      "NEMO::UpwindAUSM", Kokkos::RangePolicy<exec_space>(0, nEdge), KOKKOS_LAMBDA(const unsigned long iEdge) {
-        const int nVar = a.nVar, ns = a.ns;
-        const auto iPoint = a.edge_nodes(iEdge, 0), jPoint = a.edge_nodes(iEdge, 1);
-        const double* Normal = &a.edge_normal(iEdge, 0);
-
-        /*--- Cell values (first order or non-physical reconstruction). ---*/
-        const double* V_i = &a.V(iPoint, 0);
-        const double* V_j = &a.V(jPoint, 0);
-        const double* eve_i = &a.eves(iPoint, 0);
-        const double* eve_j = &a.eves(jPoint, 0);
-        const double zero[MAXNV] = {0.0};
-        const double* dPdU_i = a.implicit ? &a.dPdU(iPoint, 0) : zero;
-        const double* dPdU_j = a.implicit ? &a.dPdU(jPoint, 0) : zero;
-        double Gamma_i = a.Gamma(iPoint), Gamma_j = a.Gamma(jPoint);
-
-        double Primitive_i[MAXNP], Primitive_j[MAXNP];
-        double Eve_i[MAXNS], Eve_j[MAXNS];
-
-        if (a.muscl) {
-          Reconstruct<ND>(a, iPoint, jPoint, Primitive_i, Primitive_j);
-          const bool chk_err_i = a.eflag(iEdge, 0), chk_err_j = a.eflag(iEdge, 1);
-
-          /*--- ComputeConsistentExtrapolation: Eve at Tve and Gamma of the reconstructed state only
-           *    (dPdU/dTdU/dTvedU/Cvve are not computed: the zero-initialised CPU arrays are used). ---*/
-          if (!chk_err_i) {
-            ComputeSpeciesEve(a.gas, Primitive_i[ns + 1], Eve_i);
-            Gamma_i = ComputeGamma(a.gas, Primitive_i);
-            V_i = Primitive_i;
-            eve_i = Eve_i;
-            dPdU_i = zero;
-            if (long(2 * iEdge) == lastKey)
-              for (int v = 0; v < a.nPrimVar; ++v) a.lastRec(v) = Primitive_i[v];
-          }
-          if (!chk_err_j) {
-            ComputeSpeciesEve(a.gas, Primitive_j[ns + 1], Eve_j);
-            Gamma_j = ComputeGamma(a.gas, Primitive_j);
-            V_j = Primitive_j;
-            eve_j = Eve_j;
-            dPdU_j = zero;
-            if (long(2 * iEdge + 1) == lastKey)
-              for (int v = 0; v < a.nPrimVar; ++v) a.lastRec(v) = Primitive_j[v];
-          }
-        }
-        const double Sensor_i = a.Sensor.size() ? a.Sensor(iPoint) : 0.0;
-        const double Sensor_j = a.Sensor.size() ? a.Sensor(jPoint) : 0.0;
-
-        double Flux[MAXNV];
-        double Jacobian_i[MAXNV * MAXNV], Jacobian_j[MAXNV * MAXNV];
-        AUSMResidual<ND>(a, Normal, V_i, V_j, eve_i, eve_j, dPdU_i, dPdU_j, Gamma_i, Gamma_j, Sensor_i, Sensor_j, Flux,
-                         Jacobian_i, Jacobian_j);
-
-        /*--- CNumerics::CheckResidualNaNs ---*/
-        bool err = false;
-        for (int iVar = 0; iVar < nVar; iVar++) {
-          if (Kokkos::isnan(Flux[iVar])) err = true;
-          if (a.implicit) {
-            for (int jVar = 0; jVar < nVar; jVar++) {
-              if (Kokkos::isnan(Jacobian_i[iVar * nVar + jVar])) err = true;
-              if (Kokkos::isnan(Jacobian_j[iVar * nVar + jVar])) err = true;
-            }
-          }
-        }
-        if (err) return;
-
-        /*--- LinSysRes.AddBlock(iPoint), SubtractBlock(jPoint). ---*/
-        for (int iVar = 0; iVar < nVar; iVar++) Kokkos::atomic_add(&a.res(iPoint, iVar), Flux[iVar]);
-        for (int iVar = 0; iVar < nVar; iVar++) Kokkos::atomic_sub(&a.res(jPoint, iVar), Flux[iVar]);
-
-        if (!a.implicit) return;
-
-        /*--- Jacobian.UpdateBlocks(iEdge, iPoint, jPoint, Ji, Jj). ---*/
-        const unsigned long bs = static_cast<unsigned long>(nVar) * nVar;
-        double* bii = &a.jac(a.dia_ptr(iPoint) * bs);
-        double* bjj = &a.jac(a.dia_ptr(jPoint) * bs);
-        double* bij = &a.jac(a.edge_nnz(iEdge, 0) * bs);
-        double* bji = &a.jac(a.edge_nnz(iEdge, 1) * bs);
-        for (unsigned long k = 0; k < bs; ++k) {
-          Kokkos::atomic_add(&bii[k], Jacobian_i[k]);
-          Kokkos::atomic_add(&bij[k], Jacobian_j[k]);
-          Kokkos::atomic_sub(&bji[k], Jacobian_i[k]);
-          Kokkos::atomic_sub(&bjj[k], Jacobian_j[k]);
-        }
-      });
+void KernelUpwindFlux(const UpwArgs& a, unsigned long nEdge, long lastKey, const CNEMOKokkosData::EdgeColoring& col) {
+  if (col.Atomic()) {
+    Kokkos::parallel_for(
+        "NEMO::UpwindAUSM", Kokkos::RangePolicy<exec_space>(0, nEdge),
+        KOKKOS_LAMBDA(const unsigned long iEdge) { UpwindEdge<ND, true>(a, iEdge, lastKey); });
+    return;
+  }
+  const auto edges = col.edges;
+  const unsigned long gs = col.groupSize;
+  for (size_t c = 0; c + 1 < col.colorPtr.size(); ++c) {
+    const unsigned long first = col.colorPtr[c], n = col.colorPtr[c + 1] - first;
+    Kokkos::parallel_for(
+        "NEMO::UpwindAUSM_color", Kokkos::RangePolicy<exec_space>(0, (n + gs - 1) / gs),
+        KOKKOS_LAMBDA(const unsigned long g) {
+          const unsigned long end = (g + 1) * gs < n ? (g + 1) * gs : n;
+          for (unsigned long k = g * gs; k < end; ++k) UpwindEdge<ND, false>(a, edges(first + k), lastKey);
+        });
+  }
 }
 
 }  // namespace
@@ -344,8 +364,8 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
     if (lastKey < 0) lastKey = -1;
     out.nonPhysical = count;
   }
-  if (nDim == 2) KernelUpwindFlux<2>(a, ne, lastKey);
-  else KernelUpwindFlux<3>(a, ne, lastKey);
+  if (nDim == 2) KernelUpwindFlux<2>(a, ne, lastKey, edgeColoring);
+  else KernelUpwindFlux<3>(a, ne, lastKey, edgeColoring);
   Kokkos::fence();
   P.kernel += timer.seconds();
   timer.reset();
