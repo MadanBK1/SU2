@@ -7,6 +7,14 @@
 
 #include "../../include/linear_algebra/CSysVector.hpp"
 
+#ifdef HAVE_MPI
+/*--- CSysMatrixKokkos.cpp: forget the halo indices held by a device index buffer that is freed / reallocated. ---*/
+void KokkosHaloIndexCacheInvalidate(const void* device_indices);
+#define SU2_KOKKOS_HALO_INVALIDATE(p) KokkosHaloIndexCacheInvalidate(p)
+#else
+#define SU2_KOKKOS_HALO_INVALIDATE(p) ((void)0)
+#endif
+
 namespace {
 template <class ScalarType>
 using DeviceView = Kokkos::View<ScalarType*, typename Kokkos::DefaultExecutionSpace::memory_space,
@@ -68,12 +76,14 @@ void CSysVector<ScalarType>::PrepareKokkosMPIBuffers(unsigned long sendPoints, u
     kokkos_mpi_recv_capacity = recvValues;
   }
   if (sendPoints > kokkos_mpi_send_index_capacity) {
+    SU2_KOKKOS_HALO_INVALIDATE(d_kokkos_mpi_send_indices);
     if (d_kokkos_mpi_send_indices != nullptr) Kokkos::kokkos_free(d_kokkos_mpi_send_indices);
     d_kokkos_mpi_send_indices = static_cast<unsigned long*>(
         Kokkos::kokkos_malloc<memory_space>("SU2::KokkosMPISendIndices", sendPoints * sizeof(unsigned long)));
     kokkos_mpi_send_index_capacity = sendPoints;
   }
   if (recvPoints > kokkos_mpi_recv_index_capacity) {
+    SU2_KOKKOS_HALO_INVALIDATE(d_kokkos_mpi_recv_indices);
     if (d_kokkos_mpi_recv_indices != nullptr) Kokkos::kokkos_free(d_kokkos_mpi_recv_indices);
     d_kokkos_mpi_recv_indices = static_cast<unsigned long*>(
         Kokkos::kokkos_malloc<memory_space>("SU2::KokkosMPIRecvIndices", recvPoints * sizeof(unsigned long)));
@@ -85,6 +95,8 @@ template <class ScalarType>
 void CSysVector<ScalarType>::ReleaseKokkosMPIBuffers() {
   if (d_kokkos_mpi_send != nullptr) Kokkos::kokkos_free(d_kokkos_mpi_send);
   if (d_kokkos_mpi_recv != nullptr) Kokkos::kokkos_free(d_kokkos_mpi_recv);
+  SU2_KOKKOS_HALO_INVALIDATE(d_kokkos_mpi_send_indices);
+  SU2_KOKKOS_HALO_INVALIDATE(d_kokkos_mpi_recv_indices);
   if (d_kokkos_mpi_send_indices != nullptr) Kokkos::kokkos_free(d_kokkos_mpi_send_indices);
   if (d_kokkos_mpi_recv_indices != nullptr) Kokkos::kokkos_free(d_kokkos_mpi_recv_indices);
 

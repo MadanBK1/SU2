@@ -12,6 +12,9 @@
 #include <limits>
 #include <type_traits>
 #include <unordered_map>
+#ifdef HAVE_MPI
+#include <mutex>
+#endif
 
 #include "../../include/linear_algebra/CSysMatrix.hpp"
 #include "../../include/geometry/CGeometry.hpp"
@@ -25,15 +28,47 @@ using DeviceView = Kokkos::View<T*, typename Kokkos::DefaultExecutionSpace::memo
 template <class T>
 using HostView = Kokkos::View<T*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
 
-struct HaloIndexCache {
+#ifdef HAVE_MPI
+/*--- Only MPI builds exchange halos: keeping this out of the non-MPI unit leaves its code generation unchanged
+ *    (fast-math builds: inlining decisions depend on the unit's size). ---*/
+/*!
+ * \brief Device halo point indices already uploaded into a CSysVector's persistent index buffers.
+ *
+ * Keyed by the device index buffer itself (not by the vector address: vectors are swapped / reallocated, and a freed
+ * vector's address can be reused by a new one). An entry records which geometry halo map (geometry object, host index
+ * array, count) the buffer currently holds; CSysVector invalidates its entries when it frees or reallocates the
+ * buffers (KokkosHaloIndexCacheInvalidate), so a recycled device address can never be mistaken for uploaded indices.
+ * Shared by the GPU-aware and host-staged exchanges.
+ */
+struct HaloIndexEntry {
   const CGeometry* geometry = nullptr;
-  const unsigned long* host_send_indices = nullptr;
-  const unsigned long* host_recv_indices = nullptr;
-  unsigned long* device_send_indices = nullptr;
-  unsigned long* device_recv_indices = nullptr;
-  unsigned long send_points = 0;
-  unsigned long recv_points = 0;
+  const unsigned long* host_indices = nullptr;
+  unsigned long points = 0;
 };
+
+/*--- Never destroyed (vectors may be freed during static destruction). ---*/
+std::mutex& HaloIndexMutex() {
+  static auto* m = new std::mutex;
+  return *m;
+}
+std::unordered_map<const void*, HaloIndexEntry>& HaloIndexCache() {
+  static auto* cache = new std::unordered_map<const void*, HaloIndexEntry>;
+  return *cache;
+}
+
+/*! \brief Upload host indices into the device buffer unless it already holds exactly this halo map. */
+void EnsureHaloIndices(unsigned long* device_indices, const unsigned long* host_indices, unsigned long points,
+                       const CGeometry* geometry) {
+  if (points == 0 || device_indices == nullptr) return;
+  std::lock_guard<std::mutex> lock(HaloIndexMutex());
+  auto& entry = HaloIndexCache()[static_cast<const void*>(device_indices)];
+  if (entry.geometry == geometry && entry.host_indices == host_indices && entry.points == points) return;
+  Kokkos::deep_copy(DeviceView<unsigned long>(device_indices, points), HostView<const unsigned long>(host_indices, points));
+  entry.geometry = geometry;
+  entry.host_indices = host_indices;
+  entry.points = points;
+}
+#endif  // HAVE_MPI
 
 /*--- Per-thread execution mode used only by an explicitly device-resident Krylov call.
  * Default values preserve the original synchronized SpMV behavior. ---*/
@@ -82,34 +117,9 @@ void KokkosGPUAwareHaloExchange(CSysVector<ScalarType>& vector, CGeometry* geome
   value_view send_values(vector.GetKokkosMPISendBuffer(), send_value_count);
   value_view recv_values(vector.GetKokkosMPIRecvBuffer(), recv_value_count);
 
-  /*--- Halo point maps are geometry metadata and do not change during Krylov iterations.
-   * Upload them only when a vector first participates in the exchange, when its
-   * device index allocation changes, or when the geometry/layout changes. ---*/
-  static std::unordered_map<const void*, HaloIndexCache> halo_index_cache;
-  auto& cache = halo_index_cache[static_cast<const void*>(&vector)];
-  const bool refresh_send =
-      cache.geometry != geometry || cache.host_send_indices != geometry->Local_Point_P2PSend ||
-      cache.device_send_indices != vector.GetKokkosMPISendIndices() || cache.send_points != send_points;
-  const bool refresh_recv =
-      cache.geometry != geometry || cache.host_recv_indices != geometry->Local_Point_P2PRecv ||
-      cache.device_recv_indices != vector.GetKokkosMPIRecvIndices() || cache.recv_points != recv_points;
-
-  if (refresh_send && send_points > 0) {
-    Kokkos::deep_copy(send_indices, HostView<const unsigned long>(geometry->Local_Point_P2PSend, send_points));
-  }
-  if (refresh_recv && recv_points > 0) {
-    Kokkos::deep_copy(recv_indices, HostView<const unsigned long>(geometry->Local_Point_P2PRecv, recv_points));
-  }
-
-  if (refresh_send || refresh_recv) {
-    cache.geometry = geometry;
-    cache.host_send_indices = geometry->Local_Point_P2PSend;
-    cache.host_recv_indices = geometry->Local_Point_P2PRecv;
-    cache.device_send_indices = vector.GetKokkosMPISendIndices();
-    cache.device_recv_indices = vector.GetKokkosMPIRecvIndices();
-    cache.send_points = send_points;
-    cache.recv_points = recv_points;
-  }
+  /*--- Halo point maps are geometry metadata: uploaded once per index buffer and geometry (EnsureHaloIndices). ---*/
+  EnsureHaloIndices(vector.GetKokkosMPISendIndices(), geometry->Local_Point_P2PSend, send_points, geometry);
+  EnsureHaloIndices(vector.GetKokkosMPIRecvIndices(), geometry->Local_Point_P2PRecv, recv_points, geometry);
 
   const auto mpi_datatype = std::is_same_v<ScalarType, float> ? MPI_FLOAT : MPI_DOUBLE;
 
@@ -236,45 +246,9 @@ void KokkosHostStagedHaloExchange(CSysVector<ScalarType>& vector,
   value_view device_send(vector.GetKokkosMPISendBuffer(), send_value_count);
   value_view device_recv(vector.GetKokkosMPIRecvBuffer(), recv_value_count);
 
-  /* Reuse the same geometry/index cache as the direct device-MPI path. */
-  static std::unordered_map<const void*, HaloIndexCache> halo_index_cache;
-  auto& cache = halo_index_cache[static_cast<const void*>(&vector)];
-
-  const bool refresh_send =
-      cache.geometry != geometry ||
-      cache.host_send_indices != geometry->Local_Point_P2PSend ||
-      cache.device_send_indices != vector.GetKokkosMPISendIndices() ||
-      cache.send_points != send_points;
-
-  const bool refresh_recv =
-      cache.geometry != geometry ||
-      cache.host_recv_indices != geometry->Local_Point_P2PRecv ||
-      cache.device_recv_indices != vector.GetKokkosMPIRecvIndices() ||
-      cache.recv_points != recv_points;
-
-  if (refresh_send && send_points > 0) {
-    Kokkos::deep_copy(
-        send_indices,
-        HostView<const unsigned long>(
-            geometry->Local_Point_P2PSend, send_points));
-  }
-
-  if (refresh_recv && recv_points > 0) {
-    Kokkos::deep_copy(
-        recv_indices,
-        HostView<const unsigned long>(
-            geometry->Local_Point_P2PRecv, recv_points));
-  }
-
-  if (refresh_send || refresh_recv) {
-    cache.geometry = geometry;
-    cache.host_send_indices = geometry->Local_Point_P2PSend;
-    cache.host_recv_indices = geometry->Local_Point_P2PRecv;
-    cache.device_send_indices = vector.GetKokkosMPISendIndices();
-    cache.device_recv_indices = vector.GetKokkosMPIRecvIndices();
-    cache.send_points = send_points;
-    cache.recv_points = recv_points;
-  }
+  /* Same index cache as the direct device-MPI path. */
+  EnsureHaloIndices(vector.GetKokkosMPISendIndices(), geometry->Local_Point_P2PSend, send_points, geometry);
+  EnsureHaloIndices(vector.GetKokkosMPIRecvIndices(), geometry->Local_Point_P2PRecv, recv_points, geometry);
 
   /*
    * Persistent host buffers per execution thread. They grow only when the halo
@@ -409,6 +383,15 @@ void KokkosHostStagedHaloExchange(CSysVector<ScalarType>& vector,
 }
 
 }  // namespace
+
+#ifdef HAVE_MPI
+/*! \brief Called by CSysVector before it frees / reallocates a device halo index buffer. */
+void KokkosHaloIndexCacheInvalidate(const void* device_indices) {
+  if (device_indices == nullptr) return;
+  std::lock_guard<std::mutex> lock(HaloIndexMutex());
+  HaloIndexCache().erase(device_indices);
+}
+#endif
 
 namespace KokkosSpMVControl {
 void Begin(bool matrix_on_device, bool input_on_device, bool output_to_host) {
