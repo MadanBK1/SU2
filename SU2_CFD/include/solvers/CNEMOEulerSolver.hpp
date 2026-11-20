@@ -105,7 +105,7 @@ protected:
   /*! \brief kind: CNEMOKokkosData::BCKind. */
   bool Device_BCResidual(CGeometry *geometry, CSolver **solver_container, CNumerics *conv_numerics,
                          CNumerics *visc_numerics, CConfig *config, unsigned short val_marker, int kind);
-  std::string Device_BCUnsupported(const CConfig *config, int kind) const;
+  std::string Device_BCUnsupported(const CConfig *config, int kind, int marker = -1) const;
   /*! \brief Make the device accumulator authoritative if allowed (see above); false -> run the stage on the host. */
   bool Device_ResidualToDevice(CGeometry *geometry, const CConfig *config);
   /*! \brief Download the device accumulator into LinSysRes / Jacobian if it is authoritative. */
@@ -137,6 +137,16 @@ protected:
   bool Device_ResidentActive() const;
   /*! \brief Device-resident MPI comms: download the send rows of the group, host comms, upload the receive rows. */
   void Device_StagedComms(CGeometry *geometry, const CConfig *config, MPI_QUANTITIES comm, int group);
+
+  /*!
+   * \brief Device (Kokkos) Step 8: NS viscous residual (CAvgGradCorrected_NEMO edges) into the device accumulator.
+   *        False -> run the host Viscous_Residual. A/B with SU2_KOKKOS_STAGE_VERIFY=1.
+   */
+  bool Device_ViscousResidual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
+                              CConfig *config, unsigned short iMesh);
+  std::string Device_ViscousUnsupported(const CConfig *config, unsigned short iMesh) const;
+  bool viscousHostOnly = false; /*!< \brief A/B rerun of the host viscous residual. */
+  const CConfig *kokkosConfig = nullptr; /*!< \brief Config of the run (deferred host work in SyncHostData). */
 
   /*! \brief Host implementations (unchanged CPU code), used by the fallback and the A/B verification. */
   void SetTime_Step_Host(CGeometry *geometry, CSolver **solver_container, CConfig *config,

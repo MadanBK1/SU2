@@ -154,6 +154,13 @@ class CNEMOKokkosData {
     View1D<double> UnderRelax;             /*!< (nPoint) UnderRelaxation */
     View1D<unsigned long> bndPoints;       /*!< unique marker-vertex points (EnsureHostBoundaryPrimitive) */
     View2D<double> bndStage;               /*!< (nBndPoints, nPrimVar) staging */
+
+    /*--- Step 8 (NS). LamVisc / ThermalCond / ThermalCondVe above hold the device transport properties. ---*/
+    View2D<double> DiffCoeff, Enthalpys;   /*!< (nPoint, nSpecies) CNEMONSVariable DiffusionCoeff / Enthalpys */
+    View2D<double> TransDP;                /*!< (nPoint, 2) gas Density / Pressure the transport of the point reads */
+    View1D<double> BStateVisc;             /*!< far-field viscous state: Cvve | dTdU | dTvedU | gradient (node_infty) */
+    View1D<unsigned long> viscWallPoints;  /*!< unique points of the viscous-wall markers (forces / heat flux) */
+    View2D<double> viscWallStage;          /*!< (n, nPrimVarGrad*nDim + 3 + 2*nSpecies) staging */
   };
 
   Geometry geo;
@@ -190,6 +197,17 @@ class CNEMOKokkosData {
   /*! \brief Host gas-state replay for one point after SetPrimVar() (see ReplayHostGasState). */
   void ReplayGasState(unsigned long iPoint, bool full) const;
 
+  /*!
+   * \brief Step 8: NS transport properties are computed by the device SetPrimVar (CNEMONSVariable::SetTransportProperties
+   *        on the device: diffusion coefficients, viscosity, k_tr, k_ve, species enthalpies, Primitive[LAM_VISC]), for
+   *        the WILKE / GUPTAYOS / SUTHERLAND models of a viscous CSU2TCLib (SU2_KOKKOS_NEMO_HOST=transport: host).
+   */
+  bool DeviceTransport() const { return deviceTransport; }
+  /*! \brief Device transport arrays == host ones (computed by the last SetPrimVar), read by dt / viscous / walls. */
+  bool TransportOnDevice() const { return transportDeviceValid; }
+  /*! \brief Host replay of the gas state + transport members after the last point (CPU loop end state). */
+  void ReplayTransportLastPoint();
+
   /*! \brief Round-trip check: device copies == host data (bitwise). Returns number of mismatches. */
   unsigned long SelfCheck(CGeometry* geometry) const;
 
@@ -211,7 +229,12 @@ class CNEMOKokkosData {
   /*! \brief The device Primitive is what the last SetPrimVar() produced (== host Primitive for the first
    *         nPrimVarGrad columns). Cleared when the host overwrites Primitive behind our back (A/B verify). */
   bool PrimitiveOnDevice() const { return primDeviceValid; }
-  void InvalidatePrimitive() { primDeviceValid = false; secDeviceValid = false; consDeviceValid = false; }
+  void InvalidatePrimitive() {
+    primDeviceValid = false;
+    secDeviceValid = false;
+    consDeviceValid = false;
+    transportDeviceValid = false;
+  }
   /*! \brief HtoD of the host Primitive only (no secondaries), marks it valid. */
   void UploadPrimitiveOnly();
 
@@ -267,7 +290,8 @@ class CNEMOKokkosData {
    *        its results, reruns the unchanged host code and compares. The run continues with the host results.
    */
   static bool StageVerifyEnabled();
-  enum Stage { ST_GRADIENT = 0, ST_LIMITER, ST_TIMESTEP, ST_MAXEIG, ST_UPWIND, ST_SOURCE, ST_BC, ST_RESSYNC, N_STAGES };
+  enum Stage { ST_GRADIENT = 0, ST_LIMITER, ST_TIMESTEP, ST_MAXEIG, ST_UPWIND, ST_SOURCE, ST_BC, ST_RESSYNC, ST_VISCOUS,
+               N_STAGES };
   /*! \brief Compare host (CPU) result vs a copy of the device result over n entries (row-major, ncol columns,
    *         relative difference normalised per column); accumulates per stage. */
   void StageCompare(Stage s, const char* name, const double* cpu, const double* dev, size_t n, size_t ncol = 1);
@@ -338,18 +362,27 @@ class CNEMOKokkosData {
    */
   SourceResult ComputeSourceResidual(const SourceParams& p, bool uploadInputs);
 
-  enum class BCKind { SYMMETRY = 0, FAR_FIELD, OUTLET, SUPERSONIC_INLET, SUPERSONIC_OUTLET };
+  enum class BCKind { SYMMETRY = 0, FAR_FIELD, OUTLET, SUPERSONIC_INLET, SUPERSONIC_OUTLET, ISOTHERMAL, HEAT_FLUX };
   struct BCParams {
     BCKind kind = BCKind::SYMMETRY;
     int marker = 0;
     UpwindParams upw;        /*!< scheme, implicit, Minf, nElNumerics of the boundary numerics (same type as CONV_TERM) */
     double P_Exit = 0.0;     /*!< OUTLET: non-dimensional back pressure */
     bool downloadCharac = false; /*!< OUTLET: copy the marker's CharacPrimVar rows to the host */
+    /*--- Step 8. ---*/
+    bool viscous = false;    /*!< FAR_FIELD: viscous contribution (CAvgGrad_NEMO with node_infty, reflected point) */
+    double Twall = 0.0;      /*!< ISOTHERMAL: config Isothermal_Temperature (as the CPU, not non-dimensionalised) */
+    bool catalytic = false, supercatalytic = false; /*!< ISOTHERMAL: CATALYTIC_WALL marker, SUPERCATALYTIC_WALL */
+    double Yst[su2kokkos::nemo::MAXNS] = {0.0}; /*!< ISOTHERMAL supercatalytic: wall composition */
+    double catEff = 0.0;     /*!< ISOTHERMAL partially catalytic: CATALYTIC_EFFICIENCY */
+    double heatFlux = 0.0;   /*!< HEAT_FLUX: non-dimensional (integrated: per area) wall heat flux */
   };
   /*! \brief Far-field (node_infty) or supersonic-inlet state, uploaded only when it changes (host cache). */
   struct BoundaryState {
     const double *V = nullptr, *eve = nullptr, *dPdU = nullptr;
     double Gamma = 0.0;
+    /*--- FAR_FIELD viscous part: node_infty Cvve, dTdU, dTvedU (implicit), gradient (nPrimVarGrad x nDim). ---*/
+    const double *Cvve = nullptr, *dTdU = nullptr, *dTvedU = nullptr, *grad = nullptr;
   };
   struct BCResult {
     long lastSubsonic = -1;          /*!< OUTLET: last domain vertex (CPU order) on the subsonic branch, -1 if none */
@@ -367,6 +400,24 @@ class CNEMOKokkosData {
    * \param[in] uploadInputs - Re-upload Solution, Primitive + secondaries, sensor from the host (A/B isolation).
    */
   BCResult ComputeBCResidual(const BCParams& p, const BoundaryState& bstate, bool uploadInputs);
+
+  /*====================== Step 8: viscous residual (NS) ======================*/
+
+  struct ViscousParams {
+    bool implicit = false;
+    int nElNumerics = 0; /*!< CNEMONumerics::nEl (config IONIZATION) */
+  };
+  /*!
+   * \brief Device CNEMONSSolver::Viscous_Residual (CAvgGradCorrected_NEMO on every edge, CheckResidualNaNs, atomic
+   *        LinSysRes Subtract/AddBlock + Jacobian UpdateBlocks into the device accumulator, edge order on Serial).
+   *        Reads the device Primitive, secondaries, Gradient_Primitive, transport properties.
+   * \param[in] uploadInputs - Re-upload Primitive + secondaries, gradient and transport from the host (A/B isolation).
+   */
+  void ComputeViscousResidual(const ViscousParams& p, bool uploadInputs);
+  /*! \brief Re-upload the host NS transport arrays (host transport / A/B isolation). */
+  void UploadTransport();
+  /*! \brief Points of the viscous-wall markers whose gradient / transport rows Friction_Forces reads (resident). */
+  void SetViscousWallMarkers(const std::vector<int>& markers);
   /*! \brief The AUSM+M sensor on the device is stale (set false by SetPrimVar, true when uploaded). */
   bool SensorOnDevice() const { return sensorValid; }
   /*! \brief Copy of the host Non_Physical / Non_Physical_Counter (A/B snapshot), and restore. */
@@ -407,7 +458,8 @@ class CNEMOKokkosData {
   void EnsureDevice(Group g);
   void MarkDeviceWritten(Group g);
   void MarkHostWritten(Group g) { if (resident) residency[g] = Residency::HOST; }
-  /*! \brief DtoH of the Primitive rows of every marker-vertex point (force / traction computations). */
+  /*! \brief DtoH of the Primitive rows of every marker-vertex point (force / traction computations), and (NS) of the
+   *         gradient + transport rows of the viscous-wall points (Friction_Forces: shear stress, heat flux). */
   void EnsureHostBoundaryPrimitive();
   void EnsureHostAll();
   /*! \brief One device Gamma value (host replay of BC_Outlet's solver Gamma in device-resident mode). */
@@ -450,7 +502,7 @@ class CNEMOKokkosData {
     double h2d = 0, d2h = 0, bytes_h2d = 0, bytes_d2h = 0;
     unsigned long calls = 0;
   };
-  mutable SyncPerf syncPerf[N_GROUPS + 1]; /*!< + boundary primitive */
+  mutable SyncPerf syncPerf[N_GROUPS + 1]; /*!< + boundary primitive (+ viscous-wall gradient / transport) */
   struct UpdatePerf {
     double prepare = 0, complete = 0, explicitUpd = 0, oldSol = 0, norm = 0;
     unsigned long nPrepare = 0, nComplete = 0, nExplicit = 0, nOldSol = 0, nNorm = 0;
@@ -509,6 +561,11 @@ class CNEMOKokkosData {
   double* hostLinSysRes = nullptr;      /*!< host storage of LinSysRes / LinSysSol (resident mode) */
   double* hostLinSysSol = nullptr;
   std::vector<unsigned long> h_bndPoints;
+  /*--- Step 8. ---*/
+  bool deviceTransport = false, transportDeviceValid = false, bndViscHost = false;
+  std::vector<unsigned long> h_viscWallPoints;
+  std::vector<double> bstateViscCache;
+  void ComputeTransportStage(); /*!< DP carry + transport kernel (end of SetPrimVar) */
   void DownloadGroup(Group g);
   void UploadGroup(Group g);
   void PoisonGroup(Group g);

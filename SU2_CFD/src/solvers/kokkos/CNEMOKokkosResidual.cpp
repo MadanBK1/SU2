@@ -40,8 +40,10 @@
 #include "../../../../Common/include/CConfig.hpp"
 #include "../../../../Common/include/geometry/CGeometry.hpp"
 #include "../../../include/variables/CNEMOEulerVariable.hpp"
+#include "../../../include/variables/CNEMONSVariable.hpp"
 
 #include "CNEMOKokkosAUSM.hpp"
+#include "CNEMOKokkosViscous.hpp"
 
 namespace {
 
@@ -54,6 +56,17 @@ struct ResArgs {
   unsigned long nPointDomain = 0;
   bool frozen = false, monoatomic = false, vtLimiting = false;
   double P_Exit = 0.0;
+  /*--- Step 8: viscous far-field part and NS walls. ---*/
+  nemo_visc::ViscConst vc;
+  View3D<double> grad;
+  View2D<double> coord, Ds, Uold, trunc;
+  View1D<double> mu, k, kve, bstateVisc;
+  View1D<long> vtxNormalNeighbor;
+  View1D<unsigned long> rowPtr, colInd;
+  int eddyIdx = 0;
+  bool viscous = false, catalytic = false, supercat = false, writeWallState = false;
+  double Twall = 0.0, catEff = 0.0, heatFlux = 0.0, RuSI = 0.0;
+  double Yst[MAXNS] = {0.0};
 };
 
 /*! \brief res_i += alpha * block (CSysVector::AddBlock / SubtractBlock semantics: vec = vec + alpha*block). */
@@ -79,6 +92,235 @@ KOKKOS_INLINE_FUNCTION bool ResidualNaN(bool implicit, int nVar, const double* r
   }
   return err;
 }
+
+/*! \brief CSysMatrix::DeleteValsRowi(i, row) on the device accumulator. */
+KOKKOS_INLINE_FUNCTION void DeleteValsRowi(const ResArgs& r, unsigned long i, int row) {
+  const unsigned long nv = r.a.nVar;
+  for (auto index = r.rowPtr(i); index < r.rowPtr(i + 1); index++) {
+    for (unsigned long iVar = 0; iVar < nv; iVar++) r.a.jac(index * nv * nv + row * nv + iVar) = 0.0;
+    if (r.colInd(index) == i) r.a.jac(index * nv * nv + row * nv + row) = 1.0;
+  }
+}
+
+/*! \brief SetVelocity_Old(i, 0) and the momentum rows of LinSysRes / Res_TruncError (wall BCs). */
+KOKKOS_INLINE_FUNCTION void WallMomentumRows(const ResArgs& r, unsigned long iPoint, int ND) {
+  const int nSpecies = r.a.ns;
+  const int RHO = nSpecies + ND + 3;
+  for (int iDim = 0; iDim < ND; iDim++) {
+    if (r.writeWallState) r.Uold(iPoint, nSpecies + iDim) = 0.0 * r.a.V(iPoint, RHO);
+  }
+  for (int iDim = 0; iDim < ND; iDim++) r.a.res(iPoint, nSpecies + iDim) = 0.0;
+  if (r.writeWallState)
+    for (int iDim = 0; iDim < ND; iDim++) r.trunc(iPoint, nSpecies + iDim) = 0.0;
+}
+
+/*!
+ * \brief CNEMONSSolver::BC_Isothermal_Wall: BC_IsothermalNonCatalytic_Wall then (catalytic marker) the species /
+ *        energy part of BC_IsothermalCatalytic_Wall, fused per vertex (each vertex reads other points but writes only
+ *        the row / diagonal block of its own point, so the per-entry order equals the CPU's two marker loops).
+ */
+template <int ND>
+void KernelIsothermal(const ResArgs& r, unsigned long v0, unsigned long v1) {
+  Kokkos::parallel_for(
+      "NEMO::BC_Isothermal_Wall", Kokkos::RangePolicy<exec_space>(v0, v1), KOKKOS_LAMBDA(const unsigned long kv) {
+        const UpwArgs& a = r.a;
+        const NEMOGasTables& g = a.gas;
+        const int nSpecies = a.ns, nVar = a.nVar, nDim = ND;
+        const NEMOPrimIndices idx(nSpecies, ND);
+        const bool implicit = a.implicit;
+        const auto iPoint = r.vtxNode(kv);
+        if (iPoint >= r.nPointDomain) return;
+
+        /*====================== BC_IsothermalNonCatalytic_Wall ======================*/
+        const double C = 5;
+        const double Twall = r.Twall;
+        double Normal[ND], UnitNormal[ND];
+        for (int iDim = 0; iDim < nDim; iDim++) Normal[iDim] = r.vtxNormal(kv, iDim);
+        double sq = 0.0;
+        for (int iDim = 0; iDim < nDim; ++iDim) sq += Normal[iDim] * Normal[iDim];
+        const double Area = Kokkos::sqrt(sq);
+        for (int iDim = 0; iDim < nDim; iDim++) UnitNormal[iDim] = Normal[iDim] / Area;
+
+        const auto Point_Normal = static_cast<unsigned long>(r.vtxNormalNeighbor(kv));
+        double d2 = 0.0;
+        for (int iDim = 0; iDim < nDim; iDim++) {
+          const double dd = r.coord(iPoint, iDim) - r.coord(Point_Normal, iDim);
+          d2 += dd * dd;
+        }
+        const double dist_ij = Kokkos::sqrt(d2);
+
+        double Res_Visc[MAXNV];
+        WallMomentumRows(r, iPoint, ND);
+        for (int iVar = 0; iVar < nVar; iVar++) Res_Visc[iVar] = 0.0;
+
+        const double Ti = a.V(iPoint, idx.T());
+        const double Tj = a.V(Point_Normal, idx.T());
+        const double Tvei = a.V(iPoint, idx.TVE());
+        const double Tvej = a.V(Point_Normal, idx.TVE());
+        const double ktr = r.k(iPoint);
+        const double kve = r.kve(iPoint);
+
+        Res_Visc[nSpecies + nDim] = ((ktr * (Ti - Tj) + kve * (Tvei - Tvej)) +
+                                     (ktr * (Twall - Ti) + kve * (Twall - Tvei)) * C) * Area / dist_ij;
+        Res_Visc[nSpecies + nDim + 1] = (kve * (Tvei - Tvej) + kve * (Twall - Tvei) * C) * Area / dist_ij;
+
+        double Jacobian_i[MAXNV * MAXNV];
+        if (implicit) {
+          for (int q = 0; q < nVar * nVar; q++) Jacobian_i[q] = 0.0;
+          const double* dTdU = &r.dTdU(iPoint, 0);
+          const double* dTvedU = &r.dTvedU(iPoint, 0);
+          double theta = 0.0;
+          for (int iDim = 0; iDim < nDim; ++iDim) theta += UnitNormal[iDim] * UnitNormal[iDim];
+          for (int iVar = 0; iVar < nVar; iVar++) {
+            Jacobian_i[(nSpecies + nDim) * nVar + iVar] =
+                -(ktr * theta / dist_ij * dTdU[iVar] + kve * theta / dist_ij * dTvedU[iVar]) * Area;
+            Jacobian_i[(nSpecies + nDim + 1) * nVar + iVar] = -kve * theta / dist_ij * dTvedU[iVar] * Area;
+          }
+        }
+
+        AddRow(a.res, iPoint, nVar, Res_Visc, -1.0);
+        if (implicit) {
+          AddDiag(a, iPoint, Jacobian_i, -1.0);
+          /*--- CPU: rows 1..nDim (not the momentum rows nSpecies..), reproduced. ---*/
+          for (int iVar = 1; iVar <= nDim; iVar++) DeleteValsRowi(r, iPoint, iVar);
+        }
+
+        if (!r.catalytic) return;
+
+        /*====================== BC_IsothermalCatalytic_Wall (species / energy) ======================*/
+        const double RuSI = r.RuSI;
+        const double Ru = 1000.0 * RuSI;
+        const auto jPoint = Point_Normal;
+        const double dij = dist_ij;
+        for (int iVar = 0; iVar < nVar; iVar++) Res_Visc[iVar] = 0.0;
+
+        const double* Vi = &a.V(iPoint, 0);
+        const double* Vj = &a.V(jPoint, 0);
+        const double* Di = &r.Ds(iPoint, 0);
+        const double* eves = &a.eves(iPoint, 0);
+        double hs[MAXNS];
+        ComputeSpeciesEnthalpy(g, Vi[idx.T()], Vi[idx.TVE()], eves, hs);
+        const double rho = Vi[idx.RHO()];
+        const int RHO_INDEX = idx.RHO();
+
+        if (r.supercat) {
+          const double* Yst = r.Yst;
+          double dYdn = 0.0, SdYdn = 0.0;
+          for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+            dYdn = (Yst[iSpecies] - Vj[iSpecies] / Vj[RHO_INDEX]) / dij;
+            SdYdn += rho * Di[iSpecies] * dYdn;
+          }
+          for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+            dYdn = (Yst[iSpecies] - Vj[iSpecies] / Vj[RHO_INDEX]) / dij;
+            Res_Visc[iSpecies] = -(-rho * Di[iSpecies] * dYdn + Yst[iSpecies] * SdYdn) * Area;
+          }
+
+          if (implicit) {
+            const double* dTdU = &r.dTdU(iPoint, 0);
+            const double* dTvedU = &r.dTvedU(iPoint, 0);
+            const double* Cvve = &r.Cvves(iPoint, 0);
+            double dVdU[MAXNV * MAXNV], Jj[MAXNV * MAXNV];
+#define DV(rr, cc) dVdU[(rr) * nVar + (cc)]
+#define JJ(rr, cc) Jj[(rr) * nVar + (cc)]
+#define JI(rr, cc) Jacobian_i[(rr) * nVar + (cc)]
+            for (int q = 0; q < nVar * nVar; q++) dVdU[q] = Jj[q] = Jacobian_i[q] = 0.0;
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+              for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) DV(iSpecies, jSpecies) += -1.0 / rho * Yst[iSpecies];
+              DV(iSpecies, iSpecies) += 1.0 / rho;
+            }
+            for (int iVar = 0; iVar < nVar; iVar++) {
+              DV(nSpecies + nDim, iVar) = dTdU[iVar];
+              DV(nSpecies + nDim + 1, iVar) = dTvedU[iVar];
+            }
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+              for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++)
+                JJ(iSpecies, jSpecies) += -Yst[iSpecies] * rho * Di[jSpecies] / dij;
+              JJ(iSpecies, iSpecies) += rho * Di[iSpecies] / dij - SdYdn;
+            }
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+              for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++)
+                JJ(nSpecies + nDim, iSpecies) += JJ(jSpecies, iSpecies) * hs[iSpecies];
+              JJ(nSpecies + nDim, nSpecies + nDim) += Res_Visc[iSpecies] / Area * (Ru / g.MolarMass(iSpecies) + g.Cvtrs(iSpecies));
+              JJ(nSpecies + nDim, nSpecies + nDim + 1) += Res_Visc[iSpecies] / Area * Cvve[iSpecies];
+            }
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+              for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++)
+                JJ(nSpecies + nDim + 1, iSpecies) += JJ(jSpecies, iSpecies) * eves[iSpecies];
+              JJ(nSpecies + nDim + 1, nSpecies + nDim + 1) += Res_Visc[iSpecies] / Area * Cvve[iSpecies];
+            }
+            for (int iVar = 0; iVar < nVar; iVar++)
+              for (int jVar = 0; jVar < nVar; jVar++)
+                for (int kVar = 0; kVar < nVar; kVar++) JI(iVar, jVar) += JJ(iVar, kVar) * DV(kVar, jVar) * Area;
+#undef DV
+#undef JJ
+#undef JI
+            /*--- Jacobian.SubtractBlock(iPoint, iPoint, Jacobian_i) ---*/
+            AddDiag(a, iPoint, Jacobian_i, -1.0);
+          }
+        } else {
+          /*--- Partially catalytic (explicit only, checked by the caller). ---*/
+          const double Tw = Twall;
+          const double gam = r.catEff;
+          const double factor = gam * rho * Kokkos::sqrt(RuSI * Tw / 2 / g.Pi) * Area;
+          for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+            const int Index = g.CatRecomb(iSpecies, 1);
+            Res_Visc[iSpecies] = double(g.CatRecomb(iSpecies, 0)) * factor * Vi[Index] / Vi[RHO_INDEX] *
+                                 Kokkos::sqrt(1 / g.MolarMass(Index));
+          }
+        }
+
+        for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+          Res_Visc[nSpecies + nDim] += (Res_Visc[iSpecies] * hs[iSpecies]) * Area;
+          Res_Visc[nSpecies + nDim + 1] += (Res_Visc[iSpecies] * eves[iSpecies]) * Area;
+        }
+        AddRow(a.res, iPoint, nVar, Res_Visc, -1.0);
+      });
+}
+
+/*! \brief CNEMONSSolver::BC_HeatFluxNonCatalytic_Wall. */
+template <int ND>
+void KernelHeatFlux(const ResArgs& r, unsigned long v0, unsigned long v1) {
+  Kokkos::parallel_for(
+      "NEMO::BC_HeatFlux_Wall", Kokkos::RangePolicy<exec_space>(v0, v1), KOKKOS_LAMBDA(const unsigned long kv) {
+        const UpwArgs& a = r.a;
+        const int nSpecies = a.ns, nVar = a.nVar, nDim = ND;
+        const NEMOPrimIndices idx(nSpecies, ND);
+        const auto iPoint = r.vtxNode(kv);
+        if (iPoint >= r.nPointDomain) return;
+
+        const double pcontrol = 1.0;
+        double Normal[ND];
+        for (int iDim = 0; iDim < nDim; iDim++) Normal[iDim] = r.vtxNormal(kv, iDim);
+        double sq = 0.0;
+        for (int iDim = 0; iDim < nDim; ++iDim) sq += Normal[iDim] * Normal[iDim];
+        const double Area = Kokkos::sqrt(sq);
+
+        double Res_Visc[MAXNV];
+        for (int iVar = 0; iVar < nVar; iVar++) Res_Visc[iVar] = 0.0;
+
+        double dTdn = 0.0;
+        double dTvedn = 0.0;
+        for (int iDim = 0; iDim < nDim; iDim++) {
+          dTdn += r.grad(iPoint, idx.T(), iDim) * Normal[iDim];
+          dTvedn += r.grad(iPoint, idx.TVE(), iDim) * Normal[iDim];
+        }
+        const double ktr = r.k(iPoint);
+        const double kve = r.kve(iPoint);
+
+        Res_Visc[nSpecies + nDim] += pcontrol * (ktr * dTdn + kve * dTvedn) + r.heatFlux * Area;
+        Res_Visc[nSpecies + nDim + 1] += pcontrol * (kve * dTvedn) + r.heatFlux * Area;
+
+        WallMomentumRows(r, iPoint, ND);
+        AddRow(a.res, iPoint, nVar, Res_Visc, -1.0);
+
+        if (a.implicit) {
+          for (int iVar = nSpecies; iVar < nSpecies + nDim; iVar++) DeleteValsRowi(r, iPoint, iVar);
+        }
+      });
+}
+
 
 /*!
  * \brief Source kernel: CNEMOEulerSolver::Source_Residual loop body (monoatomic / frozen / implicit options,
@@ -370,6 +612,44 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
 
         AddRow(a.res, iPoint, nVar, Flux, 1.0);
         if (a.implicit) AddDiag(a, iPoint, Jacobian_i, 1.0);
+
+        /*--- Step 8: viscous contribution of BC_Far_Field (CAvgGrad_NEMO, node_infty, reflected normal neighbour;
+         *    transport properties of iPoint on both sides). ---*/
+        if (r.viscous) {
+          using namespace nemo_visc;
+          const auto Point_Normal = static_cast<unsigned long>(r.vtxNormalNeighbor(k));
+          double Coord_i[ND], Coord_Reflected[ND];
+          for (int iDim = 0; iDim < nDim; iDim++) {
+            Coord_i[iDim] = r.coord(iPoint, iDim);
+            Coord_Reflected[iDim] = 2 * r.coord(iPoint, iDim) - r.coord(Point_Normal, iDim);
+          }
+          const double* bv = &r.bstateVisc(0);
+          const int ofsGrad = nSpecies + 2 * nVar;
+          ViscPoint pi, pj;
+          pi.V = V_i;
+          pi.G = &r.grad(iPoint, 0, 0);
+          pi.eve = eve_i;
+          pi.cvve = &r.Cvves(iPoint, 0);
+          pi.dTdU = a.implicit ? &r.dTdU(iPoint, 0) : zero;
+          pi.dTvedU = a.implicit ? &r.dTvedU(iPoint, 0) : zero;
+          pi.Ds = &r.Ds(iPoint, 0);
+          pi.mu = r.mu(iPoint);
+          pi.eddy = a.V(iPoint, r.eddyIdx);
+          pi.k = r.k(iPoint);
+          pi.kve = r.kve(iPoint);
+          pj = pi;
+          pj.V = Vb;
+          pj.G = bv + ofsGrad;
+          pj.eve = eveb;
+          pj.cvve = bv;
+          pj.dTdU = a.implicit ? bv + nSpecies : zero;
+          pj.dTvedU = a.implicit ? bv + nSpecies + nVar : zero;
+
+          double FluxV[MAXNV], JiV[MAXNV * MAXNV], JjV[MAXNV * MAXNV];
+          AvgGradResidual<ND>(r.vc, false, Coord_i, Coord_Reflected, Normal, pi, pj, FluxV, JiV, JjV);
+          AddRow(a.res, iPoint, nVar, FluxV, -1.0);
+          if (a.implicit) AddDiag(a, iPoint, JiV, -1.0);
+        }
       },
       Kokkos::Max<long>(lastSub));
 }
@@ -503,10 +783,55 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   BCResult out;
   if (!accOnDevice) SU2_MPI::Error("CNEMOKokkosData: BC stage without a device accumulator.", CURRENT_FUNCTION);
 
-  const bool flux = (p.kind != BCKind::SYMMETRY);
+  const bool wall = (p.kind == BCKind::ISOTHERMAL || p.kind == BCKind::HEAT_FLUX);
+  const bool flux = (p.kind != BCKind::SYMMETRY) && !wall;
   const bool ausmPlusM = flux && (p.upw.scheme == UpwindScheme::AUSMPLUSM);
   const bool needState = (p.kind == BCKind::FAR_FIELD || p.kind == BCKind::OUTLET || p.kind == BCKind::SUPERSONIC_INLET);
+  const bool viscFar = (p.kind == BCKind::FAR_FIELD) && p.viscous;
   EnsureInputsOnDevice(uploadInputs, p.kind == BCKind::SYMMETRY || p.kind == BCKind::OUTLET, ausmPlusM);
+
+  /*--- Step 8: NS inputs (gradient, transport), host-authoritative mode only (resident: always on the device). ---*/
+  if (wall || viscFar) {
+    if (!viscousVars) SU2_MPI::Error("CNEMOKokkosData: viscous BC without NS variables.", CURRENT_FUNCTION);
+    const bool needGrad = viscFar || p.kind == BCKind::HEAT_FLUX;
+    if (needGrad && (uploadInputs || !gradPrimValid)) {
+      if (ResidentActive()) SU2_MPI::Error("CNEMOKokkosData: device-resident gradient not valid.", CURRENT_FUNCTION);
+      AllocateGradients();
+      Kokkos::deep_copy(st.GradPrim, Kokkos::View<const double***, Kokkos::LayoutRight, HostSpace, Unmanaged>(
+                                         nodes->GetGradient_Primitive().data(), nPoint, nPrimVarGrad, nDim));
+      P.bytes_h2d += double(st.GradPrim.size()) * sizeof(double);
+      gradPrimValid = true;
+      if (!separateRecGradient) gradRecValid = true;
+    }
+    if (uploadInputs || !transportDeviceValid) {
+      if (ResidentActive()) SU2_MPI::Error("CNEMOKokkosData: device-resident transport not valid.", CURRENT_FUNCTION);
+      UploadTransport();
+    }
+    /*--- Host-authoritative mode: the caller updates the host Solution_Old / Res_TruncError rows itself. ---*/
+    if (wall && ResidentActive()) {
+      EnsureDevice(G_SOLUTION_OLD);
+      EnsureDevice(G_TRUNCERR);
+    }
+  }
+  if (viscFar) {
+    /*--- node_infty Cvve | dTdU | dTvedU | gradient, uploaded when it changes (constant in practice). ---*/
+    const size_t ng = size_t(nPrimVarGrad) * nDim;
+    const size_t n = size_t(nSpecies) + 2 * size_t(nVar) + ng;
+    std::vector<double> h(n, 0.0);
+    std::copy(bs.Cvve, bs.Cvve + nSpecies, h.begin());
+    if (p.upw.implicit) {
+      std::copy(bs.dTdU, bs.dTdU + nVar, h.begin() + nSpecies);
+      std::copy(bs.dTvedU, bs.dTvedU + nVar, h.begin() + nSpecies + nVar);
+    }
+    std::copy(bs.grad, bs.grad + ng, h.begin() + nSpecies + 2 * nVar);
+    if (st.BStateVisc.size() != n) st.BStateVisc = View1D<double>("NEMO::BoundaryStateViscous", n);
+    if (uploadInputs || bstateViscCache.size() != n ||
+        std::memcmp(h.data(), bstateViscCache.data(), n * sizeof(double)) != 0) {
+      Kokkos::deep_copy(st.BStateVisc, Kokkos::View<const double*, HostSpace, Unmanaged>(h.data(), n));
+      bstateViscCache = h;
+      P.bytes_h2d += double(n) * sizeof(double);
+    }
+  }
 
   if (needState) {
     /*--- V | eve | dPdU | Gamma, uploaded only when it differs from the cached copy (constant in practice). ---*/
@@ -558,6 +883,44 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   r.bstate = needState ? st.BState : View1D<double>();
   r.nPointDomain = geo.nPointDomain;
   r.P_Exit = p.P_Exit;
+  /*--- Step 8. ---*/
+  r.viscous = viscFar;
+  if (wall || viscFar) {
+    r.vc.gas = gas;
+    r.vc.ns = nSpecies;
+    r.vc.nVar = nVar;
+    r.vc.nPrimVar = nPrimVar;
+    r.vc.nPrimVarGrad = nPrimVarGrad;
+    r.vc.nHeavy = nSpecies - p.upw.nElNumerics;
+    r.vc.implicit = p.upw.implicit;
+    r.vc.Ru = 1000.0 * UNIVERSAL_GAS_CONSTANT;
+    r.grad = st.GradPrim;
+    r.coord = geo.coord;
+    r.Ds = st.DiffCoeff;
+    r.mu = st.LamVisc;
+    r.k = st.ThermalCond;
+    r.kve = st.ThermalCondVe;
+    r.Cvves = st.Cvves;
+    r.dTdU = st.dTdU;
+    r.dTvedU = st.dTvedU;
+    r.bstateVisc = viscFar ? st.BStateVisc : View1D<double>();
+    r.vtxNormalNeighbor = geo.vtx_normal_neighbor;
+    r.rowPtr = geo.row_ptr;
+    r.colInd = geo.col_ind;
+    r.eddyIdx = nSpecies + nDim + 9;
+    r.catalytic = p.catalytic;
+    r.supercat = p.supercatalytic;
+    for (int s2 = 0; s2 < nSpecies; s2++) r.Yst[s2] = p.Yst[s2];
+    r.Twall = p.Twall;
+    r.catEff = p.catEff;
+    r.heatFlux = p.heatFlux;
+    r.RuSI = UNIVERSAL_GAS_CONSTANT;
+    r.writeWallState = wall && ResidentActive();
+    if (r.writeWallState) {
+      r.Uold = st.Solution_Old;
+      r.trunc = st.TruncErr;
+    }
+  }
 
   /*--- Marker range (host copy of marker_ptr cached on first use). ---*/
   if (h_markerPtr.empty()) {
@@ -567,7 +930,13 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   const unsigned long v0 = h_markerPtr[p.marker], v1 = h_markerPtr[p.marker + 1];
 
   long lastSub = -1;
-  if (!flux) {
+  if (p.kind == BCKind::ISOTHERMAL) {
+    if (nDim == 2) KernelIsothermal<2>(r, v0, v1);
+    else KernelIsothermal<3>(r, v0, v1);
+  } else if (p.kind == BCKind::HEAT_FLUX) {
+    if (nDim == 2) KernelHeatFlux<2>(r, v0, v1);
+    else KernelHeatFlux<3>(r, v0, v1);
+  } else if (!flux) {
     if (nDim == 2) KernelSymmetry<2>(r, v0, v1);
     else KernelSymmetry<3>(r, v0, v1);
   } else {
@@ -577,6 +946,10 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   Kokkos::fence();
   P.kernel += timer.seconds();
   timer.reset();
+  if (r.writeWallState) {
+    MarkDeviceWritten(G_SOLUTION_OLD);
+    MarkDeviceWritten(G_TRUNCERR);
+  }
 
   if (p.kind == BCKind::OUTLET) {
     out.lastSubsonic = (lastSub >= long(v0)) ? lastSub - long(v0) : -1;
@@ -680,7 +1053,7 @@ struct PrepareFunctor {
 struct ExplicitFunctor {
   using value_type = RR;
   View1D<double> vol, pvol, dt;
-  View2D<double> res, trunc, U;
+  View2D<double> res, trunc, U, Uold;
   int nVar = 0;
 
   KOKKOS_INLINE_FUNCTION void init(value_type& v) const { RRInit(v); }
@@ -690,7 +1063,9 @@ struct ExplicitFunctor {
     const double Delta = dt(iPoint) / Vol;
     for (int iVar = 0; iVar < nVar; iVar++) {
       const double Res = res(iPoint, iVar) + trunc(iPoint, iVar);
-      U(iPoint, iVar) += -Res * Delta;
+      /*--- CVariable::AddSolution: Solution = Solution_Old + du (Solution_Old differs from Solution where the NS
+       *    wall BCs zeroed its velocity, SetVelocity_Old). ---*/
+      U(iPoint, iVar) = Uold(iPoint, iVar) + -Res * Delta;
       RRAdd(v, iPoint, iVar, Res);
     }
   }
@@ -741,6 +1116,7 @@ void CNEMOKokkosData::ActivateResident() {
   /*--- Device copies of the accumulator inputs that SetPrimVar's previous uploads may have left: none are trusted. ---*/
   primDeviceValid = secDeviceValid = consDeviceValid = false;
   gradPrimValid = gradRecValid = limValid = sensorValid = false;
+  transportDeviceValid = bndViscHost = false;
 }
 
 void CNEMOKokkosData::DownloadGroup(Group g) {
@@ -748,6 +1124,9 @@ void CNEMOKokkosData::DownloadGroup(Group g) {
   Kokkos::Timer timer;
   double b = 0.0;
   const auto nd = geo.nPointDomain;
+  auto as2d = [&](const View1D<double>& v) {
+    return Kokkos::View<double**, Kokkos::LayoutRight, mem_space, Unmanaged>(v.data(), v.size(), 1);
+  };
   auto rows = [&](double* host, const auto& d, size_t n) {
     if (d.size() == 0) return;
     const size_t cnt = n * (d.size() / d.extent(0));
@@ -769,6 +1148,14 @@ void CNEMOKokkosData::DownloadGroup(Group g) {
       rows(nodes->Cvves.data(), st.Cvves, nPoint);
       rows(nodes->Gamma.data(), Kokkos::View<double**, Kokkos::LayoutRight, mem_space, Unmanaged>(st.Gamma.data(),
                                                                                                     nPoint, 1), nPoint);
+      if (viscousVars) {
+        auto* ns = static_cast<CNEMONSVariable*>(nodes);
+        rows(ns->DiffusionCoeff.data(), st.DiffCoeff, nPoint);
+        rows(ns->Enthalpys.data(), st.Enthalpys, nPoint);
+        rows(ns->LaminarViscosity.data(), as2d(st.LamVisc), nPoint);
+        rows(ns->ThermalCond.data(), as2d(st.ThermalCond), nPoint);
+        rows(ns->ThermalCond_ve.data(), as2d(st.ThermalCondVe), nPoint);
+      }
       /*--- Host remainder of SetPrimVar (SetPrimitive_Variables): Velocity2 from the downloaded Primitive. ---*/
       for (unsigned long i = 0; i < nPoint; ++i) nodes->SetVelocity2(i);
       bndPrimHost = true;
@@ -850,6 +1237,15 @@ void CNEMOKokkosData::UploadGroup(Group g) {
       rows(st.eves, nodes->eves.data(), nPoint);
       rows(st.Cvves, nodes->Cvves.data(), nPoint);
       rows(as2(st.Gamma), nodes->Gamma.data(), nPoint);
+      if (viscousVars) {
+        auto* ns = static_cast<CNEMONSVariable*>(nodes);
+        rows(st.DiffCoeff, ns->DiffusionCoeff.data(), nPoint);
+        rows(st.Enthalpys, ns->Enthalpys.data(), nPoint);
+        rows(as2(st.LamVisc), ns->LaminarViscosity.data(), nPoint);
+        rows(as2(st.ThermalCond), ns->ThermalCond.data(), nPoint);
+        rows(as2(st.ThermalCondVe), ns->ThermalCond_ve.data(), nPoint);
+        transportDeviceValid = true;
+      }
       break;
     case G_GRADIENT:
       AllocateGradients();
@@ -914,6 +1310,14 @@ void CNEMOKokkosData::PoisonGroup(Group g) {
       fill(nodes->Cvves.data(), nodes->Cvves.size());
       fill(nodes->Gamma.data(), nodes->Gamma.size());
       fill(nodes->Velocity2.data(), nodes->Velocity2.size());
+      if (viscousVars) {
+        auto* ns = static_cast<CNEMONSVariable*>(nodes);
+        fill(ns->DiffusionCoeff.data(), ns->DiffusionCoeff.size());
+        fill(ns->Enthalpys.data(), ns->Enthalpys.size());
+        fill(ns->LaminarViscosity.data(), ns->LaminarViscosity.size());
+        fill(ns->ThermalCond.data(), ns->ThermalCond.size());
+        fill(ns->ThermalCond_ve.data(), ns->ThermalCond_ve.size());
+      }
       break;
     case G_GRADIENT:
       fill(nodes->GetGradient_Primitive().data(), nd * size_t(nPrimVarGrad) * nDim);
@@ -962,11 +1366,82 @@ void CNEMOKokkosData::MarkDeviceWritten(Group g) {
   if (!ResidentActive()) return;
   residency[g] = Residency::DEVICE;
   if (g == G_PRIMITIVE) bndPrimHost = false;
+  if (g == G_PRIMITIVE || g == G_GRADIENT) bndViscHost = false;
   if (poison) PoisonGroup(g);
 }
 
+void CNEMOKokkosData::SetViscousWallMarkers(const std::vector<int>& markers) {
+  if (!viscousVars) return;
+  if (h_markerPtr.empty()) {
+    auto hm = Kokkos::create_mirror_view_and_copy(HostSpace(), geo.marker_ptr);
+    h_markerPtr.assign(hm.data(), hm.data() + geo.nMarker + 1);
+  }
+  auto hn = Kokkos::create_mirror_view_and_copy(HostSpace(), geo.vtx_node);
+  std::vector<char> seen(nPoint, 0);
+  h_viscWallPoints.clear();
+  for (int m : markers)
+    for (auto k = h_markerPtr[m]; k < h_markerPtr[m + 1]; ++k)
+      if (!seen[hn(k)]) {
+        seen[hn(k)] = 1;
+        h_viscWallPoints.push_back(hn(k));
+      }
+  std::sort(h_viscWallPoints.begin(), h_viscWallPoints.end());
+  const size_t rowLen = size_t(nPrimVarGrad) * nDim + 3 + 2 * size_t(nSpecies);
+  st.viscWallPoints = View1D<unsigned long>("NEMO::viscWallPoints", h_viscWallPoints.size());
+  st.viscWallStage = View2D<double>("NEMO::viscWallStage", h_viscWallPoints.size(), rowLen);
+  Kokkos::deep_copy(st.viscWallPoints, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(
+                                           h_viscWallPoints.data(), h_viscWallPoints.size()));
+}
+
 void CNEMOKokkosData::EnsureHostBoundaryPrimitive() {
-  if (!ResidentActive() || residency[G_PRIMITIVE] != Residency::DEVICE || bndPrimHost) return;
+  if (!ResidentActive()) return;
+  /*--- NS (Friction_Forces): gradient + transport rows of the viscous-wall points. ---*/
+  const bool viscStale = (residency[G_PRIMITIVE] == Residency::DEVICE || residency[G_GRADIENT] == Residency::DEVICE);
+  if (viscousVars && !bndViscHost && viscStale && !h_viscWallPoints.empty()) {
+    auto& P = syncPerf[N_GROUPS];
+    Kokkos::Timer timer;
+    const auto pts = st.viscWallPoints;
+    const auto stage = st.viscWallStage;
+    const auto G = st.GradPrim;
+    const auto mu = st.LamVisc, k = st.ThermalCond, kve = st.ThermalCondVe;
+    const auto Ds = st.DiffCoeff, hs = st.Enthalpys;
+    const int ng = nPrimVarGrad * nDim, ns = nSpecies;
+    const bool haveGrad = (G.size() != 0);
+    Kokkos::parallel_for(
+        "NEMO::GatherViscousWall", Kokkos::RangePolicy<exec_space>(0, h_viscWallPoints.size()),
+        KOKKOS_LAMBDA(const size_t q) {
+          const auto i = pts(q);
+          if (haveGrad)
+            for (int v = 0; v < ng; ++v) stage(q, v) = G.data()[i * ng + v];
+          stage(q, ng) = mu(i);
+          stage(q, ng + 1) = k(i);
+          stage(q, ng + 2) = kve(i);
+          for (int s = 0; s < ns; ++s) {
+            stage(q, ng + 3 + s) = Ds(i, s);
+            stage(q, ng + 3 + ns + s) = hs(i, s);
+          }
+        });
+    auto h = Kokkos::create_mirror_view_and_copy(HostSpace(), st.viscWallStage);
+    auto* nsv = static_cast<CNEMONSVariable*>(nodes);
+    double* hg = nodes->GetGradient_Primitive().data();
+    for (size_t q = 0; q < h_viscWallPoints.size(); ++q) {
+      const auto i = h_viscWallPoints[q];
+      if (haveGrad && residency[G_GRADIENT] == Residency::DEVICE) std::memcpy(hg + i * ng, &h(q, 0), ng * sizeof(double));
+      if (residency[G_PRIMITIVE] == Residency::DEVICE) {
+        nsv->LaminarViscosity(i) = h(q, ng);
+        nsv->ThermalCond(i) = h(q, ng + 1);
+        nsv->ThermalCond_ve(i) = h(q, ng + 2);
+        for (int s = 0; s < ns; ++s) {
+          nsv->DiffusionCoeff(i, s) = h(q, ng + 3 + s);
+          nsv->Enthalpys(i, s) = h(q, ng + 3 + ns + s);
+        }
+      }
+    }
+    P.bytes_d2h += double(h.size()) * sizeof(double);
+    bndViscHost = true;
+    P.d2h += timer.seconds();
+  }
+  if (residency[G_PRIMITIVE] != Residency::DEVICE || bndPrimHost) return;
   auto& P = syncPerf[N_GROUPS];
   Kokkos::Timer timer;
   const auto nb = h_bndPoints.size();
@@ -1103,6 +1578,7 @@ void CNEMOKokkosData::ExplicitEulerUpdate(ResidualReduction& red) {
   Kokkos::Timer timer;
   EnsureDevice(G_TRUNCERR);
   EnsureDevice(G_SOLUTION);
+  EnsureDevice(G_SOLUTION_OLD);
   ExplicitFunctor f;
   f.vol = geo.volume;
   f.pvol = geo.periodic_volume;
@@ -1110,6 +1586,7 @@ void CNEMOKokkosData::ExplicitEulerUpdate(ResidualReduction& red) {
   f.res = st.Res;
   f.trunc = st.TruncErr;
   f.U = st.Solution;
+  f.Uold = st.Solution_Old;
   f.nVar = nVar;
   Kokkos::parallel_reduce("NEMO::ExplicitEulerIteration", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain), f,
                           red);
@@ -1125,7 +1602,8 @@ void CNEMOKokkosData::ExplicitEulerUpdate(ResidualReduction& red) {
 void CNEMOKokkosData::CompleteImplicit(double allowableRatio) {
   Kokkos::Timer timer;
   EnsureDevice(G_SOLUTION);
-  const auto U = st.Solution, sol = st.Sol;
+  EnsureDevice(G_SOLUTION_OLD);
+  const auto U = st.Solution, Uold = st.Solution_Old, sol = st.Sol;
   const auto UR = st.UnderRelax;
   const int nv = nVar, ns = nSpecies;
   const double eps = EPS;
@@ -1160,7 +1638,9 @@ void CNEMOKokkosData::CompleteImplicit(double allowableRatio) {
         }
         if (localUnderRelaxation < 1e-10) localUnderRelaxation = 0.0;
         UR(iPoint) = localUnderRelaxation;
-        for (int iVar = 0; iVar < nv; iVar++) U(iPoint, iVar) += localUnderRelaxation * sol(iPoint, iVar);
+        /*--- CVariable::AddSolution: Solution = Solution_Old + UR*du (Solution_Old differs from Solution where the
+         *    NS wall BCs zeroed its velocity, SetVelocity_Old). ---*/
+        for (int iVar = 0; iVar < nv; iVar++) U(iPoint, iVar) = Uold(iPoint, iVar) + localUnderRelaxation * sol(iPoint, iVar);
       });
   Kokkos::fence();
   MarkDeviceWritten(G_SOLUTION);

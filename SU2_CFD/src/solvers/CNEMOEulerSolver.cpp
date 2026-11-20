@@ -237,6 +237,7 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
     auto* su2tc = dynamic_cast<CSU2TCLib*>(FluidModel);
     if (su2tc != nullptr) {
       kokkosData = std::make_unique<CNEMOKokkosData>(geometry, config, nodes, su2tc, iMesh);
+      kokkosConfig = config;
       deferResidualSync = Device_DeferralUnsupported(config).empty();
       deviceJacobianAllocated = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
       if (rank == MASTER_NODE && iMesh == MESH_0) PrintDeviceStages(config);
@@ -253,6 +254,13 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
         LinSysRes.SetKokkosDeviceAuthoritative(true);
         LinSysSol.SetKokkosDeviceAuthoritative(true);
         if (impl) Jacobian.SetKokkosValuesOnDevice(true);
+        /*--- Step 8: Friction_Forces reads the gradient / transport rows of the viscous-wall points. ---*/
+        if (config->GetViscous()) {
+          std::vector<int> walls;
+          for (unsigned short iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++)
+            if (config->GetViscous_Wall(iMarker)) walls.push_back(iMarker);
+          kokkosData->SetViscousWallMarkers(walls);
+        }
       }
       if (rank == MASTER_NODE && iMesh == MESH_0)
         cout << "[KOKKOS_NEMO] device-resident state (Step 6): "
@@ -2779,6 +2787,8 @@ const char* BCKindName(int kind) {
     case K::OUTLET: return "OUTLET_FLOW";
     case K::SUPERSONIC_INLET: return "SUPERSONIC_INLET";
     case K::SUPERSONIC_OUTLET: return "SUPERSONIC_OUTLET";
+    case K::ISOTHERMAL: return "ISOTHERMAL";
+    case K::HEAT_FLUX: return "HEAT_FLUX";
   }
   return "?";
 }
@@ -2932,7 +2942,9 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
     } else {
       hostStage("centered residual");
     }
-    if (viscous) hostStage("viscous residual");
+    if (viscous) stage("viscous residual (CAvgGradCorrected_NEMO" + std::string(
+                             config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT ? ", residual + Jacobian)" : ")"),
+                       Device_ViscousUnsupported(config, MESH_0));
     stage("source (finite-rate chemistry + V-T relaxation, residual" +
               std::string(config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT ? " + Jacobian" : "") + ")",
           Device_SourceUnsupported(config));
@@ -2946,6 +2958,8 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
         case SUPERSONIC_INLET: return static_cast<int>(K::BCKind::SUPERSONIC_INLET);
         case SUPERSONIC_OUTLET: return static_cast<int>(K::BCKind::SUPERSONIC_OUTLET);
         case SYMMETRY_PLANE: case EULER_WALL: return static_cast<int>(K::BCKind::SYMMETRY);
+        case ISOTHERMAL: return static_cast<int>(K::BCKind::ISOTHERMAL);
+        case HEAT_FLUX: return static_cast<int>(K::BCKind::HEAT_FLUX);
         default: return -1;
       }
     };
@@ -2971,7 +2985,12 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
         const std::string name = "bc:" + kname(kb) + " (" + config->GetMarker_All_TagBound(iMarker) + ")";
         const int k = bcKind(kb);
         if (k < 0) hostStage(name + " [not ported]");
-        else stage(name, Device_BCUnsupported(config, k));
+        else stage(name + ((kb == ISOTHERMAL || kb == HEAT_FLUX)
+                               ? std::string(config->GetCatalytic_Wall(iMarker)
+                                                 ? (config->GetSupercatalytic_Wall() ? " [supercatalytic]" : " [catalytic]")
+                                                 : " [non-catalytic]")
+                               : std::string(kb == FAR_FIELD && viscous ? " [+ viscous]" : "")),
+                   Device_BCUnsupported(config, k, iMarker));
       }
     }
     const auto why = Device_DeferralUnsupported(config);
@@ -2981,8 +3000,13 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
     else
       cout << "[KOKKOS_NEMO] residual sync: eager (" << why << "), download after every device stage" << endl;
   }
-  cout << "[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, NS transport, viscous residual, linear solve, CFL adapt"
-       << endl;
+  if (viscous)
+    cout << "[KOKKOS_NEMO] stage NS transport (" << (config->GetKind_TransCoeffModel() == TRANSCOEFFMODEL::WILKE ? "WILKE"
+             : config->GetKind_TransCoeffModel() == TRANSCOEFFMODEL::GUPTAYOS ? "GUPTAYOS"
+             : config->GetKind_TransCoeffModel() == TRANSCOEFFMODEL::SUTHERLAND ? "SUTHERLAND" : "other")
+         << ", in SetPrimVar): " << (kokkosData->DeviceTransport() ? "device" : "host") << endl;
+  cout << "[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, linear solve, CFL adapt"
+       << (viscous && !kokkosData->DeviceTransport() ? ", NS transport" : "") << endl;
   cout << "[KOKKOS_NEMO] sync: SetPrimVar HtoD U,U_old,V,secondaries + DtoH all; stages reuse device V, DtoH domain rows"
           " of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS); upwind reuses device"
           " V/secondaries/gradient/limiter (HtoD halo rows, Non_Physical, sensor); source/BCs reuse device U/V/"
@@ -3295,7 +3319,7 @@ std::string CNEMOEulerSolver::Device_SourceUnsupported(const CConfig *config) co
 #endif
 }
 
-std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int kind) const {
+std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int kind, int marker) const {
 #ifdef HAVE_KOKKOS
   using K = CNEMOKokkosData::BCKind;
   if (!kokkosData) return "no device data";
@@ -3306,18 +3330,32 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
   if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   const auto k = static_cast<K>(kind);
   if (k == K::SYMMETRY) return "";
+  /*--- Step 8: NS walls (no boundary numerics). ---*/
+  if (k == K::ISOTHERMAL || k == K::HEAT_FLUX) {
+    if (!config->GetViscous() || dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr) return "no NS variables";
+    if (config->GetIonization()) return "ionization (the CPU wall BCs stop with an error)";
+    if (k == K::HEAT_FLUX && (marker >= 0 && config->GetCatalytic_Wall(marker)))
+      return "catalytic heat-flux wall (not operational on the CPU either)";
+    if (k == K::ISOTHERMAL && (marker >= 0 && config->GetCatalytic_Wall(marker)) && !config->GetSupercatalytic_Wall() &&
+        config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT)
+      return "implicit partially catalytic wall (not available on the CPU either)";
+    return "";
+  }
   /*--- Flux BCs use the boundary numerics, of the same type as the convective scheme (CDriver). ---*/
   if (config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "boundary numerics not AUSM (centered -> Roe)";
   const auto up = config->GetKind_Upwind_Flow();
   if (up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM) return "boundary numerics not AUSM / AUSM+M";
   if ((k == K::SUPERSONIC_INLET || k == K::SUPERSONIC_OUTLET) && up != UPWIND::AUSM)
     return "AUSM+M reads the stale Gamma/Sensor of the boundary numerics here";
-  if ((k == K::FAR_FIELD || k == K::SUPERSONIC_INLET) && config->GetViscous()) return "viscous contribution";
+  if (k == K::SUPERSONIC_INLET && config->GetViscous()) return "viscous contribution";
+  if (k == K::FAR_FIELD && config->GetViscous() && dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr)
+    return "viscous contribution without NS variables";
   if (k == K::OUTLET && config->GetGravityForce()) return "gravity";
   return "";
 #else
   (void)config;
   (void)kind;
+  (void)marker;
   return "no Kokkos";
 #endif
 }
@@ -3434,7 +3472,7 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
                                          CNumerics *visc_numerics, CConfig *config, unsigned short val_marker,
                                          int kind) {
 #ifdef HAVE_KOKKOS
-  if (!Device_BCUnsupported(config, kind).empty()) return false;
+  if (!Device_BCUnsupported(config, kind, val_marker).empty()) return false;
   using K = CNEMOKokkosData;
   const auto bk = static_cast<K::BCKind>(kind);
   const bool verify = K::StageVerifyEnabled();
@@ -3496,7 +3534,52 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
     bs.Gamma = node_inlet->GetGamma(0);
   }
 
+  /*--- Step 8: viscous far-field part (node_infty secondaries + gradient), NS walls. ---*/
+  std::vector<su2double> inftyGrad;
+  if (bk == K::BCKind::FAR_FIELD && config->GetViscous()) {
+    p.viscous = true;
+    bs.Cvve = node_infty->GetCvve(0);
+    bs.dTdU = node_infty->GetdTdU(0);
+    bs.dTvedU = node_infty->GetdTvedU(0);
+    const size_t ng = size_t(nPrimVarGrad) * nDim;
+    auto& g = node_infty->GetGradient_Primitive();
+    inftyGrad.assign(ng, 0.0);
+    if (size_t(g.size()) >= ng) std::copy_n(g.data(), ng, inftyGrad.begin());
+    bs.grad = inftyGrad.data();
+  }
+  const bool wallBC = (bk == K::BCKind::ISOTHERMAL || bk == K::BCKind::HEAT_FLUX);
+  if (wallBC) {
+    const string Marker_Tag = config->GetMarker_All_TagBound(val_marker);
+    if (bk == K::BCKind::ISOTHERMAL) {
+      p.Twall = config->GetIsothermal_Temperature(Marker_Tag);
+      p.catalytic = config->GetCatalytic_Wall(val_marker);
+      p.supercatalytic = config->GetSupercatalytic_Wall();
+      if (p.catalytic && p.supercatalytic) {
+        const auto* Yst = config->GetSupercatalytic_Wall_Composition();
+        for (unsigned short iSpecies = 0; iSpecies < nSpecies; iSpecies++) p.Yst[iSpecies] = Yst[iSpecies];
+      }
+      p.catEff = config->GetCatalytic_Efficiency();
+    } else {
+      su2double Wall_HeatFlux = config->GetWall_HeatFlux(Marker_Tag) / config->GetHeat_Flux_Ref();
+      if (config->GetIntegrated_HeatFlux()) Wall_HeatFlux /= geometry->GetSurfaceArea(config, val_marker);
+      p.heatFlux = Wall_HeatFlux;
+    }
+  }
+
   const auto r = kokkosData->ComputeBCResidual(p, bs, verify);
+
+  /*--- Host-authoritative NS walls: SetVelocity_Old(0) and the momentum Res_TruncError rows (resident: device). ---*/
+  if (wallBC && !Device_ResidentActive()) {
+    Kokkos::Timer timer;
+    su2double zero[MAXNDIM] = {0.0};
+    for (auto iVertex = 0ul; iVertex < geometry->nVertex[val_marker]; iVertex++) {
+      const auto iPoint = geometry->vertex[val_marker][iVertex]->GetNode();
+      if (!geometry->nodes->GetDomain(iPoint)) continue;
+      nodes->SetVelocity_Old(iPoint, zero);
+      nodes->SetVel_ResTruncError_Zero(iPoint);
+    }
+    kokkosData->stagePerf[K::ST_BC].host += timer.seconds();
+  }
 
   /*--- Host state the CPU BC_Outlet leaves behind: FluidModel (last subsonic vertex), Gamma / Gamma_Minus_One
    *    (last domain vertex), CharacPrimVar (domain vertices; only if something reads it). ---*/
@@ -3554,6 +3637,12 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
     case K::BCKind::SUPERSONIC_OUTLET:
       BC_Supersonic_Outlet(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker);
       break;
+    case K::BCKind::ISOTHERMAL:
+      BC_Isothermal_Wall(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker);
+      break;
+    case K::BCKind::HEAT_FLUX:
+      BC_HeatFlux_Wall(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker);
+      break;
   }
   kokkosData->stagePerf[K::ST_BC].hostRef += timer.seconds();
   kokkosData->stagePerf[K::ST_BC].hostRefCalls++;
@@ -3589,6 +3678,82 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
 
 /*============================ Device (Kokkos) Step 6: device-resident state ============================*/
 
+/*============================ Device (Kokkos) Step 8: viscous residual ============================*/
+
+std::string CNEMOEulerSolver::Device_ViscousUnsupported(const CConfig *config, unsigned short iMesh) const {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return "no device data";
+  if (!config->GetViscous()) return "inviscid";
+  if (dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr) return "no NS variables";
+  if (!kokkosData->geo.domain_first) return "domain points not first";
+  if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
+  if (ReducerStrategy) return "reducer strategy";
+  if (iMesh != MESH_0) return "coarse multigrid level (CAvgGrad_NEMO)";
+  if (ForcedHost("viscous")) return "SU2_KOKKOS_NEMO_HOST";
+  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (nodes->GetGradient_Primitive().size() == 0) return "gradient not allocated";
+  return "";
+#else
+  (void)config;
+  (void)iMesh;
+  return "no Kokkos";
+#endif
+}
+
+bool CNEMOEulerSolver::Device_ViscousResidual(CGeometry *geometry, CSolver **solver_container,
+                                              CNumerics **numerics_container, CConfig *config, unsigned short iMesh) {
+#ifdef HAVE_KOKKOS
+  if (!Device_ViscousUnsupported(config, iMesh).empty()) return false;
+  using K = CNEMOKokkosData;
+  const bool verify = K::StageVerifyEnabled();
+  const bool implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
+
+  su2mixedfloat* jac = implicit ? JacobianValues(geometry, Jacobian, nVar) : nullptr;
+  const size_t nRes = size_t(nPoint) * nVar, nJac = implicit ? size_t(kokkosData->geo.nnz) * nVar * nVar : 0;
+  std::vector<su2double> res0, jac0;
+  if (verify) {
+    res0.assign(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes);
+    if (implicit) jac0.assign(jac, jac + nJac);
+  }
+
+  if (!Device_ResidualToDevice(geometry, config)) return false;
+  SU2_ZONE_SCOPED
+
+  K::ViscousParams p;
+  p.implicit = implicit;
+  p.nElNumerics = config->GetIonization() ? 1 : 0; /*--- CNEMONumerics::nEl ---*/
+  kokkosData->ComputeViscousResidual(p, verify);
+  if (!deferResidualSync) Device_ResidualToHost(geometry);
+  if (!verify) return true;
+
+  std::vector<su2double> resD(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes), jacD;
+  if (implicit) jacD.assign(jac, jac + nJac);
+  std::copy(res0.begin(), res0.end(), LinSysRes.GetBlock(0));
+  if (implicit) std::copy(jac0.begin(), jac0.end(), jac);
+
+  viscousHostOnly = true;
+  Kokkos::Timer timer;
+  Viscous_Residual(geometry, solver_container, numerics_container, config, iMesh, 0);
+  kokkosData->stagePerf[K::ST_VISCOUS].hostRef += timer.seconds();
+  kokkosData->stagePerf[K::ST_VISCOUS].hostRefCalls++;
+  viscousHostOnly = false;
+
+  kokkosData->StageCompare(K::ST_VISCOUS, "LinSysRes", LinSysRes.GetBlock(0), resD.data(), nRes, nVar);
+  if (implicit) {
+    std::vector<su2double> jacH(jac, jac + nJac);
+    kokkosData->StageCompare(K::ST_VISCOUS, "Jacobian", jacH.data(), jacD.data(), nJac, size_t(nVar) * nVar);
+  }
+  return true;
+#else
+  (void)geometry;
+  (void)solver_container;
+  (void)numerics_container;
+  (void)config;
+  (void)iMesh;
+  return false;
+#endif
+}
+
 bool CNEMOEulerSolver::Device_ResidentActive() const {
 #ifdef HAVE_KOKKOS
   return kokkosData && kokkosData->ResidentActive();
@@ -3615,7 +3780,18 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
   if (config->GetnMGLevels() > 0) return "multigrid";
   if (config->GetDiscrete_Adjoint() || config->GetContinuous_Adjoint()) return "adjoint";
   if (dynamic_grid) return "dynamic grid";
-  if (config->GetViscous()) return "viscous residual / NS walls on the host (Step 8)";
+  if (config->GetViscous()) {
+    /*--- Step 8: laminar NEMO NS (device transport, viscous residual, walls, viscous far field). ---*/
+    if (config->GetKind_Turb_Model() != TURB_MODEL::NONE) return "turbulence model (eddy viscosity from the host turbulence solver)";
+    if (config->GetWall_Functions()) return "wall functions";
+    if (!kokkosData->DeviceTransport()) return "NS transport properties on the host (model / SU2_KOKKOS_NEMO_HOST)";
+    auto whyV = Device_ViscousUnsupported(config, MESH_0);
+    if (!whyV.empty()) return "viscous residual: " + whyV;
+    const auto gmv = config->GetKind_Gradient_Method();
+    if (gmv != GREEN_GAUSS && gmv != WEIGHTED_LEAST_SQUARES) return "NS gradient method";
+    whyV = Device_GradientUnsupported(config, false, gmv == GREEN_GAUSS);
+    if (!whyV.empty()) return "NS gradient: " + whyV;
+  }
   if (VerificationSolution) return "verification solution";
   if (config->GetCFL_Adapt()) return "CFL adaptation on the host (TODO: device AdaptCFLNumber)";
   if (config->GetnMarker_Analyze() > 0) return "MARKER_ANALYZE (host surface analysis each iteration)";
@@ -3665,10 +3841,12 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
       case SUPERSONIC_INLET: k = static_cast<int>(K::BCKind::SUPERSONIC_INLET); break;
       case SUPERSONIC_OUTLET: k = static_cast<int>(K::BCKind::SUPERSONIC_OUTLET); break;
       case SYMMETRY_PLANE: case EULER_WALL: k = static_cast<int>(K::BCKind::SYMMETRY); break;
+      case ISOTHERMAL: k = static_cast<int>(K::BCKind::ISOTHERMAL); break;
+      case HEAT_FLUX: k = static_cast<int>(K::BCKind::HEAT_FLUX); break;
       case SEND_RECEIVE: continue;
       default: return "marker " + config->GetMarker_All_TagBound(iMarker) + ": BC not ported";
     }
-    why = Device_BCUnsupported(config, k);
+    why = Device_BCUnsupported(config, k, iMarker);
     if (!why.empty()) return "marker " + config->GetMarker_All_TagBound(iMarker) + ": " + why;
   }
   return "";
@@ -3710,8 +3888,14 @@ void CNEMOEulerSolver::Set_OldSolution() {
 void CNEMOEulerSolver::SyncHostData(CGeometry *geometry, HostSyncScope scope) {
 #ifdef HAVE_KOKKOS
   if (!Device_ResidentActive()) return;
-  if (scope == HostSyncScope::BOUNDARY) kokkosData->EnsureHostBoundaryPrimitive();
-  else kokkosData->EnsureHostAll();
+  if (scope == HostSyncScope::BOUNDARY) {
+    kokkosData->EnsureHostBoundaryPrimitive();
+  } else {
+    kokkosData->EnsureHostAll();
+    /*--- Step 8: NS vorticity / strain magnitude (output only) from the downloaded gradient (CNEMONSSolver::
+     *    Preprocessing skips them in device-resident mode). ---*/
+    if (kokkosConfig && kokkosConfig->GetViscous()) ComputeVorticityAndStrainMag(*kokkosConfig, geometry, MESH_0);
+  }
 #else
   (void)geometry;
   (void)scope;

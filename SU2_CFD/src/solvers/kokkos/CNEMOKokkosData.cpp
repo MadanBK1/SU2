@@ -129,6 +129,17 @@ CNEMOKokkosData::CNEMOKokkosData(CGeometry* geometry, const CConfig* config, CNE
   h_Status.assign(nPoint, 0);
   h_FirstDP.assign(2 * nPoint, 0.0);
 
+  /*--- Step 8: NS transport properties on the device (viscous CSU2TCLib, supported model). ---*/
+  if (viscousVars) {
+    st.LamVisc = View1D<double>("NEMO::LaminarViscosity", nPoint);
+    st.ThermalCond = View1D<double>("NEMO::ThermalCond", nPoint);
+    st.ThermalCondVe = View1D<double>("NEMO::ThermalCond_ve", nPoint);
+    st.DiffCoeff = View2D<double>("NEMO::DiffusionCoeff", nPoint, nSpecies);
+    st.Enthalpys = View2D<double>("NEMO::Enthalpys", nPoint, nSpecies);
+    deviceTransport = (gas.transModel != su2kokkos::nemo::NEMOGasTables::TRANSPORT_NONE) && !HostForced("transport");
+    if (deviceTransport) st.TransDP = View2D<double>("NEMO::TransportDensityPressure", nPoint, 2);
+  }
+
   /*--- Initial state mirror (not needed by SetPrimVar, which re-uploads, but keeps the device copy valid). ---*/
   UploadConservative();
   UploadPrimitive();
@@ -380,6 +391,29 @@ void CNEMOKokkosData::DownloadState() {
   perf.bytes_d2h += DtoH(nodes->Gamma.data(), st.Gamma);
   perf.bytes_d2h += DtoH(h_Status.data(), st.Status);
   perf.bytes_d2h += DtoH(h_FirstDP.data(), st.FirstDP);
+  if (deviceTransport) {
+    auto* ns = static_cast<CNEMONSVariable*>(nodes);
+    perf.bytes_d2h += DtoH(ns->DiffusionCoeff.data(), st.DiffCoeff);
+    perf.bytes_d2h += DtoH(ns->LaminarViscosity.data(), st.LamVisc);
+    perf.bytes_d2h += DtoH(ns->ThermalCond.data(), st.ThermalCond);
+    perf.bytes_d2h += DtoH(ns->ThermalCond_ve.data(), st.ThermalCondVe);
+    perf.bytes_d2h += DtoH(ns->Enthalpys.data(), st.Enthalpys);
+  }
+}
+
+void CNEMOKokkosData::UploadTransport() {
+  if (!viscousVars) return;
+  auto* ns = static_cast<CNEMONSVariable*>(nodes);
+  CheckShape(ns->DiffusionCoeff, nPoint, nSpecies, "DiffusionCoeff");
+  CheckShape(ns->Enthalpys, nPoint, nSpecies, "Enthalpys");
+  double b = 0.0;
+  b += HtoD(st.DiffCoeff, ns->DiffusionCoeff.data());
+  b += HtoD(st.LamVisc, ns->LaminarViscosity.data());
+  b += HtoD(st.ThermalCond, ns->ThermalCond.data());
+  b += HtoD(st.ThermalCondVe, ns->ThermalCond_ve.data());
+  b += HtoD(st.Enthalpys, ns->Enthalpys.data());
+  stagePerf[ST_VISCOUS].bytes_h2d += b;
+  transportDeviceValid = true;
 }
 
 unsigned long CNEMOKokkosData::SetPrimVar() {
@@ -408,11 +442,13 @@ unsigned long CNEMOKokkosData::SetPrimVar() {
   const auto Gamma = st.Gamma;
   const auto Status = st.Status;
   const auto FirstDP = st.FirstDP;
+  const auto TransDP = st.TransDP;
+  const bool transport = deviceTransport;
 
-  unsigned long nonPhysical = 0;
+  unsigned long nonPhysical = 0, noGasState = 0;
   Kokkos::parallel_reduce(
       "NEMO::SetPrimVar", Kokkos::RangePolicy<exec_space>(0, nPoint),
-      KOKKOS_LAMBDA(const unsigned long i, unsigned long& count) {
+      KOKKOS_LAMBDA(const unsigned long i, unsigned long& count, unsigned long& noState) {
         using namespace su2kokkos::nemo;
         double* Ui = &U(i, 0);
         double* Vi = &V(i, 0);
@@ -448,8 +484,49 @@ unsigned long CNEMOKokkosData::SetPrimVar() {
         Gamma(i) = gam;
         Status(i) = status;
         count += nonPhys ? 1 : 0;
+
+        /*--- Step 8: gas Density / Pressure members the transport routines of this point read (last
+         *    SetTDStateRhosTTv: final attempt, else first attempt, else an earlier point -> carry kernel). ---*/
+        if (transport) {
+          if (finalFull) {
+            double rho = 0.0;
+            for (int s = 0; s < ns; s++) rho += Vi[s];
+            TransDP(i, 0) = rho;
+            TransDP(i, 1) = ComputePressure(g, Vi, Vi[ns], Vi[ns + 1]);
+          } else if (firstFull) {
+            TransDP(i, 0) = FirstDP(i, 0);
+            TransDP(i, 1) = FirstDP(i, 1);
+          } else {
+            noState++;
+          }
+        }
       },
-      nonPhysical);
+      Kokkos::Sum<unsigned long>(nonPhysical), Kokkos::Sum<unsigned long>(noGasState));
+  if (transport) {
+    perf.kernel += timer.seconds();
+    timer.reset();
+    /*--- Rare (both attempts non-physical): sequential carry of the previous state, starting from the host gas. ---*/
+    if (noGasState > 0) {
+      double dp0[2];
+      su2kokkos::nemo::HostGasDensityPressure(*gasModel, dp0);
+      const double d0 = dp0[0], p0 = dp0[1];
+      const auto np = nPoint;
+      Kokkos::parallel_for(
+          "NEMO::TransportStateCarry", Kokkos::RangePolicy<exec_space>(0, 1), KOKKOS_LAMBDA(const int) {
+            double d = d0, p = p0;
+            for (unsigned long i = 0; i < np; i++) {
+              if (Status(i) & (su2kokkos::nemo::C2P_FINAL_FULL | su2kokkos::nemo::C2P_FIRST_FULL)) {
+                d = TransDP(i, 0);
+                p = TransDP(i, 1);
+              } else {
+                TransDP(i, 0) = d;
+                TransDP(i, 1) = p;
+              }
+            }
+          });
+    }
+    ComputeTransportStage();
+  }
   /*--- parallel_reduce into a host scalar blocks until completion: no extra fence needed for the timer. ---*/
   perf.kernel += timer.seconds();
   timer.reset();
@@ -467,12 +544,58 @@ unsigned long CNEMOKokkosData::SetPrimVar() {
   /*--- The device Primitive now equals the host one (host SetVelocity2 recomputes the same U/rho velocity,
    *    NS transport only writes columns >= nPrimVarGrad), so Steps 3-4 read it without re-uploading. ---*/
   primDeviceValid = true;
+  transportDeviceValid = deviceTransport;
+  bndViscHost = false;
   secDeviceValid = true;
   consDeviceValid = true; /*--- device Solution (clipped / rolled back) == downloaded host Solution ---*/
   sensorValid = false;    /*--- SetPressureDiffusionSensor recomputes it on the host after SetPrimVar ---*/
   gradPrimValid = gradRecValid = false;
 
   return nonPhysical;
+}
+
+void CNEMOKokkosData::ComputeTransportStage() {
+  /*--- CNEMONSVariable::SetTransportProperties per point, on the gas state (rho_s, T, Tve, Density, Pressure). ---*/
+  const auto g = gas;
+  const int ns = nSpecies, nd = nDim;
+  const auto V = st.Primitive, eves = st.eves, TransDP = st.TransDP;
+  const auto Ds = st.DiffCoeff, hs = st.Enthalpys;
+  const auto mu = st.LamVisc, k = st.ThermalCond, kve = st.ThermalCondVe;
+  const int lamIdx = nSpecies + nDim + 8;
+  Kokkos::parallel_for(
+      "NEMO::TransportProperties", Kokkos::RangePolicy<exec_space>(0, nPoint), KOKKOS_LAMBDA(const unsigned long i) {
+        using namespace su2kokkos::nemo;
+        const double* Vi = &V(i, 0);
+        const GasState s{Vi, Vi[ns], Vi[ns + 1], TransDP(i, 0), TransDP(i, 1)};
+        double D[MAXNS], h[MAXNS], kk[2], Mu;
+        ComputeTransport(g, s, D, Mu, kk);
+        ComputeSpeciesEnthalpy(g, Vi[ns], Vi[ns + 1], &eves(i, 0), h);
+        for (int sp = 0; sp < ns; sp++) {
+          Ds(i, sp) = D[sp];
+          hs(i, sp) = h[sp];
+        }
+        mu(i) = Mu;
+        k(i) = kk[0];
+        kve(i) = kk[1];
+        V(i, lamIdx) = Mu;
+        (void)nd;
+      });
+  Kokkos::fence();
+}
+
+void CNEMOKokkosData::ReplayTransportLastPoint() {
+  if (nPoint == 0 || !deviceTransport) return;
+  auto& P = syncPerf[G_PRIMITIVE];
+  const auto i = nPoint - 1;
+  std::vector<double> V(nPrimVar), dp(2), ev(nSpecies);
+  unsigned char status = 0;
+  Kokkos::deep_copy(Kokkos::View<double*, HostSpace, Unmanaged>(V.data(), nPrimVar),
+                    Kokkos::subview(st.Primitive, i, Kokkos::ALL()));
+  Kokkos::deep_copy(Kokkos::View<double*, HostSpace, Unmanaged>(dp.data(), 2), Kokkos::subview(st.TransDP, i, Kokkos::ALL()));
+  Kokkos::deep_copy(Kokkos::View<double*, HostSpace, Unmanaged>(ev.data(), nSpecies), Kokkos::subview(st.eves, i, Kokkos::ALL()));
+  Kokkos::deep_copy(Kokkos::View<unsigned char, HostSpace, Unmanaged>(&status), Kokkos::subview(st.Status, i));
+  P.bytes_d2h += double(nPrimVar + 2 + nSpecies) * sizeof(double) + 1;
+  su2kokkos::nemo::ReplayHostTransportState(*gasModel, nDim, V.data(), status, dp.data(), ev.data());
 }
 
 void CNEMOKokkosData::ReplayGasState(unsigned long iPoint, bool full) const {
@@ -586,12 +709,13 @@ namespace {
 const char* GroupName(int g) {
   static const char* names[] = {"Solution",  "Solution_Old", "Primitive+secondaries", "Gradient",
                                 "Limiter",   "TimeStep",     "LocalCFL",              "Non_Physical",
-                                "UnderRelaxation", "Res_TruncError", "LinSysRes+LinSysSol", "boundary Primitive"};
+                                "UnderRelaxation", "Res_TruncError", "LinSysRes+LinSysSol",
+                                "boundary Primitive (+ viscous-wall gradient/transport)"};
   return names[g];
 }
 const char* StageName(int s) {
   static const char* names[] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue",
-                                "Upwind",   "Source",  "BC",       "ResidualSync"};
+                                "Upwind",   "Source",  "BC",       "ResidualSync", "Viscous"};
   return names[s];
 }
 }  // namespace
@@ -659,7 +783,7 @@ void CNEMOKokkosData::PrintPerf() const {
             << " MB/call)"
             << " | host post " << perf.host_post << " s (" << perf.host_post / c << "/call)" << std::endl;
   static const char* names[N_STAGES] = {"Gradient", "Limiter",  "TimeStep", "MaxEigenvalue",
-                                        "Upwind",   "Source",   "BC",       "ResidualSync"};
+                                        "Upwind",   "Source",   "BC",       "ResidualSync", "Viscous"};
   for (int s = 0; s < N_STAGES; ++s) {
     const auto& P = stagePerf[s];
     if (P.calls == 0) continue;

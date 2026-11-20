@@ -918,8 +918,8 @@ void CNEMOKokkosData::ComputeTimeStep(bool viscous, double maxDeltaTime, double&
     st.MaxLambdaInv = View1D<double>("NEMO::Max_Lambda_Inv", nPoint);
     st.DeltaTime = View1D<double>("NEMO::Delta_Time", nPoint);
   }
-  if (viscous && st.MaxLambdaVisc.size() == 0) {
-    st.MaxLambdaVisc = View1D<double>("NEMO::Max_Lambda_Visc", nPoint);
+  if (viscous && st.MaxLambdaVisc.size() == 0) st.MaxLambdaVisc = View1D<double>("NEMO::Max_Lambda_Visc", nPoint);
+  if (viscous && st.LamVisc.size() == 0) {
     st.LamVisc = View1D<double>("NEMO::LaminarViscosity", nPoint);
     st.ThermalCond = View1D<double>("NEMO::ThermalCond", nPoint);
     st.ThermalCondVe = View1D<double>("NEMO::ThermalCond_ve", nPoint);
@@ -932,7 +932,8 @@ void CNEMOKokkosData::ComputeTimeStep(bool viscous, double maxDeltaTime, double&
    *    Device-resident mode: LocalCFL is uploaded only when the host changed it. ---*/
   if (ResidentActive()) EnsureDevice(G_LOCALCFL);
   else P.bytes_h2d += UploadRows(st.LocalCFL, nodes->LocalCFL.data(), nPoint);
-  if (viscous) {
+  /*--- Step 8: mu, k, k_ve come from the device transport stage of SetPrimVar (uploaded only if host-computed). ---*/
+  if (viscous && !transportDeviceValid) {
     auto* ns = static_cast<CNEMONSVariable*>(nodes);
     P.bytes_h2d += UploadRows(st.LamVisc, ns->LaminarViscosity.data(), nPoint);
     P.bytes_h2d += UploadRows(st.ThermalCond, ns->ThermalCond.data(), nPoint);

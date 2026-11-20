@@ -20,7 +20,8 @@ if get_option('enable-kokkos')
                         'solvers/kokkos/CNEMOKokkosData.cpp',
                         'solvers/kokkos/CNEMOKokkosStages.cpp',
                         'solvers/kokkos/CNEMOKokkosUpwind.cpp',
-                        'solvers/kokkos/CNEMOKokkosResidual.cpp'])
+                        'solvers/kokkos/CNEMOKokkosResidual.cpp',
+                        'solvers/kokkos/CNEMOKokkosViscous.cpp'])
 endif
 
 su2_cfd_src += files(['output/COutputFactory.cpp',

@@ -109,9 +109,9 @@ void CNEMONSSolver::Preprocessing(CGeometry *geometry, CSolver **solver_containe
       SetPrimitive_Limiter(geometry, config);
   }
 
-  /*--- Compute vorticity and strain mag. ---*/
+  /*--- Compute vorticity and strain mag. (device-resident: output only, deferred to SyncHostData). ---*/
 
-  ComputeVorticityAndStrainMag(*config, geometry, iMesh);
+  if (!Device_ResidentActive()) ComputeVorticityAndStrainMag(*config, geometry, iMesh);
 
   /*--- Compute the TauWall from the wall functions ---*/
 
@@ -139,24 +139,45 @@ unsigned long CNEMONSSolver::SetPrimitive_Variables(CSolver **solver_container,C
   if (deviceC2P) {
     if (verify) kokkosData->Snapshot();
 
+    /*--- Step 6/8: the first call activates the device-resident mode; later non-output calls close one iteration
+     *    of the transfer ledger. ---*/
+    if (deviceResident) kokkosData->ActivateResident();
+    if (!Output) kokkosData->LedgerIterationBoundary(false);
+
+    if (Device_ResidentActive()) {
+      /*--- Device Cons2Prim + transport on the resident state, nothing downloaded (laminar: no eddy viscosity). The
+       *    host gas model is left in the state of the CPU loop (last point: gas state + transport members). ---*/
+      nonPhysicalPoints = kokkosData->SetPrimVar();
+      Kokkos::Timer timer;
+      kokkosData->ReplayTransportLastPoint();
+      kokkosData->perf.host_post += timer.seconds();
+      return nonPhysicalPoints;
+    }
+
     /*--- Eddy viscosity first (SetPrimVar does not read or write it). ---*/
     if (turb_model != TURB_MODEL::NONE && solver_container[TURB_SOL] != nullptr) {
       for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++)
         nodes->SetEddyViscosity(iPoint, solver_container[TURB_SOL]->GetNodes()->GetmuT(iPoint));
     }
 
-    /*--- Device Cons2Prim + rollback + Gamma. ---*/
+    /*--- Device Cons2Prim + rollback + Gamma (+ Step 8: transport properties). ---*/
     nonPhysicalPoints = kokkosData->SetPrimVar();
 
-    /*--- Host remainder of CNEMONSVariable::SetPrimVar: velocity^2 and transport properties.
-     *    The transport routines read the gas model state, which is replayed per point exactly as
-     *    Cons2PrimVar would have left it (full replay for the last point). ---*/
     Kokkos::Timer timer;
-    auto* nsNodes = static_cast<CNEMONSVariable*>(nodes);
-    for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++) {
-      nodes->SetVelocity2(iPoint);
-      kokkosData->ReplayGasState(iPoint, iPoint + 1 == nPoint);
-      nsNodes->SetTransportProperties(iPoint, FluidModel);
+    if (kokkosData->DeviceTransport()) {
+      /*--- Host remainder: velocity^2; host gas model left as after the CPU loop (last point). ---*/
+      for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++) nodes->SetVelocity2(iPoint);
+      kokkosData->ReplayTransportLastPoint();
+    } else {
+      /*--- Host remainder of CNEMONSVariable::SetPrimVar: velocity^2 and transport properties.
+       *    The transport routines read the gas model state, which is replayed per point exactly as
+       *    Cons2PrimVar would have left it (full replay for the last point). ---*/
+      auto* nsNodes = static_cast<CNEMONSVariable*>(nodes);
+      for (auto iPoint = 0ul; iPoint < nPoint; iPoint ++) {
+        nodes->SetVelocity2(iPoint);
+        kokkosData->ReplayGasState(iPoint, iPoint + 1 == nPoint);
+        nsNodes->SetTransportProperties(iPoint, FluidModel);
+      }
     }
     kokkosData->perf.host_post += timer.seconds();
 
@@ -237,6 +258,8 @@ void CNEMONSSolver::Viscous_Residual(CGeometry *geometry,
   SU2_ZONE_SCOPED
 
 #ifdef HAVE_KOKKOS
+  /*--- Step 8: device viscous residual (CAvgGradCorrected_NEMO) into the device accumulator. ---*/
+  if (!viscousHostOnly && Device_ViscousResidual(geometry, solver_container, numerics_container, config, iMesh)) return;
   Device_BeginHostStage(geometry); /*--- device residual accumulator -> host ---*/
 #endif
 
@@ -396,6 +419,9 @@ void CNEMONSSolver::BC_HeatFlux_Wall(CGeometry *geometry,
   SU2_ZONE_SCOPED
 
 #ifdef HAVE_KOKKOS
+  if (!bcHostOnly && Device_BCResidual(geometry, solver_container, conv_numerics, sour_numerics, config, val_marker,
+                                       static_cast<int>(CNEMOKokkosData::BCKind::HEAT_FLUX)))
+    return;
   Device_BeginHostStage(geometry); /*--- device residual accumulator -> host ---*/
 #endif
 
@@ -583,6 +609,9 @@ void CNEMONSSolver::BC_Isothermal_Wall(CGeometry *geometry, CSolver **solver_con
   SU2_ZONE_SCOPED
 
 #ifdef HAVE_KOKKOS
+  if (!bcHostOnly && Device_BCResidual(geometry, solver_container, conv_numerics, sour_numerics, config, val_marker,
+                                       static_cast<int>(CNEMOKokkosData::BCKind::ISOTHERMAL)))
+    return;
   Device_BeginHostStage(geometry); /*--- device residual accumulator -> host ---*/
 #endif
 
