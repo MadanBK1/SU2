@@ -308,6 +308,7 @@ void CNewtonIntegration::MultiGrid_Iteration(CGeometry ****geometry_, CSolver **
   solvers[FLOW_SOL]->Postprocessing(geometry, solvers, config, MESH_0);
 
   SU2_OMP_MASTER {
+    solvers[FLOW_SOL]->SyncHostData(geometry, CSolver::HostSyncScope::BOUNDARY);
     solvers[FLOW_SOL]->Pressure_Forces(geometry, config);
     solvers[FLOW_SOL]->Momentum_Forces(geometry, config);
     solvers[FLOW_SOL]->Friction_Forces(geometry, config);

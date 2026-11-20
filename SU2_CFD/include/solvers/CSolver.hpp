@@ -1293,6 +1293,24 @@ public:
    */
   inline virtual void FinalizeSpaceIntegration(CGeometry *geometry, CConfig *config, unsigned short iMesh) { }
 
+  /*!
+   * \brief Scope of SyncHostData: the Primitive of the boundary (marker vertex) points read by the force /
+   *        traction computations, or everything host code may read (volume output, restart).
+   */
+  enum class HostSyncScope { BOUNDARY, ALL };
+
+  /*!
+   * \brief Make the host copies of device-resident solver data current before host code reads them
+   *        (no-op by default; the device-resident Kokkos NEMO solver downloads lazily here).
+   */
+  inline virtual void SyncHostData(CGeometry *geometry, HostSyncScope scope) { }
+
+  /*!
+   * \brief Squared 2-norm of the domain part of LinSysRes (all threads must call it, see CSysVector::squaredNorm).
+   *        Virtual so that a solver whose residual is device resident can reduce it there.
+   */
+  inline virtual su2double LinSysResSquaredNorm() const { return LinSysRes.squaredNorm(); }
+
  /*!
    * \brief Get the outer state for fluid interface nodes.
    * \param[in] val_marker - marker index

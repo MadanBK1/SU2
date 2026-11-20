@@ -1627,6 +1627,10 @@ void COutput::PreprocessVolumeOutput(CConfig *config){
 
 void COutput::LoadDataIntoSorter(CConfig* config, CGeometry* geometry, CSolver** solver){
 
+  /*--- A device-resident flow solver refreshes its host copies (no-op for host solvers). ---*/
+  if (solver != nullptr && solver[FLOW_SOL] != nullptr)
+    solver[FLOW_SOL]->SyncHostData(geometry, CSolver::HostSyncScope::ALL);
+
   unsigned short iMarker = 0;
   unsigned long iPoint = 0, jPoint = 0;
   unsigned long iVertex = 0;

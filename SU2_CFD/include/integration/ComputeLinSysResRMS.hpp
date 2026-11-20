@@ -45,7 +45,7 @@ inline passivedouble ComputeLinSysResRMS(const CSolver* solver) {
 
   /*--- squaredNorm() -> dot() uses OMP parallel for + barriers internally,
    *    so all threads must participate. ---*/
-  const su2double sqNorm = solver->LinSysRes.squaredNorm();
+  const su2double sqNorm = solver->LinSysResSquaredNorm();
 
   /*--- The MPI reduction for nElmDomain must be single-threaded. ---*/
   passivedouble result = 0.0;
