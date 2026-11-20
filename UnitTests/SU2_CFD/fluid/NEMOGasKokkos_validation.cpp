@@ -143,20 +143,20 @@ static RandomState MakeState(std::mt19937_64& rng, int ns, int nDim, bool ioniza
 }
 
 /*--- Unit tests of the individual functions. Packed output layout per state. ---*/
-struct IndivLayout {
+struct IndivLayout {  // accessors are called inside the device kernel below
   int ns, nVar;
-  int cvtr() const { return 0; }
-  int cvve() const { return ns; }
-  int eve() const { return 2 * ns; }
-  int ev() const { return 3 * ns; }
-  int hs() const { return 4 * ns; }
-  int ener() const { return 5 * ns; }                // 2
-  int scal() const { return 5 * ns + 2; }            // P, a, gamma, rhoCvtr, rhoCvve, T, Tve, rhoCvve_cvves...
+  KOKKOS_INLINE_FUNCTION int cvtr() const { return 0; }
+  KOKKOS_INLINE_FUNCTION int cvve() const { return ns; }
+  KOKKOS_INLINE_FUNCTION int eve() const { return 2 * ns; }
+  KOKKOS_INLINE_FUNCTION int ev() const { return 3 * ns; }
+  KOKKOS_INLINE_FUNCTION int hs() const { return 4 * ns; }
+  KOKKOS_INLINE_FUNCTION int ener() const { return 5 * ns; }                // 2
+  KOKKOS_INLINE_FUNCTION int scal() const { return 5 * ns + 2; }            // P, a, gamma, rhoCvtr, rhoCvve, T, Tve, rhoCvve_cvves...
   static constexpr int nScal = 7;
-  int dPdU() const { return scal() + nScal; }
-  int dTdU() const { return dPdU() + nVar; }
-  int dTvedU() const { return dTdU() + nVar; }
-  int size() const { return dTvedU() + nVar; }
+  KOKKOS_INLINE_FUNCTION int dPdU() const { return scal() + nScal; }
+  KOKKOS_INLINE_FUNCTION int dTdU() const { return dPdU() + nVar; }
+  KOKKOS_INLINE_FUNCTION int dTvedU() const { return dTdU() + nVar; }
+  KOKKOS_INLINE_FUNCTION int size() const { return dTvedU() + nVar; }
 };
 static const char* kScalNames[IndivLayout::nScal] = {"P", "a", "Gamma", "rhoCvtr", "rhoCvve", "T(CompT)", "Tve(CompT)"};
 

@@ -633,7 +633,12 @@ class CNEMOKokkosData {
   bool deviceTransport = false, transportDeviceValid = false, bndViscHost = false;
   std::vector<unsigned long> h_viscWallPoints;
   std::vector<double> bstateViscCache;
+ public:
+  /*--- Public only because it encloses a KOKKOS_LAMBDA: nvcc rejects extended __host__ __device__ lambdas in
+   *    private / protected member functions. Internal: called from SetPrimVar. ---*/
   void ComputeTransportStage(); /*!< DP carry + transport kernel (end of SetPrimVar) */
+
+ private:
   /*--- Step 10: halo plan (device send / receive point indices, persistent buffers). ---*/
   const CGeometry* haloGeometry = nullptr;
   unsigned long haloSend = 0, haloRecv = 0;

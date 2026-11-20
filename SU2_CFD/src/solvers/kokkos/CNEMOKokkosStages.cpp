@@ -421,6 +421,41 @@ struct DtArgs {
   double maxDeltaTime;
 };
 
+/*--- CNEMOEulerVariable::GetProjVel, CNEMOEulerSolver::SetTime_Step functors. Namespace scope (not local to
+ *    KernelTimeStep): nvcc rejects extended-lambda captures of function-local types. ---*/
+template <int ND>
+struct DtFn {
+  DtArgs a;
+  int vel, sos, rho, cvtr, cvve;
+  KOKKOS_INLINE_FUNCTION double ProjVel(unsigned long p, const double* n) const {
+    double ProjVel = 0.0;
+    for (int iDim = 0; iDim < ND; iDim++) ProjVel += a.V(p, vel + iDim) * n[iDim];
+    return ProjVel;
+  }
+  KOKKOS_INLINE_FUNCTION static double lambda(double lamVisc, double eddyVisc, double rho_, double k_, double cv) {
+    const double Lambda_1 = (4.0 / 3.0) * (lamVisc + eddyVisc);
+    return (Lambda_1 + k_ / cv) / rho_;
+  }
+  KOKKOS_INLINE_FUNCTION double lambdaVisc(unsigned long i, unsigned long j) const {
+    const auto& V = a.V;
+    const double lamVisc = 0.5 * (a.mu(i) + a.mu(j));
+    const double eddyVisc = 0.5 * (V(i, a.eddyIdx) + V(j, a.eddyIdx));
+    const double thermalCond = 0.5 * (a.k(i) + a.k(j) + a.kve(i) + a.kve(j));
+    const double density = 0.5 * (V(i, rho) + V(j, rho));
+    const double cv = 0.5 * (V(i, cvtr) + V(i, cvve) + V(j, cvtr) + V(j, cvve)) / density;
+    return lambda(lamVisc, eddyVisc, density, thermalCond, cv);
+  }
+  KOKKOS_INLINE_FUNCTION double lambdaVisc(unsigned long i) const {
+    const auto& V = a.V;
+    const double lamVisc = a.mu(i);
+    const double eddyVisc = V(i, a.eddyIdx);
+    const double thermalCond = a.k(i) + a.kve(i);
+    const double density = V(i, rho);
+    const double cv = (V(i, cvtr) + V(i, cvve)) / density;
+    return lambda(lamVisc, eddyVisc, density, thermalCond, cv);
+  }
+};
+
 /*!
  * \brief SetTime_Step_impl (no dynamic grid): point/edge pass, boundary pass, dt pass with MinMax reduction.
  */
@@ -436,39 +471,7 @@ void KernelTimeStep(const Geo& geo, const DtArgs a, double& minDt, double& maxDt
   const auto vnrm = geo.vtx_normal;
   const su2kokkos::nemo::NEMOPrimIndices pidx(a.ns, ND);
 
-  /*--- CNEMOEulerVariable::GetProjVel, CNEMOEulerSolver::SetTime_Step functors. ---*/
-  struct Fn {
-    DtArgs a;
-    int vel, sos, rho, cvtr, cvve;
-    KOKKOS_INLINE_FUNCTION double ProjVel(unsigned long p, const double* n) const {
-      double ProjVel = 0.0;
-      for (int iDim = 0; iDim < ND; iDim++) ProjVel += a.V(p, vel + iDim) * n[iDim];
-      return ProjVel;
-    }
-    KOKKOS_INLINE_FUNCTION static double lambda(double lamVisc, double eddyVisc, double rho_, double k_, double cv) {
-      const double Lambda_1 = (4.0 / 3.0) * (lamVisc + eddyVisc);
-      return (Lambda_1 + k_ / cv) / rho_;
-    }
-    KOKKOS_INLINE_FUNCTION double lambdaVisc(unsigned long i, unsigned long j) const {
-      const auto& V = a.V;
-      const double lamVisc = 0.5 * (a.mu(i) + a.mu(j));
-      const double eddyVisc = 0.5 * (V(i, a.eddyIdx) + V(j, a.eddyIdx));
-      const double thermalCond = 0.5 * (a.k(i) + a.k(j) + a.kve(i) + a.kve(j));
-      const double density = 0.5 * (V(i, rho) + V(j, rho));
-      const double cv = 0.5 * (V(i, cvtr) + V(i, cvve) + V(j, cvtr) + V(j, cvve)) / density;
-      return lambda(lamVisc, eddyVisc, density, thermalCond, cv);
-    }
-    KOKKOS_INLINE_FUNCTION double lambdaVisc(unsigned long i) const {
-      const auto& V = a.V;
-      const double lamVisc = a.mu(i);
-      const double eddyVisc = V(i, a.eddyIdx);
-      const double thermalCond = a.k(i) + a.kve(i);
-      const double density = V(i, rho);
-      const double cv = (V(i, cvtr) + V(i, cvve)) / density;
-      return lambda(lamVisc, eddyVisc, density, thermalCond, cv);
-    }
-  };
-  const Fn fn{a, pidx.VEL(), pidx.A(), pidx.RHO(), pidx.RHOCVTR(), pidx.RHOCVVE()};
+  const DtFn<ND> fn{a, pidx.VEL(), pidx.A(), pidx.RHO(), pidx.RHOCVTR(), pidx.RHOCVVE()};
   const bool viscous = a.viscous;
 
   Kokkos::parallel_for(
