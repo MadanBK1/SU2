@@ -27,7 +27,20 @@ BASE[tb_air5]=$TB;                                         MOD[tb_air5]="GAS_MOD
 BASE[supersonic]=$TC/invwedge/invwedge_ausm.cfg;           MOD[supersonic]="MARKER_FAR= ( Farfield )|MARKER_OUTLET= DELETE|MARKER_SUPERSONIC_INLET= ( Inlet, 288.15, 101325.0, 1700.0, 0.0, 0.0 )|INLET_GAS_COMPOSITION= (0.77, 0.23, 0.0, 0.0, 0.0)|MARKER_SUPERSONIC_OUTLET= ( Exit )"
 BASE[subout]=$TC/invwedge/invwedge_ausm.cfg;               MOD[subout]="MACH_NUMBER= 0.6|MARKER_OUTLET= ( Exit, 90000.0 )"
 BASE[subout_am]=$TC/invwedge/invwedge_am.cfg;              MOD[subout_am]="MACH_NUMBER= 0.6|MARKER_OUTLET= ( Exit, 90000.0 )|TIME_DISCRE_FLOW= EULER_IMPLICIT|CFL_NUMBER= 3"
-names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm ausmplusm amimpl vanalbada nolim bj_gg wang explicit first air7 air7ion ns_muscl supercat up2 tb tb_impl tb_frozen tb_vtlim tb_air5 supersonic subout subout_am)
+# Step 8: NEMO Navier-Stokes (device transport, viscous residual, NS walls, viscous far field)
+SC=$TC/visc_wedge/super_cat.cfg
+BASE[sc_cat]=$SC;  MOD[sc_cat]="CATALYTIC_WALL= (Wall)|ITER= 11"
+BASE[sc_partcat]=$SC;  MOD[sc_partcat]="CATALYTIC_WALL= (Wall)|SUPERCATALYTIC_WALL= NO|CATALYTIC_EFFICIENCY= 0.2|TIME_DISCRE_FLOW= EULER_EXPLICIT|CFL_NUMBER= 0.5|ITER= 11"
+BASE[sc_gy]=$SC;  MOD[sc_gy]="TRANSPORT_COEFF_MODEL= GUPTA-YOS|ITER= 11"
+BASE[sc_suth]=$SC;  MOD[sc_suth]="TRANSPORT_COEFF_MODEL= SUTHERLAND|ITER= 11"
+BASE[sc_gg]=$SC;  MOD[sc_gg]="NUM_METHOD_GRAD= GREEN_GAUSS|ITER= 11"
+BASE[sc_heatflux]=$SC;  MOD[sc_heatflux]="MARKER_ISOTHERMAL= DELETE|MARKER_HEATFLUX= ( Wall, 0.0 )|ITER= 11"
+BASE[sc_explicit]=$SC;  MOD[sc_explicit]="TIME_DISCRE_FLOW= EULER_EXPLICIT|CFL_NUMBER= 0.5|ITER= 11"
+BASE[sc_n2]=$SC;  MOD[sc_n2]="GAS_MODEL= N2|GAS_COMPOSITION= (0.99, 0.01)|SUPERCATALYTIC_WALL_COMPOSITION= (0.99, 0.01)|CATALYTIC_WALL= (Wall)|ITER= 11"
+BASE[sc_jacobi]=$SC;  MOD[sc_jacobi]="LINEAR_SOLVER_PREC= JACOBI|ITER= 11"
+BASE[partial_cat]=$TC/visc_wedge/partial_cat.cfg;  MOD[partial_cat]=""
+BASE[axi_visccone]=$TC/visc_wedge/axi_visccone.cfg;  MOD[axi_visccone]=""
+names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm ausmplusm amimpl vanalbada nolim bj_gg wang explicit first air7 air7ion ns_muscl supercat up2 tb tb_impl tb_frozen tb_vtlim tb_air5 supersonic subout subout_am sc_cat sc_partcat sc_gy sc_suth sc_gg sc_heatflux sc_explicit sc_n2 sc_jacobi partial_cat axi_visccone)
 st=0
 for n in "${names[@]}"; do
   d=/home/claude/runs/ab/$n; rm -rf $d; mkdir -p $d; cd $d; ln -sf /home/claude/meshes/*.su2 .
@@ -43,6 +56,7 @@ for n in "${names[@]}"; do
   grep -m1 "subsonic outlet" log.txt | sed 's/\[KOKKOS_NEMO_PERF\] MG 0 /   /'
   grep "KOKKOS_NEMO_VERIFY\] MG 0 [A-Za-z]* compares" log.txt | sed 's/\[KOKKOS_NEMO_VERIFY\] MG 0 /   /'
   grep -m1 "reconstructed states" log.txt | sed 's/^/   /'
+  grep -E "stage (viscous|NS transport)|device-resident" log.txt | sed 's/\[KOKKOS_NEMO\] /   /' | cut -c1-110
   [ $rc -ne 0 ] && { tail -3 log.txt; st=1; }
   grep "KOKKOS_NEMO_VERIFY\] MG 0 [A-Za-z]* compares" log.txt | grep -qv "non-bitwise=0 " && st=1
 done

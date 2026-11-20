@@ -31,7 +31,22 @@ BASE[tb_air5]=$TB;        MOD[tb_air5]="GAS_MODEL= AIR-5|GAS_COMPOSITION= (0.6, 
 BASE[tb_steady]=$TB;      MOD[tb_steady]="TIME_DOMAIN= NO|TIME_MARCHING= DELETE|ITER= 11|TIME_DISCRE_FLOW= EULER_IMPLICIT"
 BASE[ausmplusm]=$TC/invwedge/invwedge_am.cfg; MOD[ausmplusm]=""
 BASE[supercat]=$TC/visc_wedge/super_cat.cfg;  MOD[supercat]="ITER= 11"
-names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm jacobi fgmres ilu1 vanalbada nolim bj_gg wang explicit first air7 maxupd output supersonic subout tb tb_impl tb_air5 tb_steady ausmplusm supercat)
+# Step 8: NEMO Navier-Stokes (forces / heat flux in the screen history exercise the BOUNDARY host sync)
+SC=$TC/visc_wedge/super_cat.cfg
+SO="SCREEN_OUTPUT= (INNER_ITER, RMS_DENSITY_0, RMS_DENSITY_1, RMS_ENERGY, RMS_ENERGY_VE, LIFT, DRAG, TOTAL_HEATFLUX)"
+BASE[sc_cat]=$SC;  MOD[sc_cat]="CATALYTIC_WALL= (Wall)|ITER= 11|$SO"
+BASE[sc_partcat]=$SC;  MOD[sc_partcat]="CATALYTIC_WALL= (Wall)|SUPERCATALYTIC_WALL= NO|CATALYTIC_EFFICIENCY= 0.2|TIME_DISCRE_FLOW= EULER_EXPLICIT|CFL_NUMBER= 0.5|ITER= 11|$SO"
+BASE[sc_gy]=$SC;  MOD[sc_gy]="TRANSPORT_COEFF_MODEL= GUPTA-YOS|ITER= 11|$SO"
+BASE[sc_suth]=$SC;  MOD[sc_suth]="TRANSPORT_COEFF_MODEL= SUTHERLAND|ITER= 11|$SO"
+BASE[sc_gg]=$SC;  MOD[sc_gg]="NUM_METHOD_GRAD= GREEN_GAUSS|ITER= 11|$SO"
+BASE[sc_heatflux]=$SC;  MOD[sc_heatflux]="MARKER_ISOTHERMAL= DELETE|MARKER_HEATFLUX= ( Wall, 0.0 )|ITER= 11|$SO"
+BASE[sc_explicit]=$SC;  MOD[sc_explicit]="TIME_DISCRE_FLOW= EULER_EXPLICIT|CFL_NUMBER= 0.5|ITER= 11|$SO"
+BASE[sc_n2]=$SC;  MOD[sc_n2]="GAS_MODEL= N2|GAS_COMPOSITION= (0.99, 0.01)|SUPERCATALYTIC_WALL_COMPOSITION= (0.99, 0.01)|CATALYTIC_WALL= (Wall)|ITER= 11|$SO"
+BASE[sc_jacobi]=$SC;  MOD[sc_jacobi]="LINEAR_SOLVER_PREC= JACOBI|ITER= 11|$SO"
+BASE[sc_forces]=$SC;  MOD[sc_forces]="ITER= 11|$SO"
+BASE[sc_output]=$SC;  MOD[sc_output]="ITER= 7|OUTPUT_WRT_FREQ= 3|OUTPUT_FILES= (RESTART_ASCII, PARAVIEW_ASCII)|$SO"
+BASE[sc_muscl]=$SC;  MOD[sc_muscl]="MUSCL_FLOW= YES|SLOPE_LIMITER_FLOW= VENKATAKRISHNAN|ITER= 11|$SO"
+names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm jacobi fgmres ilu1 vanalbada nolim bj_gg wang explicit first air7 maxupd output supersonic subout tb tb_impl tb_air5 tb_steady ausmplusm supercat sc_forces sc_output sc_muscl sc_cat sc_partcat sc_gy sc_suth sc_gg sc_heatflux sc_explicit sc_n2 sc_jacobi)
 st=0
 for n in "${names[@]}"; do
   for mode in ON OFF; do
@@ -53,7 +68,7 @@ for n in "${names[@]}"; do
   a=/home/claude/runs/abres/${n}_ON; b=/home/claude/runs/abres/${n}_OFF
   res=$(grep -m1 "device-resident state" $a/log.txt | sed 's/.*Step 6): //' | cut -c1-90)
   r1=same; nf=0
-  for f in $b/restart_flow*.csv $b/*.vtu; do [ -e "$f" ] || continue; nf=$((nf+1)); cmp -s $f $a/$(basename $f) || r1=DIFF; done
+  for f in $b/restart_flow*.csv $b/*.vtu $b/*.vtk; do [ -e "$f" ] || continue; nf=$((nf+1)); cmp -s $f $a/$(basename $f) || r1=DIFF; done
   [ $nf -eq 0 ] && r1=MISSING
   r2=$(cmp -s $a/hist.txt $b/hist.txt && echo same || echo DIFF)
   pv=$(grep "preconditioner device build vs host" $a/log.txt | sed 's/.*: //')
