@@ -75,6 +75,7 @@ CSysMatrix<ScalarType>::~CSysMatrix() {
   if (useDevice) {
 #ifdef HAVE_KOKKOS
     if (d_invM != nullptr) GPUMemoryAllocation::gpu_free(d_invM);
+    if (d_dia_ptr != nullptr) GPUMemoryAllocation::gpu_free(d_dia_ptr);
 #endif
     GPUMemoryAllocation::gpu_free(d_matrix);
     GPUMemoryAllocation::gpu_free(d_row_ptr);
@@ -680,6 +681,13 @@ void CSysMatrix<ScalarType>::MatrixVectorProduct(const CSysVector<ScalarType>& v
 template <class ScalarType>
 void CSysMatrix<ScalarType>::BuildJacobiPreconditioner() {
   SU2_ZONE_SCOPED
+#ifdef HAVE_KOKKOS
+  /*--- Device-authoritative values (set by the owner, e.g. the device-resident NEMO solver): build on the device. ---*/
+  if (kokkos_values_on_device && !kokkos_force_host_build) {
+    KokkosBuildJacobiPreconditioner();
+    return;
+  }
+#endif
   /*--- Build Jacobi preconditioner (M = D), compute and store the inverses of the diagonal blocks. ---*/
   SU2_OMP_FOR_DYN(omp_heavy_size)
   for (unsigned long iPoint = 0; iPoint < nPointDomain; iPoint++)
@@ -711,6 +719,16 @@ void CSysMatrix<ScalarType>::ComputeJacobiPreconditioner(const CSysVector<Scalar
 
 template <class ScalarType>
 void CSysMatrix<ScalarType>::BuildILUPreconditioner() {
+#ifdef HAVE_KOKKOS
+  /*--- Device-authoritative values: ILU(0) is factorized on the device; ILU(n>0) downloads the values (host build). ---*/
+  if (kokkos_values_on_device && !kokkos_force_host_build) {
+    if (ilu_fill_in == 0 && !levels_ilu.empty()) {
+      KokkosBuildILUPreconditioner();
+      return;
+    }
+    KokkosValuesToHost();
+  }
+#endif
   const auto blockSize = nVar * nVar;
   ScalarType Lij[MAXNVAR * MAXNVAR], Lij_Ujk[MAXNVAR * MAXNVAR];
 

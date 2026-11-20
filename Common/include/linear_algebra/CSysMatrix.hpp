@@ -179,6 +179,16 @@ class CSysMatrix {
 #ifdef HAVE_KOKKOS
   /*--- KOKKOS JACOBI DEVICE STORAGE: persistent mirror of invM. ---*/
   ScalarType* d_invM = nullptr;
+  const unsigned long* d_dia_ptr = nullptr; /*!< \brief Device dia_ptr (nPointDomain), for the device Jacobi build. */
+
+  /*--- Residency (Step 6 of NEMO_KOKKOS_PORT_PLAN.md). When set by the owner, d_matrix holds the authoritative
+   *    values (assembled on the device) and the host "matrix" is stale: the SpMV does not HtDTransfer, and the
+   *    Jacobi / ILU(0) preconditioners are built on the device (ILU(n>0): values downloaded, host build).
+   *    False by default: every other solver keeps the host-authoritative behaviour. ---*/
+  bool kokkos_values_on_device = false;
+  bool kokkos_force_host_build = false; /*!< \brief Internal: host rebuild for SU2_KOKKOS_PRECOND_VERIFY. */
+  unsigned long kokkos_device_builds = 0, kokkos_verify_builds = 0, kokkos_verify_nonbitwise = 0;
+  double kokkos_build_seconds = 0.0;
 #endif
 
   /*--- Temporary (hence mutable) working memory used in the Linelet preconditioner, outer vector is for threads ---*/
@@ -926,6 +936,29 @@ class CSysMatrix {
   /*! rief Apply the already-built ILU factors entirely in Kokkos device memory. */
   void KokkosComputeILUPreconditioner(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
                                       CGeometry* geometry, const CConfig* config) const;
+
+  /*!
+   * \brief The device values (d_matrix, CSysMatrix layout, nnz*nVar*nEqn) are authoritative (on = true), e.g. because
+   *        the owner assembled them there. See kokkos_values_on_device.
+   */
+  inline void SetKokkosValuesOnDevice(bool on) { kokkos_values_on_device = on; }
+  inline bool GetKokkosValuesOnDevice() const { return kokkos_values_on_device; }
+  /*! \brief Device pointer to the values (nnz*nVar*nEqn, same layout as the host values). */
+  inline ScalarType* GetKokkosDeviceValues() const { return d_matrix; }
+  inline unsigned long GetNumNonZeros() const { return nnz; }
+  /*! \brief DtoH of the device values into the host values (they stay authoritative on the device). */
+  void KokkosValuesToHost();
+  /*! \brief Device builds: block inverses of the diagonal (BuildJacobiPreconditioner) and ILU(0) numeric
+   *         factorization over levels_ilu (BuildILUPreconditioner), the same operations per row as the host. */
+  void KokkosBuildJacobiPreconditioner();
+  void KokkosBuildILUPreconditioner();
+  /*! \brief Allocate / copy the device ILU structure (pattern and levels) once. */
+  void EnsureKokkosILUStructure();
+  /*! \brief Device builds done, A/B verifications (env SU2_KOKKOS_PRECOND_VERIFY=1) and their non-bitwise entries. */
+  inline unsigned long GetKokkosDeviceBuilds() const { return kokkos_device_builds; }
+  inline unsigned long GetKokkosVerifyBuilds() const { return kokkos_verify_builds; }
+  inline unsigned long GetKokkosVerifyNonBitwise() const { return kokkos_verify_nonbitwise; }
+  inline double GetKokkosBuildSeconds() const { return kokkos_build_seconds; }
 #endif
 
   /*!

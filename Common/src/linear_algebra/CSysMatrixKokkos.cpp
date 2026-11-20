@@ -4,7 +4,10 @@
  */
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <Kokkos_Core.hpp>
+#include <vector>
 
 #include <limits>
 #include <type_traits>
@@ -336,6 +339,7 @@ void KokkosHostStagedHaloExchange(CSysVector<ScalarType>& vector,
     Kokkos::deep_copy(
         host_value_view(host_send.data(), send_value_count),
         device_send);
+    KokkosTransferLedger::Add(KokkosTransferLedger::HALO_D2H, double(send_value_count) * sizeof(ScalarType));
   }
 
   for (int i_send = 0; i_send < geometry->nP2PSend; ++i_send) {
@@ -375,6 +379,7 @@ void KokkosHostStagedHaloExchange(CSysVector<ScalarType>& vector,
     Kokkos::deep_copy(
         device_recv,
         host_value_view(host_recv.data(), recv_value_count));
+    KokkosTransferLedger::Add(KokkosTransferLedger::HALO_H2D, double(recv_value_count) * sizeof(ScalarType));
 
     const auto device_vector = vector.GetDevicePointer();
 
@@ -430,6 +435,7 @@ void CSysMatrix<ScalarType>::SyncKokkosJacobiPreconditioner() {
   Kokkos::deep_copy(
       DeviceView<ScalarType>(d_invM, count),
       HostView<const ScalarType>(invM, count));
+  KokkosTransferLedger::Add(KokkosTransferLedger::PRECOND_H2D, double(count) * sizeof(ScalarType));
 }
 
 template <class ScalarType>
@@ -485,10 +491,9 @@ void CSysMatrix<ScalarType>::KokkosComputeJacobiPreconditioner(
   if (config->GetKokkosGPUAwareMPI()) {
     KokkosGPUAwareHaloExchange(prod, geometry, false);
   } else {
-    prod.DtHTransfer();
-    CSysMatrixComms::Initiate(prod, geometry, config);
-    CSysMatrixComms::Complete(prod, geometry, config);
-    prod.HtDTransfer();
+    /*--- Step 6: only the compact halo rows cross the host boundary (was a full DtoH + host comms + HtoD;
+     *    the exchanged halo values and every other entry are the same). ---*/
+    KokkosHostStagedHaloExchange(prod, geometry, false);
   }
 }
 
@@ -500,6 +505,15 @@ template <class ScalarType>
 void CSysMatrix<ScalarType>::SyncKokkosILUPreconditioner() {
   if (ILU_matrix == nullptr || nnz_ilu == 0 || levels_ilu.empty()) return;
 
+  EnsureKokkosILUStructure();
+  const auto factor_count = nnz_ilu * nVar * nEqn;
+  Kokkos::deep_copy(DeviceView<ScalarType>(d_ILU_matrix, factor_count),
+                    HostView<const ScalarType>(ILU_matrix, factor_count));
+  KokkosTransferLedger::Add(KokkosTransferLedger::PRECOND_H2D, double(factor_count) * sizeof(ScalarType));
+}
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::EnsureKokkosILUStructure() {
   const auto block_size = nVar * nEqn;
   const auto factor_count = nnz_ilu * block_size;
   const auto level_count = levels_ilu.getOuterSize();
@@ -523,9 +537,6 @@ void CSysMatrix<ScalarType>::SyncKokkosILUPreconditioner() {
   if (d_ilu_level_rows == nullptr)
     d_ilu_level_rows = GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(
         levels_ilu.innerIdx(), level_rows * sizeof(unsigned long));
-
-  Kokkos::deep_copy(DeviceView<ScalarType>(d_ILU_matrix, factor_count),
-                    HostView<const ScalarType>(ILU_matrix, factor_count));
 }
 
 /*--- KOKKOS DEVICE ILU APPLY --------------------------------------------------
@@ -709,6 +720,15 @@ void CSysMatrix<ScalarType>::HtDTransfer(bool trigger) const {
   if (!trigger || nnz == 0) return;
   const auto count = nnz * nVar * nEqn;
   Kokkos::deep_copy(DeviceView<ScalarType>(d_matrix, count), HostView<const ScalarType>(matrix, count));
+  KokkosTransferLedger::Add(KokkosTransferLedger::MATRIX_H2D, double(count) * sizeof(ScalarType));
+}
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::KokkosValuesToHost() {
+  if (nnz == 0) return;
+  const auto count = nnz * nVar * nEqn;
+  Kokkos::deep_copy(HostView<ScalarType>(matrix, count), DeviceView<const ScalarType>(d_matrix, count));
+  KokkosTransferLedger::Add(KokkosTransferLedger::MATRIX_D2H, double(count) * sizeof(ScalarType));
 }
 
 template <class ScalarType>
@@ -724,7 +744,8 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
   const bool input_on_device = kokkos_spmv_mode.active && kokkos_spmv_mode.input_on_device;
   const bool output_to_host = !kokkos_spmv_mode.active || kokkos_spmv_mode.output_to_host;
 
-  if (!matrix_on_device) HtDTransfer();
+  /*--- Device-authoritative values (SetKokkosValuesOnDevice) are never overwritten from the stale host copy. ---*/
+  if (!matrix_on_device && !kokkos_values_on_device) HtDTransfer();
   if (!input_on_device) vec.HtDTransfer();
 
   const auto values = d_matrix;
@@ -769,6 +790,208 @@ void CSysMatrix<ScalarType>::KokkosMatrixVectorProduct(const CSysVector<ScalarTy
      * send/receive buffers are staged through host memory. */
     KokkosHostStagedHaloExchange(prod, geometry, output_to_host);
   }
+}
+
+
+/*============================== Step 6: device preconditioner builds ==============================*/
+namespace {
+
+/*--- RegularizePivot of CSysMatrix.cpp: "const float eps = 1e-12", compared and copysign'ed in the promoted type. ---*/
+template <class T>
+KOKKOS_INLINE_FUNCTION void DeviceRegularizePivot(T& pivot) {
+  using P = std::common_type_t<float, T>;
+  const float eps = 1e-12;
+  if (Kokkos::abs(pivot) < eps) pivot = Kokkos::copysign(static_cast<P>(eps), static_cast<P>(pivot));
+}
+
+/*--- CSysMatrix::MatrixInverse (non-MKL path), same statement order. A is destroyed, M = inv(A). ---*/
+template <class T>
+KOKKOS_INLINE_FUNCTION void DeviceMatrixInverse(unsigned long nVar, T* A_, T* M_) {
+#define A(I, J) A_[(I)*nVar + (J)]
+#define M(I, J) M_[(I)*nVar + (J)]
+  for (unsigned long iVar = 0; iVar < nVar; iVar++)
+    for (unsigned long jVar = 0; jVar < nVar; jVar++) M(iVar, jVar) = T(iVar == jVar);
+
+  for (unsigned long iVar = 1; iVar < nVar; iVar++) {
+    for (unsigned long jVar = 0; jVar < iVar; jVar++) {
+      DeviceRegularizePivot(A(jVar, jVar));
+      T weight = A(iVar, jVar) / A(jVar, jVar);
+      for (auto kVar = jVar; kVar < nVar; kVar++) A(iVar, kVar) -= weight * A(jVar, kVar);
+      for (unsigned long kVar = 0; kVar <= jVar; kVar++) M(iVar, kVar) -= weight * M(jVar, kVar);
+    }
+  }
+  for (auto iVar = nVar; iVar > 0ul;) {
+    iVar--;
+    for (auto jVar = iVar + 1; jVar < nVar; jVar++)
+      for (unsigned long kVar = 0; kVar < nVar; kVar++) M(iVar, kVar) -= A(iVar, jVar) * M(jVar, kVar);
+    DeviceRegularizePivot(A(iVar, iVar));
+    for (unsigned long kVar = 0; kVar < nVar; kVar++) M(iVar, kVar) /= A(iVar, iVar);
+  }
+#undef A
+#undef M
+}
+
+/*--- gemm_impl of CSysMatrix.inl. ---*/
+template <class T>
+KOKKOS_INLINE_FUNCTION void DeviceGemm(unsigned long n, const T* a, const T* b, T* c) {
+  for (unsigned long i = 0; i < n; i++) {
+    for (unsigned long j = 0; j < n; j++) {
+      c[i * n + j] = 0.0;
+      for (unsigned long k = 0; k < n; k++) c[i * n + j] += a[i * n + k] * b[k * n + j];
+    }
+  }
+}
+
+bool PrecondVerifyEnabled() {
+  static const bool on = [] {
+    const char* env = std::getenv("SU2_KOKKOS_PRECOND_VERIFY");
+    return env != nullptr && std::atoi(env) != 0;
+  }();
+  return on;
+}
+
+template <class T>
+unsigned long CountNonBitwise(const T* a, const T* b, size_t n) {
+  unsigned long bad = 0;
+  for (size_t k = 0; k < n; ++k) bad += (std::memcmp(&a[k], &b[k], sizeof(T)) != 0);
+  return bad;
+}
+
+}  // namespace
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::KokkosBuildJacobiPreconditioner() {
+  if (invM == nullptr || nPointDomain == 0) return;
+  if (nVar != nEqn) SU2_MPI::Error("Kokkos Jacobi build needs square blocks.", CURRENT_FUNCTION);
+  Kokkos::Timer timer;
+  const auto count = nPointDomain * nVar * nVar;
+  if (d_invM == nullptr) d_invM = GPUMemoryAllocation::gpu_alloc<ScalarType>(count * sizeof(ScalarType));
+  if (d_dia_ptr == nullptr)
+    d_dia_ptr = GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(dia_ptr, nPointDomain * sizeof(unsigned long));
+
+  using range_policy = Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace, Kokkos::IndexType<unsigned long>>;
+  const auto values = d_matrix;
+  const auto diag = d_dia_ptr;
+  const auto inv = d_invM;
+  const unsigned long nv = nVar, bs = nVar * nVar;
+  /*--- InverseDiagonalBlock: copy the block (MatrixInverse destroys its input), invert. ---*/
+  Kokkos::parallel_for(
+      "SU2::KokkosJacobiBuild", range_policy(0ul, nPointDomain), KOKKOS_LAMBDA(const unsigned long i) {
+        ScalarType block[MAXNVAR * MAXNVAR];
+        const auto* src = values + diag[i] * bs;
+        for (unsigned long k = 0; k < bs; ++k) block[k] = src[k];
+        DeviceMatrixInverse(nv, block, inv + i * bs);
+      });
+  Kokkos::fence("SU2::Kokkos Jacobi build complete");
+  kokkos_device_builds++;
+
+  if (PrecondVerifyEnabled()) {
+    /*--- A/B: host build from the downloaded values (also re-syncs d_invM from the host result). ---*/
+    std::vector<ScalarType> dev(count);
+    Kokkos::deep_copy(HostView<ScalarType>(dev.data(), count), DeviceView<const ScalarType>(d_invM, count));
+    KokkosValuesToHost();
+    kokkos_force_host_build = true;
+    BuildJacobiPreconditioner();
+    kokkos_force_host_build = false;
+    kokkos_verify_builds++;
+    kokkos_verify_nonbitwise += CountNonBitwise(invM, dev.data(), count);
+  }
+  kokkos_build_seconds += timer.seconds();
+}
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::KokkosBuildILUPreconditioner() {
+  if (ILU_matrix == nullptr || nnz_ilu == 0 || levels_ilu.empty()) return;
+  if (ilu_fill_in != 0 || nVar != nEqn)
+    SU2_MPI::Error("Kokkos ILU build supports ILU(0) with square blocks only.", CURRENT_FUNCTION);
+  Kokkos::Timer timer;
+  EnsureKokkosILUStructure();
+
+  using range_policy = Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace, Kokkos::IndexType<unsigned long>>;
+  const auto values = d_matrix;
+  const auto ilu = d_ILU_matrix;
+  const auto rows = d_row_ptr_ilu;
+  const auto diagonal = d_dia_ptr_ilu;
+  const auto columns = d_col_ind_ilu;
+  const auto level_rows = d_ilu_level_rows;
+  const unsigned long nv = nVar, bs = nVar * nVar, end = nPointDomain;
+
+  /*--- Same per-row operations as BuildILUPreconditioner (level-scheduled branch). Rows of one level only read
+   *    rows of earlier levels and write their own blocks, so the row order within a level does not matter. ---*/
+  for (auto level = 0ul; level < levels_ilu.getOuterSize(); ++level) {
+    const auto first = levels_ilu.outerPtr()[level];
+    const auto last = levels_ilu.outerPtr()[level + 1];
+    const bool firstLevel = (level == 0);
+    Kokkos::parallel_for(
+        "SU2::KokkosILU0Build", range_policy(first, last), KOKKOS_LAMBDA(const unsigned long k) {
+          const auto iPoint = level_rows[k];
+
+          /*--- InitIluRow (ILU0: direct copy of the row's blocks). ---*/
+          for (auto idx = rows[iPoint] * bs; idx < rows[iPoint + 1] * bs; ++idx) ilu[idx] = values[idx];
+
+          if (!firstLevel) {
+            /*--- BuildIluRow(iPoint, 0, nPointDomain). ---*/
+            ScalarType Lij[MAXNVAR * MAXNVAR], Lij_Ujk[MAXNVAR * MAXNVAR];
+            for (auto index = rows[iPoint]; index < diagonal[iPoint]; ++index) {
+              const auto jPoint = columns[index];
+              auto* Block_ij = ilu + index * bs;
+              const auto* invUjj = ilu + diagonal[jPoint] * bs;
+              DeviceGemm(nv, Block_ij, invUjj, Lij);
+
+              for (auto index_ = diagonal[jPoint] + 1; index_ < rows[jPoint + 1]; ++index_) {
+                const auto kPoint = columns[index_];
+                if (kPoint >= end) break;
+
+                /*--- GetBlock_ILUMatrix(iPoint, kPoint). ---*/
+                ScalarType* Block_ik = nullptr;
+                const auto searchEnd = (kPoint < iPoint) ? diagonal[iPoint] : rows[iPoint + 1];
+                for (auto s = (kPoint < iPoint) ? rows[iPoint] : diagonal[iPoint]; s < searchEnd; ++s) {
+                  if (columns[s] == kPoint) {
+                    Block_ik = ilu + s * bs;
+                    break;
+                  }
+                }
+                if (Block_ik == nullptr) continue;
+
+                const auto* Ujk = ilu + index_ * bs;
+                DeviceGemm(nv, Lij, Ujk, Lij_Ujk);
+                for (unsigned long v = 0; v < bs; ++v) Block_ik[v] = Block_ik[v] - Lij_Ujk[v];
+              }
+              for (unsigned long v = 0; v < bs; ++v) Block_ij[v] = Lij[v];
+            }
+          }
+
+          /*--- InvertDiagonalBlockILUMatrix(iPoint). ---*/
+          ScalarType block[MAXNVAR * MAXNVAR];
+          auto* Uii = ilu + diagonal[iPoint] * bs;
+          for (unsigned long v = 0; v < bs; ++v) block[v] = Uii[v];
+          DeviceMatrixInverse(nv, block, Uii);
+        });
+  }
+  Kokkos::fence("SU2::Kokkos ILU(0) build complete");
+  kokkos_device_builds++;
+
+  if (PrecondVerifyEnabled()) {
+    /*--- A/B: host build from the downloaded values; the host factors are compared and then synced (run continues
+     *    with the host result, identical if bitwise). ---*/
+    const auto count = nnz_ilu * bs;
+    std::vector<ScalarType> dev(count);
+    Kokkos::deep_copy(HostView<ScalarType>(dev.data(), count), DeviceView<const ScalarType>(d_ILU_matrix, count));
+    KokkosValuesToHost();
+    kokkos_force_host_build = true;
+    BuildILUPreconditioner();
+    kokkos_force_host_build = false;
+    kokkos_verify_builds++;
+    /*--- Only the factorized rows (those in levels_ilu) are defined. ---*/
+    unsigned long bad = 0;
+    for (auto k = 0ul; k < levels_ilu.getNumNonZeros(); ++k) {
+      const auto i = levels_ilu.innerIdx()[k];
+      const auto b = row_ptr_ilu[i] * bs, e = row_ptr_ilu[i + 1] * bs;
+      bad += CountNonBitwise(ILU_matrix + b, dev.data() + b, e - b);
+    }
+    kokkos_verify_nonbitwise += bad;
+  }
+  kokkos_build_seconds += timer.seconds();
 }
 
 template class CSysMatrix<su2mixedfloat>;

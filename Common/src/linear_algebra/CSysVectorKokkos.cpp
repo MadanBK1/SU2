@@ -15,18 +15,33 @@ using DeviceView = Kokkos::View<ScalarType*, typename Kokkos::DefaultExecutionSp
 template <class ScalarType>
 using HostView =
     Kokkos::View<ScalarType*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+double ledger[KokkosTransferLedger::N_CATEGORIES] = {};
 }  // namespace
+
+namespace KokkosTransferLedger {
+void Add(Category c, double bytes) { ledger[c] += bytes; }
+double Get(Category c) { return ledger[c]; }
+const char* Name(Category c) {
+  static const char* names[N_CATEGORIES] = {"vector HtoD", "vector DtoH", "matrix HtoD", "matrix DtoH",
+                                            "precond HtoD", "precond DtoH", "halo HtoD", "halo DtoH"};
+  return names[c];
+}
+}  // namespace KokkosTransferLedger
 
 template <class ScalarType>
 void CSysVector<ScalarType>::HtDTransfer(bool trigger) const {
-  if (trigger && nElm > 0) Kokkos::deep_copy(DeviceView<ScalarType>(d_vec_val, nElm),
-                                              HostView<const ScalarType>(vec_val, nElm));
+  if (trigger && nElm > 0) {
+    Kokkos::deep_copy(DeviceView<ScalarType>(d_vec_val, nElm), HostView<const ScalarType>(vec_val, nElm));
+    KokkosTransferLedger::Add(KokkosTransferLedger::VECTOR_H2D, double(nElm) * sizeof(ScalarType));
+  }
 }
 
 template <class ScalarType>
 void CSysVector<ScalarType>::DtHTransfer(bool trigger) const {
-  if (trigger && nElm > 0) Kokkos::deep_copy(HostView<ScalarType>(vec_val, nElm),
-                                              DeviceView<const ScalarType>(d_vec_val, nElm));
+  if (trigger && nElm > 0) {
+    Kokkos::deep_copy(HostView<ScalarType>(vec_val, nElm), DeviceView<const ScalarType>(d_vec_val, nElm));
+    KokkosTransferLedger::Add(KokkosTransferLedger::VECTOR_D2H, double(nElm) * sizeof(ScalarType));
+  }
 }
 
 template <class ScalarType>

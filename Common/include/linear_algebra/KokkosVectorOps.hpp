@@ -184,14 +184,16 @@ inline std::vector<ScalarType> MultiDot(const std::vector<CSysVector<ScalarType>
 /*--- Synchronization helpers. These are deliberately explicit so solver code can
  * keep vectors device-resident and synchronize only at CPU preconditioner or
  * monitoring boundaries. ---*/
+/*--- A vector whose device copy is authoritative (CSysVector::SetKokkosDeviceAuthoritative, e.g. the device-resident
+ *    NEMO LinSysRes / LinSysSol) is not transferred: its owner keeps it current on the device and downloads on demand. ---*/
 template <class ScalarType>
 inline void HostToDevice(const CSysVector<ScalarType>& x) {
-  x.HtDTransfer();
+  if (!x.GetKokkosDeviceAuthoritative()) x.HtDTransfer();
 }
 
 template <class ScalarType>
 inline void DeviceToHost(const CSysVector<ScalarType>& x) {
-  x.DtHTransfer();
+  if (!x.GetKokkosDeviceAuthoritative()) x.DtHTransfer();
 }
 
 }  // namespace KokkosLinearAlgebra

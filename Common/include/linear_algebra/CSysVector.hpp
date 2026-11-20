@@ -64,6 +64,21 @@
  * \ingroup SpLinSys
  * \brief Class for holding and manipulating vectors needed by linear solvers.
  */
+#ifdef HAVE_KOKKOS
+/*!
+ * \brief Byte counters of the host<->device transfers made by the Kokkos linear-algebra backend (vectors, matrix
+ *        values, preconditioner factors, staged halos). Read by solvers that report a transfer ledger.
+ */
+namespace KokkosTransferLedger {
+enum Category : int {
+  VECTOR_H2D = 0, VECTOR_D2H, MATRIX_H2D, MATRIX_D2H, PRECOND_H2D, PRECOND_D2H, HALO_H2D, HALO_D2H, N_CATEGORIES
+};
+void Add(Category c, double bytes);
+double Get(Category c);
+const char* Name(Category c);
+}  // namespace KokkosTransferLedger
+#endif
+
 template <class ScalarType>
 class CSysVector : public VecExpr::CVecExpr<CSysVector<ScalarType>, ScalarType> {
  private:
@@ -87,6 +102,10 @@ class CSysVector : public VecExpr::CVecExpr<CSysVector<ScalarType>, ScalarType> 
   unsigned long kokkos_mpi_recv_capacity = 0; /*!< \brief Number of values available in the receive buffer. */
   unsigned long kokkos_mpi_send_index_capacity = 0; /*!< \brief Number of send indices allocated. */
   unsigned long kokkos_mpi_recv_index_capacity = 0; /*!< \brief Number of receive indices allocated. */
+  /*--- Residency (Step 6 of NEMO_KOKKOS_PORT_PLAN.md): when set by the owner, the device copy is authoritative and the
+   *    host copy is stale. The Kokkos Krylov solvers then skip their HostToDevice / DeviceToHost of this vector;
+   *    the owner downloads explicitly when host code needs the values. False by default (unchanged behaviour). ---*/
+  mutable bool kokkos_device_authoritative = false;
 #endif
 
 #ifdef HAVE_OMP
@@ -193,6 +212,7 @@ class CSysVector : public VecExpr::CVecExpr<CSysVector<ScalarType>, ScalarType> 
     std::swap(kokkos_mpi_recv_capacity, other.kokkos_mpi_recv_capacity);
     std::swap(kokkos_mpi_send_index_capacity, other.kokkos_mpi_send_index_capacity);
     std::swap(kokkos_mpi_recv_index_capacity, other.kokkos_mpi_recv_index_capacity);
+    std::swap(kokkos_device_authoritative, other.kokkos_device_authoritative);
 #endif
     std::swap(nElm, other.nElm);
     std::swap(nElmDomain, other.nElmDomain);
@@ -277,6 +297,10 @@ class CSysVector : public VecExpr::CVecExpr<CSysVector<ScalarType>, ScalarType> 
   inline ScalarType* GetKokkosMPIRecvBuffer() const { return d_kokkos_mpi_recv; }
   inline unsigned long* GetKokkosMPISendIndices() const { return d_kokkos_mpi_send_indices; }
   inline unsigned long* GetKokkosMPIRecvIndices() const { return d_kokkos_mpi_recv_indices; }
+
+  /*! \brief Device copy authoritative (host stale): the Kokkos Krylov solvers do not transfer this vector. */
+  inline void SetKokkosDeviceAuthoritative(bool on) const { kokkos_device_authoritative = on; }
+  inline bool GetKokkosDeviceAuthoritative() const { return kokkos_device_authoritative; }
 #endif
 
   /*!
