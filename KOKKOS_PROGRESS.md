@@ -176,3 +176,10 @@ LOOP HINT: 4.2 is DONE (all gates PASS, super_cat NF finished round 6). 4.3 = wa
 - 2026-11-24T11:07:41-05:00 [loop] round 36 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_105621_36.log
 
 - 2026-11-24T11:17:58-05:00 [loop] round 37 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_110801_37.log
+
+- 2026-11-24T11:41:29-05:00 [loop] round 38 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_111818_38.log
+
+- 2026-11-24 round 39 (this session, item 4.4 — LAX device port):
+  - State check: branch OK, tree clean except KOKKOS_PROGRESS.md. Rounds 24-38 = loop-log lines only; no code since round 23. 4.1/4.2 DONE, 4.3 G5 PASS (G7 BLOCKED: no /dev/nvidia* in sandbox), 4.4 first unchecked actionable item (per round-7 LOOP HINT).
+  - CPU LAX source: SU2_CFD/src/numerics/NEMO/convection/lax.cpp (167 lines — small). Device dispatch: SU2_CFD/src/solvers/kokkos/CNEMOKokkosUpwind.cpp (427) + CNEMOKokkosAUSM.hpp (595).
+  - Chunk this round: (1) explore agent mapping CPU LAX call chain + device dispatch + gas helpers; (2) implement LAX device kernel + dispatch; (3) build serial (G1-style strict bitwise check of a LAX case); (4) cuda build G5.
