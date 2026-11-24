@@ -13,7 +13,7 @@ REPO=$WS/SU2
 BRANCH=su2kokkos_qwenlocal_agent
 MODEL=${MODEL:-qwen3.8:27b}
 export OLLAMA_HOST=${OLLAMA_HOST:-127.0.0.1:11435}
-MAX_TURNS=${MAX_TURNS:-40}                      # tool turns per session (bounds context use)
+MAX_TURNS=${MAX_TURNS:-15}                      # tool turns per session (bounds context use)
 ROUND_TIMEOUT=${ROUND_TIMEOUT:-3h}              # hard wall-clock cap per session
 MAX_ROUNDS=${MAX_ROUNDS:-200}
 MAX_STUCK=${MAX_STUCK:-3}                       # stop after N rounds with no progress
@@ -32,6 +32,9 @@ cd SU2. Follow LOCAL_AGENT_TASK.md exactly, starting with section 0 (git status/
 Work only on branch $BRANCH; stay inside $WS.
 Do ONE bounded chunk of the first unchecked item (an edit + build + check), keeping replies short.
 Redirect long output to files and show only tails (cmd > log 2>&1; tail -30 log).
+CONTEXT IS SMALL: never read a whole source file. Use grep -n to locate, then read at most 80 lines with offset/limit.
+Never cat build logs or diffs in full (use tail -30, git diff --stat, or git diff -- <one file> | head -150).
+Save progress to KOKKOS_PROGRESS.md and commit early (by your 10th tool call), then continue if turns remain.
 Before you finish this session ALWAYS: append status/commands/results/next step to KOKKOS_PROGRESS.md,
 commit (WIP if gates not complete), and push to origin $BRANCH.
 If every item in section 4 is done, write the line ALL ITEMS DONE at the end of KOKKOS_PROGRESS.md.

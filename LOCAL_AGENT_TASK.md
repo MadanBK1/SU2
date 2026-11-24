@@ -15,6 +15,11 @@ The script `TestCases/kokkos_nemo/local_agent_loop.sh` restarts you in a fresh s
 - **When everything is finished:** if every item in section 4 is checked, write `ALL ITEMS DONE` as the last line of `KOKKOS_PROGRESS.md`.
 - **When you need a person:** if you are blocked (credentials, GPU busy, a permission refused, or a decision only the user can make), write `NEEDS HUMAN: <reason>` as the last line. The loop stops when it sees either marker.
 
+### Context budget (small local model)
+- **Big files:** never read a whole source file (`CNEMOEulerSolver.cpp` alone is thousands of lines). Use `grep -n`, then read 50–80 lines around the hit.
+- **Long output:** redirect builds and tests to log files and show only `tail -30`. Never print full diffs; use `git diff --stat` or a single file through `head`.
+- **Save early:** write progress to `KOKKOS_PROGRESS.md` and commit early in each session.
+
 ## 1. Rules
 - **Folder boundary (hard rule):** only create, modify or delete files inside `~/software/AgenticTest/` (the SU2 clone and `kk/`).
   - Never write, move or delete anything outside it, especially `/home/mpr7366/SU2` (the user's other SU2 tree), `~/.bashrc` and other home dotfiles, and system paths.
