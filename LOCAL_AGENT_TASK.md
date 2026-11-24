@@ -13,7 +13,9 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
 The script `TestCases/kokkos_nemo/local_agent_loop.sh` restarts you in a fresh session after every round. In that mode:
 - **Each session:** do one bounded chunk, then save progress, commit and push before ending.
 - **When everything is finished:** if every item in section 4 is checked, write `ALL ITEMS DONE` as the last line of `KOKKOS_PROGRESS.md`.
-- **When you need a person:** if you are blocked (credentials, GPU busy, a permission refused, or a decision only the user can make), write `NEEDS HUMAN: <reason>` as the last line. The loop stops when it sees either marker.
+- **Never wait for a person.** If an item is blocked (credentials, GPU busy, a permission refused, a missing tool), mark it `BLOCKED <item>: <reason>` in `KOKKOS_PROGRESS.md` and continue with the next unchecked item. Retry blocked items once everything else is done or blocked. When something is a decision for the user, pick the conservative option and record it.
+- **Loop hints:** obey the most recent `LOOP HINT:` line in `KOKKOS_PROGRESS.md`.
+- **Stopping:** the loop stops only on `ALL ITEMS DONE` or when the user creates the file `STOP_AGENT`.
 
 ### Context budget (small local model)
 - **Big files:** never read a whole source file (`CNEMOEulerSolver.cpp` alone is thousands of lines). Use `grep -n`, then read 50–80 lines around the hit.
