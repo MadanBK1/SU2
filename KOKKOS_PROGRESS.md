@@ -60,3 +60,7 @@ LOOP HINT: round 3 = item 4.2 per NEXT steps above; builds via ./meson.py or sys
   - G4 strict: PASS (round-3, g4-strict.log on disk). G4 serial: PASS (this round, 1250 states AIR-7 GUPTA-YOS, bitwise within tol).
   - build.sh: added g3 gate (OLD=../kk/cd2cd46 baseline, NEW=serial).
   - Running now: g1-ab (bie87sxsf), G6 (b18oborq1), G2 (bvnfeasp9), G3 (by3h19gt0).
+  - G6 FIRST RUN: FAIL — 3 of 4 cases (invwedge_ausm, super_cat, axi_visccone) abort BOTH NO and YES runs with `MPI_ERR_TRUNCATE` in MPI_Allreduce, rank 1, right after "Begin Solver"/first iteration (wall ~1.2s). thermalbath_np2: PASS (residuals bitwise).
+  - Hypotheses: (a) Batch A regression (constructor bndStaleOK Allreduce has uniform nM — unlikely culprit; Device_PressureSensor has no variable-count Allreduce); (b) PRE-EXISTING SU2 MPI bug — Batch A commit message itself says the 2-rank MPI gate was never run.
+  - DISCRIMINATE: building baseline cd2cd46 strict-mpi (bg bpc596j1w, ../kk/cd2cd46/build-baseline-mpi). Then `NP=2 BIN=<baseline-mpi SU2_CFD> REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 bash $S/check.sh` (RUN_TAG=base): if baseline fails identically → pre-existing bug to fix in SU2 core (or document); if baseline passes → bisect Batch A diff (git show 35b6f39) for the offending collective.
+  - G2 (bvnfeasp9), G3 (by3h19gt0), g1-ab (bie87sxsf) still running.
