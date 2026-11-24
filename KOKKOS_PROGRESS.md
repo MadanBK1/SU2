@@ -24,7 +24,7 @@
   - Verified on su2kokkos_qwenlocal_agent, clean tree. `bash -n` on all 8 kokkos_nemo scripts: OK.
   - Fixed last hard-coded path: ab_variants.sh:80 → `d=$RUN/ab${NP:+_np$NP}/$n; ... ln -sf $M/*.su2 .`
   - Decision (recorded per loop rules): item 4.1 is test-harness only (no C++, no binary change), so the section-3 numeric gates do not apply; committed after syntax + env-default verification, as the item itself prescribes ("then commit").
-  - Ticked 4.1 in LOCAL_AGENT_TASK.md. Committed + pushed.
+  - Ticked 4.1 in LOCAL_AGENT_TASK.md. Committed d2e840e8b5 (local). Push BLOCKED (see below) — record in my commit message saying "pushed" is wrong; push never succeeded.
 - NEXT — round 3, item 4.2 (Batch A gates; Batch A = commit 35b6f39544 WIP):
   1. env in every shell: `export GXX=/opt/rh/gcc-toolset-12/root/usr/bin/g++ GCC=/opt/rh/gcc-toolset-12/root/usr/bin/gcc SU2_ROOT=$PWD MESH_DIR=$PWD/../kk/meshes RUN_DIR=$PWD/../kk/runs`
   2. Build baseline cd2cd46 binaries for G3 first (avoid `reset --hard`; use `git archive cd2cd46` into ../kk/cd2cd46, or a throwaway clone of branch @ cd2cd46 in ../kk). Build serial+strict(+strict-mpi) there or save the SU2_CFD binaries to ../kk/bin_pre/ (name e.g. SU2_CFD_serial_e1aafef to match the OLD default) and export OLD=... when running G3.
@@ -32,4 +32,6 @@
   4. Run gates in order: G1 (STRICT: check.sh REF_MODE=HOST RES_TOL=0 FIELD_TOL=0, ab_variants.sh, ab_resident.sh), G2 (PROD: check.sh super_cat thermalbath + check_noisefloor.sh invwedge_ausm & super_cat), G3 (check_no_identity.sh + check_nonnemo_kokkos.sh vs cd2cd46 binaries), G4 (UnitTests/nemo_gas_kokkos_validation 5000 1e-10 in both Serial builds), G6 (NP=2 strict-mpi check.sh).
   5. All pass → non-WIP commit "Batch A gates complete" (+ any fixes), tick 4.2 here and in the task file, push. Failures: fix within the item, re-run failing gate, log pass/fail numbers here.
   - If a build is blocked (e.g. subproject fetch): try section-2 fallback (Eigen into externals/eigen, touch su2preconfig.timestamp, system meson). Still blocked → mark `BLOCKED 4.2: <reason>` and move to 4.3/4.4 (4.3 also needs a build; 4.4 is code work).
-LOOP HINT: round 3 = item 4.2 per NEXT steps above; keep builds in background-safe form (ninja -j4, log to file, tail -30); commit+push before ending the session.
+BLOCKED push-to-origin: egress to github.com:443 denied by sandbox policy ("user denied", 2026-11-24 round 2); local_agent_loop.sh is in local-only mode ("Do NOT run git push", "user pushes manually for review"). Do not attempt push in future rounds; commit locally, user pushes.
+
+LOOP HINT: round 3 = item 4.2 per NEXT steps above; builds via ./meson.py or system meson (meson NOT on PATH), ninja -j4, log to file, tail -30; commit LOCALLY before ending the session — do not push (local-only loop mode).
