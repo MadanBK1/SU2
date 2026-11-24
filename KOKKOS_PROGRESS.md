@@ -53,3 +53,6 @@ LOOP HINT: round 3 = item 4.2 per NEXT steps above; builds via ./meson.py or sys
 - 2026-11-24 round 4 (this session, item 4.2 continue):
   - State check: strict+serial SU2_CFD & UnitTests built (Nov 24 02:51); strict-mpi NOT built; g1-strict.log absent (G1 never finished last round); g4-strict.log PASS (on disk).
   - This round: G1 strict, g1-ab, G2, g4serial; strict-mpi ninja for G6; G3 needs cd2cd46 baseline.
+  - BUG in build.sh: type-case `*)` hit "unknown type g1" and exited 2 BEFORE gate mode — G1 "launched" last round never ran (no log existed). Fixed: gate names now pass the type case. Re-launched G1 (bg b5cxqq4d4).
+  - G3 baseline prepared: git archive cd2cd46 → ../kk/cd2cd46 (+ subprojects/externals copies, su2preconfig.timestamp touched); build.sh gained `baseline` setup/ninja targets (build dir ../kk/cd2cd46/build-baseline, serial production flags). meson setup baseline rc=0; ninja baseline running (bg b413xvtj4).
+  - strict-mpi ninja running (bg bu02tlp4z). G3 OLD= will be ../kk/cd2cd46/build-baseline/SU2_CFD/src/SU2_CFD (script accepts OLD= env override).
