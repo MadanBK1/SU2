@@ -183,3 +183,9 @@ LOOP HINT: 4.2 is DONE (all gates PASS, super_cat NF finished round 6). 4.3 = wa
   - State check: branch OK, tree clean except KOKKOS_PROGRESS.md. Rounds 24-38 = loop-log lines only; no code since round 23. 4.1/4.2 DONE, 4.3 G5 PASS (G7 BLOCKED: no /dev/nvidia* in sandbox), 4.4 first unchecked actionable item (per round-7 LOOP HINT).
   - CPU LAX source: SU2_CFD/src/numerics/NEMO/convection/lax.cpp (167 lines — small). Device dispatch: SU2_CFD/src/solvers/kokkos/CNEMOKokkosUpwind.cpp (427) + CNEMOKokkosAUSM.hpp (595).
   - Chunk this round: (1) explore agent mapping CPU LAX call chain + device dispatch + gas helpers; (2) implement LAX device kernel + dispatch; (3) build serial (G1-style strict bitwise check of a LAX case); (4) cuda build G5.
+
+- 2026-11-24 round 40 (this session, item 4.4 — LAX device port):
+  - State check: on su2kokkos_qwenlocal_agent, tree clean. 4.1/4.2 DONE; 4.3 G5 PASS, G7 still BLOCKED (sandbox has no /dev/nvidia*; user shell needed).
+  - Rounds 30-39 left NO code (log lines only). This round = first real LAX implementation chunk:
+    (1) read CPU lax.cpp + device AUSM dispatch; (2) implement device LAX kernel + dispatch entry; (3) build serial + run a LAX case bitwise vs CPU; (4) G5 cuda rebuild.
+  - Chunk budget: LAX only (smallest scheme). Roe/MSW/AUSM+-up2 next rounds.
