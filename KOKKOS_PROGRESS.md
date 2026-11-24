@@ -56,3 +56,7 @@ LOOP HINT: round 3 = item 4.2 per NEXT steps above; builds via ./meson.py or sys
   - BUG in build.sh: type-case `*)` hit "unknown type g1" and exited 2 BEFORE gate mode — G1 "launched" last round never ran (no log existed). Fixed: gate names now pass the type case. Re-launched G1 (bg b5cxqq4d4).
   - G3 baseline prepared: git archive cd2cd46 → ../kk/cd2cd46 (+ subprojects/externals copies, su2preconfig.timestamp touched); build.sh gained `baseline` setup/ninja targets (build dir ../kk/cd2cd46/build-baseline, serial production flags). meson setup baseline rc=0; ninja baseline running (bg b413xvtj4).
   - strict-mpi ninja running (bg bu02tlp4z). G3 OLD= will be ../kk/cd2cd46/build-baseline/SU2_CFD/src/SU2_CFD (script accepts OLD= env override).
+  - G1 (strict exact, 4 cases): OVERALL PASS — all bitwise (max|dres|=0, max field diff=0); log ../kk/logs/g1-strict.log.
+  - G4 strict: PASS (round-3, g4-strict.log on disk). G4 serial: PASS (this round, 1250 states AIR-7 GUPTA-YOS, bitwise within tol).
+  - build.sh: added g3 gate (OLD=../kk/cd2cd46 baseline, NEW=serial).
+  - Running now: g1-ab (bie87sxsf), G6 (b18oborq1), G2 (bvnfeasp9), G3 (by3h19gt0).
