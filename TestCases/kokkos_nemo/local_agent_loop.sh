@@ -42,9 +42,9 @@ Before you finish this session ALWAYS: append status/commands/results/next step 
 commit (WIP if gates not complete), and push to origin $BRANCH.
 If every item in section 4 is done, write the line ALL ITEMS DONE at the end of KOKKOS_PROGRESS.md.
 Never wait for a human. If an item is blocked (credentials, permission refused, GPU busy, missing tool), mark it in
-KOKKOS_PROGRESS.md as "BLOCKED <item>: <reason> (retry later)" and move on to the next unchecked item.
+KOKKOS_PROGRESS.md as BLOCKED <item>: <reason> (retry later), and move on to the next unchecked item.
 Retry BLOCKED items only after all other items are done or blocked.
-If KOKKOS_PROGRESS.md contains a line starting with "LOOP HINT:", obey the most recent one.
+If KOKKOS_PROGRESS.md contains a line starting with LOOP HINT:, obey the most recent one.
 Then end the session."
 
 state() { (cd "$REPO" && git rev-parse HEAD 2>/dev/null; md5sum KOKKOS_PROGRESS.md 2>/dev/null; git diff --stat | tail -1) | md5sum | cut -c1-12; }
