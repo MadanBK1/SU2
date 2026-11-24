@@ -1,2 +1,35 @@
+# KOKKOS_PROGRESS — inter-session memory (branch su2kokkos_qwenlocal_agent)
 
-- 2026-11-24T00:22:34-05:00 [loop] round 1 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_001814_1.log
+## Item status (mirrors section 4 of LOCAL_AGENT_TASK.md)
+- [x] 4.1 Script env-var paths (SU2_ROOT/MESH_DIR/RUN_DIR) — done 2026-11-24
+- [ ] 4.2 Batch A gates: G2, G3 (vs cd2cd46 binaries), G6 — NEXT
+- [ ] 4.3 CUDA V100 build + GPU run (G5, G7)
+- [ ] 4.4 Device schemes: Roe, MSW, LAX, AUSM+-up2
+- [ ] 4.5 BCs: subsonic inlet, Smoluchowski–Maxwell slip, catalytic heat-flux wall
+- [ ] 4.6 Solver options: ILU(n>0), LU-SGS, MG levels, periodic markers, deforming grids
+- [ ] 4.7 Turbulence coupling (or documented host-only)
+- [ ] 4.8 Performance (after 4.3)
+- [ ] 4.9 Keep feature-coverage matrix accurate after every item
+
+## Environment facts (roam148-045, V100, GCC 12 toolset)
+- Clone: /home/mpr7366/software/AgenticTest/SU2
+- Meshes (done): /home/mpr7366/software/AgenticTest/kk/meshes/{invwedge,5x5Mesh,viscwedge}.su2; runs dir ../kk/runs (empty)
+- No build-* directories yet (as of 2026-11-24 round 2). G3 needs baseline binaries from cd2cd46 saved before/during the 35b6f39+ builds.
+- Toolchain: ninja at /usr/bin/ninja; gcc-toolset-12 at /opt/rh/gcc-toolset-12; meson NOT on PATH — use ./meson.py (vendored externals/meson exists) or pip-less fallback per section 2; Kokkos submodule extracted (subprojects/Kokkos/bin has kokkos_launch_compiler, nvcc_wrapper); externals/eigen present; CoolProp, MLPCpp, Mutationpp extracted.
+- G2/G1 gates run against $SU2_ROOT/build-kokkos-strict and build-kokkos-serial; G6 against build-kokkos-strict-mpi; G3 scripts take OLD= (default /home/claude/bin_pre/...) and NEW= env vars → point OLD at the cd2cd46 binary.
+
+## Log
+- 2026-11-24 round 1 (autosave commit 8f5f57d23a): converted all TestCases/kokkos_nemo/*.sh to ${SU2_ROOT|MESH_DIR|RUN_DIR:-/home/claude/...}; missed ab_variants.sh:80; hit max turns before committing.
+- 2026-11-24 round 2 (this session):
+  - Verified on su2kokkos_qwenlocal_agent, clean tree. `bash -n` on all 8 kokkos_nemo scripts: OK.
+  - Fixed last hard-coded path: ab_variants.sh:80 → `d=$RUN/ab${NP:+_np$NP}/$n; ... ln -sf $M/*.su2 .`
+  - Decision (recorded per loop rules): item 4.1 is test-harness only (no C++, no binary change), so the section-3 numeric gates do not apply; committed after syntax + env-default verification, as the item itself prescribes ("then commit").
+  - Ticked 4.1 in LOCAL_AGENT_TASK.md. Committed + pushed.
+- NEXT — round 3, item 4.2 (Batch A gates; Batch A = commit 35b6f39544 WIP):
+  1. env in every shell: `export GXX=/opt/rh/gcc-toolset-12/root/usr/bin/g++ GCC=/opt/rh/gcc-toolset-12/root/usr/bin/gcc SU2_ROOT=$PWD MESH_DIR=$PWD/../kk/meshes RUN_DIR=$PWD/../kk/runs`
+  2. Build baseline cd2cd46 binaries for G3 first (avoid `reset --hard`; use `git archive cd2cd46` into ../kk/cd2cd46, or a throwaway clone of branch @ cd2cd46 in ../kk). Build serial+strict(+strict-mpi) there or save the SU2_CFD binaries to ../kk/bin_pre/ (name e.g. SU2_CFD_serial_e1aafef to match the OLD default) and export OLD=... when running G3.
+  3. `./meson.py` or system meson + section-2 COMMON flags; ninja -j4 SU2_CFD and UnitTests/nemo_gas_kokkos_validation; redirect to logs, tail -30 only.
+  4. Run gates in order: G1 (STRICT: check.sh REF_MODE=HOST RES_TOL=0 FIELD_TOL=0, ab_variants.sh, ab_resident.sh), G2 (PROD: check.sh super_cat thermalbath + check_noisefloor.sh invwedge_ausm & super_cat), G3 (check_no_identity.sh + check_nonnemo_kokkos.sh vs cd2cd46 binaries), G4 (UnitTests/nemo_gas_kokkos_validation 5000 1e-10 in both Serial builds), G6 (NP=2 strict-mpi check.sh).
+  5. All pass → non-WIP commit "Batch A gates complete" (+ any fixes), tick 4.2 here and in the task file, push. Failures: fix within the item, re-run failing gate, log pass/fail numbers here.
+  - If a build is blocked (e.g. subproject fetch): try section-2 fallback (Eigen into externals/eigen, touch su2preconfig.timestamp, system meson). Still blocked → mark `BLOCKED 4.2: <reason>` and move to 4.3/4.4 (4.3 also needs a build; 4.4 is code work).
+LOOP HINT: round 3 = item 4.2 per NEXT steps above; keep builds in background-safe form (ninja -j4, log to file, tail -30); commit+push before ending the session.

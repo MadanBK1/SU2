@@ -98,7 +98,7 @@ Set `S=$SU2_ROOT/TestCases/kokkos_nemo`, `STRICT=$SU2_ROOT/build-kokkos-strict/S
 | G7 | GPU (once the CUDA build exists) | `BIN=<cuda SU2_CFD> PHYS_SCALE=1 RES_NOISE_ORDERS=10 $S/check.sh super_cat thermalbath`, plus `check_noisefloor.sh` with the CUDA binary | GPU results are NOT bitwise; use the noise-floor policy. Also check that the log shows `[KOKKOS_NEMO] device-resident state: ON`, and record `[KOKKOS_NEMO_PERF]` lines. Try `SU2_KOKKOS_NEMO_EDGE=atomic` vs `color`. |
 
 ## 4. Work items (in order; tick them here AND in KOKKOS_PROGRESS.md)
-- [ ] **4.1 Script paths:** add env-var paths to the scripts (section 2), then commit.
+- [x] **4.1 Script paths:** add env-var paths to the scripts (section 2), then commit.
 - [ ] **4.2 Finish Batch A** (commit `35b6f39`, WIP). Run G2, G3 (against `cd2cd46` binaries) and G6. Fix any failures, then commit "Batch A gates complete".
 - [ ] **4.3 CUDA V100 build and GPU run:** run G5 and G7.
   - On a runtime failure, check `cudaLimitStackSize`; the big-stack kernels are `KernelBoundaryFlux` (~15.5 KB) and `KernelViscousEdges` (~12.4 KB).

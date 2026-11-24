@@ -77,7 +77,7 @@ BASE[dt_sc]=$TC/visc_wedge/super_cat.cfg; MOD[dt_sc]="TIME_MARCHING= DUAL_TIME_S
 names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm ausmplusm amimpl vanalbada nolim bj_gg wang explicit first air7 air7ion ns_muscl supercat up2 tb tb_impl tb_frozen tb_vtlim tb_air5 supersonic subout subout_am sc_cat sc_partcat sc_gy sc_suth sc_gg sc_heatflux sc_explicit sc_n2 sc_jacobi partial_cat axi_visccone am_impl am_first cfl_ausm cfl_am cfl_sc axi axi_gg axi_inv axi_expl supout_am supin_am supinout_am tb_rk tb_rk4 rk_ausm rk4_am dt2 dt1 dt_expl dt_unstcfl dt_sc)
 st=0
 for n in "${names[@]}"; do
-  d=/home/claude/runs/ab${NP:+_np$NP}/$n; rm -rf $d; mkdir -p $d; cd $d; ln -sf /home/claude/meshes/*.su2 .
+  d=$RUN/ab${NP:+_np$NP}/$n; rm -rf $d; mkdir -p $d; cd $d; ln -sf $M/*.su2 .
   cp "${BASE[$n]}" run.cfg; printf "\n" >> run.cfg
   IFS='|' read -ra kv <<< "${MOD[$n]}"
   for x in "${kv[@]}"; do [ -z "$x" ] && continue; k=${x%%=*}; sed -i "/^$k *=/d" run.cfg; [ "${x#*= }" = DELETE ] || echo "$x" >> run.cfg; done
