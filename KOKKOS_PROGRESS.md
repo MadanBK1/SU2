@@ -259,3 +259,10 @@ LOOP HINT: 4.2 is DONE (all gates PASS, super_cat NF finished round 6). 4.3 = wa
 - 2026-11-24T18:03:07-05:00 [loop] round 69 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_175613_69.log
 
 - 2026-11-24T18:19:45-05:00 [loop] round 70 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_180327_70.log
+
+- 2026-11-24T18:31:15-05:00 [loop] round 71 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_182005_71.log
+
+- 2026-11-24 (round 72, session start, item 4.4 LAX device port):
+  - State: on su2kokkos_qwenlocal_agent. 4.1/4.2 DONE; 4.3 G5 PASS, G7 BLOCKED (sandbox has no /dev/nvidia*; needs user shell: `export SU2_ROOT=$PWD MESH_DIR=../kk/meshes RUN_DIR=../kk/runs; bash kk/build.sh gate g7`).
+  - Verified: CNEMOKokkosUpwind.cpp dispatches AUSM family only (kernel "NEMO::UpwindAUSM"); no Roe/MSW/LAX device kernels exist. LAX source = 167 lines (numerics/NEMO/convection/lax.cpp).
+  - Plan this round: read host LAX + device AUSM structure; implement KOKKOS_INLINE_FUNCTION LAX flux (port of lax.cpp) + dispatch on UpwindScheme::LAX; build serial; bitwise check vs CPU on a LAX test case.
