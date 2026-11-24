@@ -9,6 +9,12 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
 4. After every meaningful step, append to `KOKKOS_PROGRESS.md`: date, what you did, the exact commands, pass/fail numbers, and the next step.
 5. Work on **one item per session**. When the item is committed, or your context is getting long, update `KOKKOS_PROGRESS.md`, commit it, and tell the user: "restart me with the same prompt". Never rely on remembering earlier chat.
 
+### Unattended loop mode
+The script `TestCases/kokkos_nemo/local_agent_loop.sh` restarts you in a fresh session after every round. In that mode:
+- **Each session:** do one bounded chunk, then save progress, commit and push before ending.
+- **When everything is finished:** if every item in section 4 is checked, write `ALL ITEMS DONE` as the last line of `KOKKOS_PROGRESS.md`.
+- **When you need a person:** if you are blocked (credentials, GPU busy, a permission refused, or a decision only the user can make), write `NEEDS HUMAN: <reason>` as the last line. The loop stops when it sees either marker.
+
 ## 1. Rules
 - **Folder boundary (hard rule):** only create, modify or delete files inside `~/software/AgenticTest/` (the SU2 clone and `kk/`).
   - Never write, move or delete anything outside it, especially `/home/mpr7366/SU2` (the user's other SU2 tree), `~/.bashrc` and other home dotfiles, and system paths.
