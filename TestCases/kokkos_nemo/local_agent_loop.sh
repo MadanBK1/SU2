@@ -26,9 +26,11 @@ export ANTHROPIC_MODEL="$MODEL" ANTHROPIC_SMALL_FAST_MODEL="$MODEL"
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-16000}
 export MAX_THINKING_TOKENS=${MAX_THINKING_TOKENS:-4000}
 export DISABLE_AUTOUPDATER=1
-# qwen via ollama is unrecognized -> Claude Code assumes a 1M window and never compacts.
-# Cap auto-compact below the ollama context (OLLAMA_CONTEXT_LENGTH=65536). Bare number = tokens.
-export CLAUDE_CODE_AUTO_COMPACT_WINDOW=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-56000}
+# Claude Code's auto-compact window has a 100k minimum, above the 64k ollama context, so it
+# cannot help here; MAX_TURNS per round is what bounds context. Leave it unset.
+unset CLAUDE_CODE_AUTO_COMPACT_WINDOW
+# Never block on a credential prompt in unattended mode: a push without auth fails fast instead.
+export GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true SSH_ASKPASS=/bin/true GIT_SSH_COMMAND="ssh -o BatchMode=yes"
 
 PROMPT="/no_think You are running unattended in a loop; each session starts with an empty context.
 cd SU2. Follow LOCAL_AGENT_TASK.md exactly, starting with section 0 (git status/diff, read KOKKOS_PROGRESS.md).
@@ -39,7 +41,7 @@ CONTEXT IS SMALL: never read a whole source file. Use grep -n to locate, then re
 Never cat build logs or diffs in full (use tail -30, git diff --stat, or git diff -- <one file> | head -150).
 Save progress to KOKKOS_PROGRESS.md and commit early (by your 10th tool call), then continue if turns remain.
 Before you finish this session ALWAYS: append status/commands/results/next step to KOKKOS_PROGRESS.md,
-commit (WIP if gates not complete), and push to origin $BRANCH.
+commit LOCALLY (WIP if gates not complete). Do NOT run git push.
 If every item in section 4 is done, write the line ALL ITEMS DONE at the end of KOKKOS_PROGRESS.md.
 Never wait for a human. If an item is blocked (credentials, permission refused, GPU busy, missing tool), mark it in
 KOKKOS_PROGRESS.md as BLOCKED <item>: <reason> (retry later), and move on to the next unchecked item.
@@ -70,14 +72,15 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
   if [ "$(git -C "$REPO" branch --show-current)" != "$BRANCH" ]; then
     echo "    WARNING: agent left $BRANCH; switching back"; git -C "$REPO" checkout -q "$BRANCH" || break
   fi
-  # autosave: commit + push whatever the round left uncommitted (tracked edits + progress file only)
+  # autosave: commit (locally) whatever the round left uncommitted (tracked edits + progress file only)
   if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || \
      [ -n "$(git -C "$REPO" status --porcelain -- KOKKOS_PROGRESS.md)" ]; then
     git -C "$REPO" add -u && git -C "$REPO" add KOKKOS_PROGRESS.md 2>/dev/null
     git -C "$REPO" reset -q -- subprojects/CoolProp subprojects/.wraplock 2>/dev/null
     git -C "$REPO" commit -q -m "WIP loop autosave round $r ($(date -Is)): uncommitted work left by the agent session; gates not verified" \
-      && echo "    autosaved round $r" && git -C "$REPO" push -q origin "$BRANCH" 2>&1 | tail -1
+      && echo "    autosaved round $r"
   fi
+  # local-only mode: no push (the user pushes manually for review)
   after=$(state)
   if [ "$before" = "$after" ]; then stuck=$((stuck+1)); else stuck=0; fi
   if [ $rc -ne 0 ] || [ "$before" = "$after" ]; then
