@@ -133,3 +133,11 @@ LOOP HINT: 4.2 is DONE (all gates PASS, super_cat NF finished round 6). 4.3 = wa
 - 2026-11-24T08:14:09-05:00 [loop] round 20 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_080421_20.log
 
 - 2026-11-24T08:22:37-05:00 [loop] round 21 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_081429_21.log
+
+- 2026-11-24T08:31:31-05:00 [loop] round 22 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_082257_22.log
+
+- 2026-11-24 round 23 (this session):
+  - State check: rounds 8-22 committed only loop-log lines (no code change; `git diff a1b94197f0..HEAD --stat` = KOKKOS_PROGRESS.md +8 lines). 4.1/4.2 DONE; 4.3 G5 PASS; 4.4-4.9 not started.
+  - G7 retry: attempted `nvidia-smi` with dangerouslyDisableSandbox → REFUSED ("Run outside of the sandbox"). G7 + nsys remain BLOCKED (user shell needed: `export SU2_ROOT=$PWD MESH_DIR=../kk/meshes RUN_DIR=../kk/runs; bash kk/build.sh gate g7`).
+  - Item 4.4 started. Device upwind supports AUSM/AUSM+M only (`CNEMOEulerSolver::Device_UpwindUnsupported` rejects others; `CNEMOKokkosUpwind.cpp` dispatch; CPU schemes in `SU2_CFD/src/numerics/NEMO/convection/{roe,msw,lax}.cpp`). Plan: port LAX first (smallest: mean state, GetInviscidProjFlux/Jac, Lax dissipation with dPdU_i/j), then Roe (P/invP matrices, Harten-Hyman), then MSW; AUSM+-up2 = document uninitialised M_L/M_R quirk + match deterministic CPU variant.
+  - NEXT (this session): read CPU call chain (CNEMOEulerSolver::Upwind_Residual MUSCL/dPdU handling; CNEMONumerics::GetInviscidProjFlux/Jac; device gas fns in NEMOGasKokkos), implement LAX device kernel + scheme dispatch + gate, build serial+cuda (G5), add invwedge LAX variant + G1 strict bitwise.
