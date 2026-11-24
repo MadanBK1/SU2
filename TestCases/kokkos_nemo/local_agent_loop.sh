@@ -13,7 +13,7 @@ REPO=$WS/SU2
 BRANCH=su2kokkos_qwenlocal_agent
 MODEL=${MODEL:-qwen3.8:27b}
 export OLLAMA_HOST=${OLLAMA_HOST:-127.0.0.1:11435}
-MAX_TURNS=${MAX_TURNS:-15}                      # tool turns per session (bounds context use)
+MAX_TURNS=${MAX_TURNS:-25}                      # tool turns per session (bounds context use)
 ROUND_TIMEOUT=${ROUND_TIMEOUT:-3h}              # hard wall-clock cap per session
 MAX_ROUNDS=${MAX_ROUNDS:-1000000}             # effectively unlimited
 MAX_STUCK=${MAX_STUCK:-3}                       # after N no-progress rounds: back off + tell agent to change approach/skip
@@ -69,6 +69,14 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
   # safety net: if the session died without saving, record it so the next round knows
   if [ "$(git -C "$REPO" branch --show-current)" != "$BRANCH" ]; then
     echo "    WARNING: agent left $BRANCH; switching back"; git -C "$REPO" checkout -q "$BRANCH" || break
+  fi
+  # autosave: commit + push whatever the round left uncommitted (tracked edits + progress file only)
+  if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || \
+     [ -n "$(git -C "$REPO" status --porcelain -- KOKKOS_PROGRESS.md)" ]; then
+    git -C "$REPO" add -u && git -C "$REPO" add KOKKOS_PROGRESS.md 2>/dev/null
+    git -C "$REPO" reset -q -- subprojects/CoolProp subprojects/.wraplock 2>/dev/null
+    git -C "$REPO" commit -q -m "WIP loop autosave round $r ($(date -Is)): uncommitted work left by the agent session; gates not verified" \
+      && echo "    autosaved round $r" && git -C "$REPO" push -q origin "$BRANCH" 2>&1 | tail -1
   fi
   after=$(state)
   if [ "$before" = "$after" ]; then stuck=$((stuck+1)); else stuck=0; fi
