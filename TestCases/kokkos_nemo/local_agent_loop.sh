@@ -26,6 +26,9 @@ export ANTHROPIC_MODEL="$MODEL" ANTHROPIC_SMALL_FAST_MODEL="$MODEL"
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-16000}
 export MAX_THINKING_TOKENS=${MAX_THINKING_TOKENS:-4000}
 export DISABLE_AUTOUPDATER=1
+# qwen via ollama is unrecognized -> Claude Code assumes a 1M window and never compacts.
+# Cap auto-compact below the ollama context (OLLAMA_CONTEXT_LENGTH=65536). Bare number = tokens.
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-56000}
 
 PROMPT="/no_think You are running unattended in a loop; each session starts with an empty context.
 cd SU2. Follow LOCAL_AGENT_TASK.md exactly, starting with section 0 (git status/diff, read KOKKOS_PROGRESS.md).
