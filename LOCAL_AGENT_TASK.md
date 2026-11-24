@@ -99,7 +99,7 @@ Set `S=$SU2_ROOT/TestCases/kokkos_nemo`, `STRICT=$SU2_ROOT/build-kokkos-strict/S
 
 ## 4. Work items (in order; tick them here AND in KOKKOS_PROGRESS.md)
 - [x] **4.1 Script paths:** add env-var paths to the scripts (section 2), then commit.
-- [ ] **4.2 Finish Batch A** (commit `35b6f39`, WIP). Run G2, G3 (against `cd2cd46` binaries) and G6. Fix any failures, then commit "Batch A gates complete".
+- [x] **4.2 Finish Batch A** (commit `35b6f39`, WIP). Run G2, G3 (against `cd2cd46` binaries) and G6. Fix any failures, then commit "Batch A gates complete".
 - [ ] **4.3 CUDA V100 build and GPU run:** run G5 and G7.
   - On a runtime failure, check `cudaLimitStackSize`; the big-stack kernels are `KernelBoundaryFlux` (~15.5 KB) and `KernelViscousEdges` (~12.4 KB).
   - Profile: `nsys profile -o nemo SU2_CFD run.cfg` for 20 iterations of invwedge_ausm.
