@@ -239,3 +239,9 @@ LOOP HINT: 4.2 is DONE (all gates PASS, super_cat NF finished round 6). 4.3 = wa
 - 2026-11-24T16:44:18-05:00 [loop] round 61 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_163028_61.log
 
 - 2026-11-24T16:51:15-05:00 [loop] round 62 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_164438_62.log
+
+- 2026-11-24T17:00:37-05:00 [loop] round 63 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_165135_63.log
+
+- 2026-11-24 round 64 (this session, item 4.4 — LAX device port, first code chunk):
+  - State: on su2kokkos_qwenlocal_agent. 4.1/4.2 DONE; 4.3 G5 PASS, G7 still BLOCKED (no /dev/nvidia* in sandbox; dangerouslyDisableSandbox refused in unattended mode — user shell required).
+  - This round: implement LAX device kernel (port of SU2_CFD/src/numerics/NEMO/convection/lax.cpp) in device upwind dispatch + serial bitwise check vs CPU.
