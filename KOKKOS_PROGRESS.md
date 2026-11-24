@@ -50,3 +50,6 @@ LOOP HINT: round 3 = item 4.2 per NEXT steps above; builds via ./meson.py or sys
   - build.sh now has `gate` mode: gate g1 | g1-ab | g2 | g4strict | g4serial | g6 (logs to ../kk/logs).
   - G1 (strict, REF_MODE=HOST, RES_TOL=0, FIELD_TOL=0) launched bg b17dw21fv → ../kk/logs/g1-strict.log. Serial build b11xeexsk still compiling.
   - NEXT after G1: g1-ab (ab_variants + ab_resident), G2 (needs serial build done), G4 serial, G3 (needs cd2cd46 baseline binaries — see NEXT above), G6 (needs strict-mpi ninja build: `bash ../kk/build.sh ninja strict-mpi 4`).
+- 2026-11-24 round 4 (this session, item 4.2 continue):
+  - State check: strict+serial SU2_CFD & UnitTests built (Nov 24 02:51); strict-mpi NOT built; g1-strict.log absent (G1 never finished last round); g4-strict.log PASS (on disk).
+  - This round: G1 strict, g1-ab, G2, g4serial; strict-mpi ninja for G6; G3 needs cd2cd46 baseline.
