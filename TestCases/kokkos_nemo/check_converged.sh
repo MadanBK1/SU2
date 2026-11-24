@@ -15,7 +15,7 @@
 #        and momenta, which use max sqrt(rho*rhoE)), HIST_TOL (default 0.25, max |d log10 res| over the history, all columns,
 #        after the first HIST_SKIP=20 iterations), FINAL_TOL (default 0.05, |d log10 res| of the final row).
 set -u
-SU2=/home/claude/su2
+SU2=${SU2_ROOT:-/home/claude/su2}
 BIN=${BIN:-$SU2/build-kokkos-serial/SU2_CFD/src/SU2_CFD}
 ITER=${ITER:-2000}
 PAR=${PAR:-1}
@@ -24,14 +24,15 @@ HIST_TOL=${HIST_TOL:-0.25}
 HIST_SKIP=${HIST_SKIP:-20}
 FINAL_TOL=${FINAL_TOL:-0.05}
 TC=$SU2/TestCases/nonequilibrium
-M=/home/claude/meshes
+M=${MESH_DIR:-/home/claude/meshes}
+RUN=${RUN_DIR:-/home/claude/runs}
 declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [super_cat]=$TC/visc_wedge/super_cat.cfg )
 cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm)
 status=0
 for c in "${cases[@]}"; do
   run_one() {
-    local mode=$1 d=/home/claude/runs/conv_${c}_$1
+    local mode=$1 d=$RUN/conv_${c}_$1
     rm -rf "$d"; mkdir -p "$d"; cd "$d"
     cp "${CFG[$c]}" run.cfg; ln -sf $M/*.su2 .
     sed -i '/^ENABLE_KOKKOS/d; s/^ITER=.*/ITER= '"$ITER"'/; s/^OUTPUT_WRT_FREQ=.*/OUTPUT_WRT_FREQ= 100000/' run.cfg
@@ -48,11 +49,12 @@ for c in "${cases[@]}"; do
     run_one NO || status=1; run_one YES || status=1
   fi
   python3 - "$c" "$FIELD_TOL" "$HIST_TOL" "$HIST_SKIP" "$FINAL_TOL" <<'EOF' || status=1
-import sys, re, glob, numpy as np
+import os, sys, re, glob, numpy as np
+RUN = os.environ.get('RUN_DIR', '/home/claude/runs')
 c, ftol, htol, hskip, fintol = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5])
 def hist(mode):
     rows = {}
-    for l in open(f'/home/claude/runs/conv_{c}_{mode}/log.txt'):
+    for l in open(f'{RUN}/conv_{c}_{mode}/log.txt'):
         if re.match(r'^\|\s+\d+\|', l):
             v = l.strip().strip('|').split('|'); rows[int(v[0])] = [float(x) for x in v[1:]]
     return rows
@@ -69,7 +71,7 @@ if ok:
     print(f'  history max |d| (iter >= {hskip}) = {dh:.3e} (tol {htol}); final row max |d| = {df:.3e} (tol {fintol})')
     ok = dh <= htol and df <= fintol
 try:
-    pick = lambda m: sorted(glob.glob(f'/home/claude/runs/conv_{c}_{m}/restart_flow*.csv'))[-1]
+    pick = lambda m: sorted(glob.glob(f'{RUN}/conv_{c}_{m}/restart_flow*.csv'))[-1]
     fa = np.genfromtxt(pick('NO'), delimiter=',', skip_header=1)[:, 3:]
     fb = np.genfromtxt(pick('YES'), delimiter=',', skip_header=1)[:, 3:]
     hdr = open(pick('NO')).readline().replace('"', '').strip().split(',')[3:]

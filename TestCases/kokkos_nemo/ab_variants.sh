@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Strict-build per-stage A/B (SU2_KOKKOS_STAGE_VERIFY=1) over config variants. Usage: ab_variants.sh [name ...]
-BIN=${BIN:-/home/claude/su2/build-kokkos-strict/SU2_CFD/src/SU2_CFD}
+SU2=${SU2_ROOT:-/home/claude/su2}
+M=${MESH_DIR:-/home/claude/meshes}
+RUN=${RUN_DIR:-/home/claude/runs}
+BIN=${BIN:-$SU2/build-kokkos-strict/SU2_CFD/src/SU2_CFD}
 # Step 10: NP=<n> runs under `mpirun --allow-run-as-root --oversubscribe -np <n>` (MPI build), dirs runs/ab_np<n>/;
 #   the VERIFY counts are those of rank 0.
 NP=${NP:-}
 MPI_OPTS=${MPI_OPTS---mca osc ^rdma}  # see check.sh
 MPIRUN=""; [ -n "$NP" ] && MPIRUN="mpirun --allow-run-as-root --oversubscribe $MPI_OPTS -np $NP"
-TC=/home/claude/su2/TestCases/nonequilibrium
+TC=$SU2/TestCases/nonequilibrium
 declare -A BASE MOD
 BASE[ausm]=$TC/invwedge/invwedge_ausm.cfg;                 MOD[ausm]=""
 BASE[ausmplusm]=$TC/invwedge/invwedge_am.cfg;              MOD[ausmplusm]=""

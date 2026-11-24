@@ -1,6 +1,6 @@
 # Kokkos NEMO validation scripts
 
-These are developer scripts for the `su2kokkos` branch. Paths are currently hard-coded for the Claude cloud workspace (`/home/claude/su2`, `/home/claude/runs`, `/home/claude/meshes`). Change them to match your machine.
+These are developer scripts for the `su2kokkos` branch. Paths default to the old cloud workspace (`/home/claude/su2`, `/home/claude/runs`, `/home/claude/meshes`) but can be overridden with the `SU2_ROOT`, `RUN_DIR` and `MESH_DIR` environment variables.
 
 Meshes come from su2code/TestCases: `invwedge.su2`, `viscwedge.su2`, `5x5Mesh.su2`.
 
