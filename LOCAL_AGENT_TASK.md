@@ -10,6 +10,10 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
 5. Work on **one item per session**. When the item is committed, or your context is getting long, update `KOKKOS_PROGRESS.md`, commit it, and tell the user: "restart me with the same prompt". Never rely on remembering earlier chat.
 
 ## 1. Rules
+- **Folder boundary (hard rule):** only create, modify or delete files inside `~/software/AgenticTest/` (the SU2 clone and `kk/`).
+  - Never write, move or delete anything outside it, especially `/home/mpr7366/SU2` (the user's other SU2 tree), `~/.bashrc` and other home dotfiles, and system paths.
+  - No `sudo`, and no `rm -rf` on a path containing `..`, `~` on its own, or `/`.
+  - Reading outside is fine: compilers, `/opt/rh`, CUDA.
 - **Branch:** work only on `su2kokkos_qwenlocal_agent`. **Never commit to or push `su2kokkos`** — that is the reviewed branch, and Claude merges from yours after review. Also never touch `master` or other branches, and never use `reset --hard`, `clean -fd`, force-push or rebase.
 - **Commits:** commit only after the gates in section 3 pass. Push with `git push origin su2kokkos_qwenlocal_agent`.
 - **Untested work:** if gates could not be run, the commit message must start with `WIP` and list which gates were not run.
@@ -27,9 +31,9 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
 ```bash
 cd ~/software/AgenticTest
 git clone -b su2kokkos_qwenlocal_agent https://github.com/MadanBK1/SU2.git && cd SU2
-mkdir -p ~/kk/meshes ~/kk/runs
+mkdir -p ~/software/AgenticTest/kk/meshes ~/software/AgenticTest/kk/runs
 for f in invwedge/invwedge.su2 thermalbath/finitechemistry/5x5Mesh.su2 visc_wedge/viscwedge.su2; do
-  curl -sSfL -o ~/kk/meshes/$(basename $f) https://raw.githubusercontent.com/su2code/TestCases/master/nonequilibrium/$f; done
+  curl -sSfL -o ~/software/AgenticTest/kk/meshes/$(basename $f) https://raw.githubusercontent.com/su2code/TestCases/master/nonequilibrium/$f; done
 export GXX=/opt/rh/gcc-toolset-12/root/usr/bin/g++ GCC=/opt/rh/gcc-toolset-12/root/usr/bin/gcc
 ```
 **First code task (item 4.1):** the scripts in `TestCases/kokkos_nemo/*.sh` hard-code cloud paths: `/home/claude/su2`, `/home/claude/meshes` and `/home/claude/runs`. Replace them with env vars that default to the old paths:
@@ -37,8 +41,8 @@ export GXX=/opt/rh/gcc-toolset-12/root/usr/bin/g++ GCC=/opt/rh/gcc-toolset-12/ro
 | Env var | Replaces | Set it to |
 |---|---|---|
 | `SU2_ROOT` | `/home/claude/su2` | your clone |
-| `MESH_DIR` | `/home/claude/meshes` | `~/kk/meshes` |
-| `RUN_DIR` | `/home/claude/runs` | `~/kk/runs` |
+| `MESH_DIR` | `/home/claude/meshes` | `~/software/AgenticTest/kk/meshes` |
+| `RUN_DIR` | `/home/claude/runs` | `~/software/AgenticTest/kk/runs` |
 
 Export them in every shell.
 
