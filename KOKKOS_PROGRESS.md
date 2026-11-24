@@ -72,3 +72,4 @@ LOOP HINT: G6 fails in ENABLE_KOKKOS=NO too, so it is not the device port. Check
   - MPI consistency (per LOOP HINT): mpirun = mpicxx = same /home/mpr7366/software/openmpi-4.1.5; strict-mpi SU2_CFD ldd shows that libmpi. NO mismatch.
   - G6 still FAIL 3/4: MPI_ERR_TRUNCATE on MPI_COMM_WORLD, rank 1, first iteration, both NO and YES; thermalbath_np2 PASS.
   - Discriminating with cd2cd46 baseline strict-mpi build now (see commands below).
+LOOP HINT: G6 bug fixed by cherry-picked 982c4ea (verified by user: invwedge_ausm + super_cat np2 PASS). All 3 builds rebuilt. Re-run full G6, finish G2/G3, mark 4.2 done, start 4.3 (CUDA V100).
