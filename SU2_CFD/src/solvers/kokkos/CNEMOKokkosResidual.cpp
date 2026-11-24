@@ -67,6 +67,13 @@ struct ResArgs {
   bool viscous = false, catalytic = false, supercat = false, writeWallState = false;
   double Twall = 0.0, catEff = 0.0, heatFlux = 0.0, RuSI = 0.0;
   double Yst[MAXNS] = {0.0};
+  /*--- Batch A: axisymmetric source, stale boundary-numerics state (AUSM+M supersonic BCs). ---*/
+  View3D<double> auxGrad;
+  bool axisym = false, axiViscous = false;
+  int nHeavy = 0;
+  double prandtlTurb = 0.0;
+  bool staleNumerics = false;
+  double staleGammaI = 0.0, staleGammaJ = 0.0, staleSensor = 0.0;
 };
 
 /*! \brief res_i += alpha * block (CSysVector::AddBlock / SubtractBlock semantics: vec = vec + alpha*block). */
@@ -328,15 +335,14 @@ void KernelHeatFlux(const ResArgs& r, unsigned long v0, unsigned long v1) {
  *        is passed to the V-T term explicitly, as the CPU passes it through the gas-model member).
  */
 template <int ND>
-void KernelSource(const ResArgs& r, unsigned long& eChm, unsigned long& eVib) {
+void KernelSource(const ResArgs& r, unsigned long& eChm, unsigned long& eVib, unsigned long& eAxi) {
   Kokkos::parallel_reduce(
       "NEMO::SourceChemVT", Kokkos::RangePolicy<exec_space>(0, r.nPointDomain),
-      KOKKOS_LAMBDA(const unsigned long iPoint, unsigned long& nChm, unsigned long& nVib) {
+      KOKKOS_LAMBDA(const unsigned long iPoint, unsigned long& nChm, unsigned long& nVib, unsigned long& nAxi) {
         const UpwArgs& a = r.a;
         const NEMOGasTables& g = a.gas;
         const int nSpecies = a.ns, nVar = a.nVar;
         const bool implicit = a.implicit;
-        if (r.monoatomic) return;
 
         const double* V = &a.V(iPoint, 0);
         const double* eve = &a.eves(iPoint, 0);
@@ -350,7 +356,7 @@ void KernelSource(const ResArgs& r, unsigned long& eChm, unsigned long& eVib) {
         for (int s = 0; s < nSpecies; s++) ws[s] = 0.0;
 
         /*--- Compute finite rate chemistry (CSource_NEMO::ComputeChemistry) ---*/
-        if (!r.frozen) {
+        if (!r.monoatomic && !r.frozen) {
           for (int iVar = 0; iVar < nVar; iVar++) residual[iVar] = 0.0;
           if (implicit)
             for (int k = 0; k < nVar * nVar; k++) jacobian[k] = 0.0;
@@ -370,7 +376,7 @@ void KernelSource(const ResArgs& r, unsigned long& eChm, unsigned long& eVib) {
         }
 
         /*--- Compute vibrational energy relaxation (CSource_NEMO::ComputeVibRelaxation) ---*/
-        {
+        if (!r.monoatomic) {
           const double res_min = -1E6;
           const double res_max = 1E6;
           for (int iVar = 0; iVar < nVar; iVar++) residual[iVar] = 0.0;
@@ -400,8 +406,135 @@ void KernelSource(const ResArgs& r, unsigned long& eChm, unsigned long& eVib) {
             nVib++;
           }
         }
+
+        /*--- Batch A: axisymmetric source terms (CSource_NEMO::ComputeAxisymmetric, 2D), CPU statement order. ---*/
+        if (r.axisym) {
+          const int RHO_INDEX = nSpecies + ND + 3, H_INDEX = nSpecies + ND + 4, T_INDEX = nSpecies;
+          const int TVE_INDEX = nSpecies + 1, VEL_INDEX = nSpecies + 2, RHOCVTR_INDEX = nSpecies + ND + 6;
+          const double TWO3 = 2.0 / 3.0;
+          const double* U_i = &r.U(iPoint, 0);
+          const double* dPdU_i = implicit ? &a.dPdU(iPoint, 0) : nullptr;
+          const double Coord_y = r.coord(iPoint, 1);
+
+          const double rho = V[RHO_INDEX];
+          const double RuSI = r.RuSI;
+          const double Ru = 1000.0 * RuSI;
+          const double rhou = U_i[nSpecies];
+          const double rhov = U_i[nSpecies + 1];
+          const double H = V[H_INDEX];
+          const double rhoEve = U_i[nVar - 1];
+          double hs[MAXNS];
+          ComputeSpeciesEnthalpy(g, V[T_INDEX], V[TVE_INDEX], eve, hs);
+
+          for (int iVar = 0; iVar < nVar; iVar++) residual[iVar] = 0.0;
+
+          double yinv = 0.0;
+          if (Coord_y != 0.0) yinv = 1.0 / Coord_y;
+          else yinv = 0.0;
+
+          double Y[MAXNS];
+          for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) Y[iSpecies] = V[iSpecies] / rho;
+
+          for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) residual[iSpecies] = yinv * rhov * Y[iSpecies] * Volume;
+          residual[nSpecies] = yinv * rhov * rhou / rho * Volume;
+          residual[nSpecies + 1] = yinv * rhov * rhov / rho * Volume;
+          residual[nSpecies + 2] = yinv * rhov * H * Volume;
+          residual[nSpecies + 3] = yinv * rhov * rhoEve / rho * Volume;
+
+          if (implicit) {
+            for (int k = 0; k < nVar * nVar; k++) jacobian[k] = 0.0;
+            double dYdr[MAXNS * MAXNS];
+            for (int k = 0; k < nSpecies * nSpecies; k++) dYdr[k] = 0.0;
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+              for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) {
+                dYdr[iSpecies * nSpecies + jSpecies] += -1 / rho * Y[iSpecies];
+              }
+              dYdr[iSpecies * nSpecies + iSpecies] += 1 / rho;
+            }
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) {
+              for (int jSpecies = 0; jSpecies < nSpecies; jSpecies++) {
+                jacobian[(iSpecies) * nVar + (jSpecies)] = dYdr[iSpecies * nSpecies + jSpecies] * rhov;
+              }
+              jacobian[(iSpecies) * nVar + (nSpecies + 1)] = Y[iSpecies];
+            }
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) jacobian[(nSpecies) * nVar + (iSpecies)] = -rhou * rhov / (rho * rho);
+            jacobian[(nSpecies) * nVar + (nSpecies)] = rhov / rho;
+            jacobian[(nSpecies) * nVar + (nSpecies + 1)] = rhou / rho;
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) jacobian[(nSpecies + 1) * nVar + (iSpecies)] = -rhov * rhov / (rho * rho);
+            jacobian[(nSpecies + 1) * nVar + (nSpecies + 1)] = 2 * rhov / rho;
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+              jacobian[(nSpecies + ND) * nVar + (iSpecies)] = -H * rhov / rho + dPdU_i[iSpecies] * rhov / rho;
+            jacobian[(nSpecies + ND) * nVar + (nSpecies)] = dPdU_i[nSpecies] * rhov / rho;
+            jacobian[(nSpecies + ND) * nVar + (nSpecies + 1)] = H + dPdU_i[nSpecies + 1] * rhov / rho;
+            jacobian[(nSpecies + ND) * nVar + (nSpecies + ND)] = (1 + dPdU_i[nSpecies + ND]) * rhov / rho;
+            jacobian[(nSpecies + ND) * nVar + (nSpecies + ND + 1)] = dPdU_i[nSpecies + ND + 1] * rhov / rho;
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) jacobian[(nSpecies + ND + 1) * nVar + (iSpecies)] = -rhoEve * rhov / (rho * rho);
+            jacobian[(nSpecies + ND + 1) * nVar + (nSpecies + 1)] = rhoEve / rho;
+            jacobian[(nSpecies + ND + 1) * nVar + (nSpecies + ND + 1)] = rhov / rho;
+
+            for (int k = 0; k < nVar * nVar; k++) jacobian[k] *= yinv * Volume;
+          }
+
+          if (r.axiViscous) {
+            const double turb_ke_i = 0.0; /*--- !rans ---*/
+            const double ktr = r.k(iPoint);
+            const double kve = r.kve(iPoint);
+            const double Laminar_Viscosity_i = r.mu(iPoint);
+            const double Eddy_Viscosity_i = a.V(iPoint, r.eddyIdx);
+            const double Prandtl_Turb = r.prandtlTurb;
+
+            double Vector = 0.0;
+            for (int iSpecies = 0; iSpecies < r.nHeavy; iSpecies++)
+              Vector += rho * r.Ds(iPoint, iSpecies) * r.grad(iPoint, iSpecies, 1);
+
+            double Mass = 0.0;
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) Mass += V[iSpecies] / rho * g.MolarMass(iSpecies);
+
+            const double heat_capacity_cp_i = V[RHOCVTR_INDEX] / rho + Ru / Mass;
+            const double total_viscosity_i = Laminar_Viscosity_i + Eddy_Viscosity_i;
+            const double total_conductivity_i = ktr + kve + heat_capacity_cp_i * Eddy_Viscosity_i / Prandtl_Turb;
+            const double u = V[VEL_INDEX];
+            const double v = V[VEL_INDEX + 1];
+            const double qy_t = -total_conductivity_i * r.grad(iPoint, T_INDEX, 1);
+            const double qy_ve = -kve * r.grad(iPoint, TVE_INDEX, 1);
+
+            double sumJhs_y, sumJeve_y;
+            sumJhs_y = sumJeve_y = 0.0;
+            for (int iSpecies = 0; iSpecies < r.nHeavy; iSpecies++) {
+              sumJhs_y += -(rho * r.Ds(iPoint, iSpecies) * r.grad(iPoint, iSpecies, 1) - V[iSpecies] * Vector) * hs[iSpecies];
+              sumJeve_y += -(rho * r.Ds(iPoint, iSpecies) * r.grad(iPoint, iSpecies, 1) - V[iSpecies] * Vector) * eve[iSpecies];
+            }
+
+            for (int iSpecies = 0; iSpecies < nSpecies; iSpecies++) residual[iSpecies] -= 0.0;
+            residual[nSpecies] -= Volume * (yinv * total_viscosity_i * (r.grad(iPoint, nSpecies + 2, 1) + r.grad(iPoint, nSpecies + 3, 0)) -
+                                            TWO3 * r.auxGrad(iPoint, 0, 0));
+            residual[nSpecies + 1] -= Volume * (yinv * total_viscosity_i * 2 * (r.grad(iPoint, nSpecies + 3, 1) - v * yinv) -
+                                                TWO3 * r.auxGrad(iPoint, 0, 1));
+            residual[nSpecies + 2] -=
+                Volume * (yinv * (-sumJhs_y +
+                                  total_viscosity_i * (u * (r.grad(iPoint, nSpecies + 3, 0) + r.grad(iPoint, nSpecies + 2, 1)) +
+                                                       v * TWO3 * (2 * r.grad(iPoint, nSpecies + 3, 1) - r.grad(iPoint, nSpecies + 2, 0) -
+                                                                   v * yinv + rho * turb_ke_i)) -
+                                  qy_t) -
+                          TWO3 * (r.auxGrad(iPoint, 1, 1) + r.auxGrad(iPoint, 2, 0)));
+            residual[nSpecies + 3] -= Volume * (yinv * (-sumJeve_y - qy_ve));
+          }
+
+          if (!ResidualNaN(implicit, nVar, residual, jacobian)) {
+            AddRow(a.res, iPoint, nVar, residual, 1.0);
+            if (implicit) AddDiag(a, iPoint, jacobian, 1.0);
+          } else {
+            nAxi++;
+          }
+        }
       },
-      Kokkos::Sum<unsigned long>(eChm), Kokkos::Sum<unsigned long>(eVib));
+      Kokkos::Sum<unsigned long>(eChm), Kokkos::Sum<unsigned long>(eVib), Kokkos::Sum<unsigned long>(eAxi));
 }
 
 /*! \brief CNEMOEulerSolver::BC_Sym_Plane (NEMO override; also BC_Euler_Wall) for the vertices [v0, v1). */
@@ -502,8 +635,8 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
         const double* V_i = &a.V(iPoint, 0);
         const double* eve_i = &a.eves(iPoint, 0);
         const double* dPdU_i = a.implicit ? &a.dPdU(iPoint, 0) : zero;
-        const double Gamma_i = a.Gamma(iPoint);
-        const double Sensor_i = a.Sensor.size() ? a.Sensor(iPoint) : 0.0;
+        double Gamma_i = a.Gamma(iPoint);
+        double Sensor_i = a.Sensor.size() ? a.Sensor(iPoint) : 0.0;
 
         /*--- Boundary state (node_infty / node_inlet): V | eve | dPdU | Gamma. ---*/
         const double* Vb = r.bstate.size() ? &r.bstate(0) : zero;
@@ -605,6 +738,15 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
           V_j = V_outlet;
         }
 
+        /*--- Batch A: BC_Supersonic_Inlet sets neither Gamma nor Sensor of the boundary numerics, BC_Supersonic_Outlet
+         *    no Sensor: AUSM+M reads the values the last earlier BC left there (host replay, staleNumerics). ---*/
+        if (r.staleNumerics) {
+          if (kind == static_cast<int>(K::SUPERSONIC_INLET)) {
+            Gamma_i = r.staleGammaI;
+            Gamma_j = r.staleGammaJ;
+          }
+          Sensor_i = r.staleSensor;
+        }
         const double Sensor_j = Sensor_i; /*--- SetSensor(Sensor(iPoint), Sensor(iPoint)) on the CPU ---*/
         double Flux[MAXNV], Jacobian_i[MAXNV * MAXNV], Jacobian_j[MAXNV * MAXNV];
         AUSMResidual<ND>(a, Normal, V_i, V_j, eve_i, eve_j, dPdU_i, dPdU_j, Gamma_i, Gamma_j, Sensor_i, Sensor_j, Flux,
@@ -727,7 +869,9 @@ void CNEMOKokkosData::EnsureInputsOnDevice(bool upload, bool needSolution, bool 
                                        nodes->Solution.data(), nPoint, nVar));
     consDeviceValid = true;
   }
-  if (needSensor && (upload || !sensorValid)) {
+  if (needSensor && ResidentActive()) {
+    EnsureDevice(G_SENSOR); /*--- device SetPressureDiffusionSensor (batch A) ---*/
+  } else if (needSensor && (upload || !sensorValid)) {
     if (st.Sensor.size() == 0) st.Sensor = View1D<double>("NEMO::Sensor", nPoint);
     Kokkos::deep_copy(st.Sensor, Kokkos::View<const double*, HostSpace, Unmanaged>(nodes->GetSensor().data(), nPoint));
     sensorValid = true;
@@ -741,7 +885,26 @@ CNEMOKokkosData::SourceResult CNEMOKokkosData::ComputeSourceResidual(const Sourc
   Kokkos::Timer timer;
   SourceResult out;
   if (!accOnDevice) SU2_MPI::Error("CNEMOKokkosData: source stage without a device accumulator.", CURRENT_FUNCTION);
-  EnsureInputsOnDevice(uploadInputs, false, false);
+  /*--- Batch A: the axisymmetric terms also read U (rho u, rho v, rho Eve) and, viscous, the primitive gradient, the
+   *    transport properties and the AuxVar gradient. ---*/
+  EnsureInputsOnDevice(uploadInputs, p.axisymmetric, false);
+  if (p.axiViscous) {
+    if (ResidentActive()) {
+      EnsureDevice(G_GRADIENT);
+      EnsureDevice(G_AUXVAR);
+    } else {
+      if (uploadInputs || !gradPrimValid) {
+        AllocateGradients();
+        Kokkos::deep_copy(st.GradPrim, Kokkos::View<const double***, Kokkos::LayoutRight, HostSpace, Unmanaged>(
+                                           nodes->GetGradient_Primitive().data(), nPoint, nPrimVarGrad, nDim));
+        P.bytes_h2d += double(st.GradPrim.size()) * sizeof(double);
+        gradPrimValid = true;
+        if (!separateRecGradient) gradRecValid = true;
+      }
+      if (uploadInputs || !transportDeviceValid) UploadTransport();
+      if (uploadInputs) UploadAuxVar();
+    }
+  }
   Kokkos::fence();
   P.h2d += timer.seconds();
   timer.reset();
@@ -766,9 +929,28 @@ CNEMOKokkosData::SourceResult CNEMOKokkosData::ComputeSourceResidual(const Sourc
   r.frozen = p.frozen;
   r.monoatomic = p.monoatomic;
   r.vtLimiting = p.vtLimiting;
+  r.axisym = p.axisymmetric;
+  r.axiViscous = p.axiViscous;
+  r.nHeavy = p.nHeavyNumerics;
+  r.prandtlTurb = p.prandtlTurb;
+  r.RuSI = p.RuSI;
+  r.eddyIdx = nSpecies + nDim + 9;
+  if (p.axisymmetric) {
+    r.a.dPdU = st.dPdU;
+    r.U = st.Solution;
+    r.coord = geo.coord;
+  }
+  if (p.axiViscous) {
+    r.grad = st.GradPrim;
+    r.auxGrad = st.AuxGrad;
+    r.Ds = st.DiffCoeff;
+    r.mu = st.LamVisc;
+    r.k = st.ThermalCond;
+    r.kve = st.ThermalCondVe;
+  }
 
-  if (nDim == 2) KernelSource<2>(r, out.eChm, out.eVib);
-  else KernelSource<3>(r, out.eChm, out.eVib);
+  if (nDim == 2) KernelSource<2>(r, out.eChm, out.eVib, out.eAxi);
+  else KernelSource<3>(r, out.eChm, out.eVib, out.eAxi);
   P.kernel += timer.seconds();
   P.calls++;
   return out;
@@ -883,6 +1065,10 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   r.bstate = needState ? st.BState : View1D<double>();
   r.nPointDomain = geo.nPointDomain;
   r.P_Exit = p.P_Exit;
+  r.staleNumerics = p.staleNumerics;
+  r.staleGammaI = p.staleGammaI;
+  r.staleGammaJ = p.staleGammaJ;
+  r.staleSensor = p.staleSensor;
   /*--- Step 8. ---*/
   r.viscous = viscFar;
   if (wall || viscFar) {
@@ -1071,6 +1257,98 @@ struct ExplicitFunctor {
   }
 };
 
+/*--- Batch A: Explicit_Iteration_impl<RUNGE_KUTTA_EXPLICIT> / <CLASSICAL_RK4_EXPLICIT>, Identity preconditioner. ---*/
+struct ExplicitRKFunctor {
+  using value_type = RR;
+  View1D<double> vol, pvol, dt;
+  View2D<double> res, trunc, U, Uold, Unew;
+  int nVar = 0, step = 0;
+  bool rk4 = false;
+  double alpha = 0.0, timeCoeff = 0.0, funcCoeff = 0.0;
+
+  KOKKOS_INLINE_FUNCTION void init(value_type& v) const { RRInit(v); }
+  KOKKOS_INLINE_FUNCTION void join(value_type& d, const value_type& s) const { RRJoin(d, s, nVar); }
+  KOKKOS_INLINE_FUNCTION void operator()(const unsigned long iPoint, value_type& v) const {
+    const double Vol = vol(iPoint) + pvol(iPoint);
+    const double Delta = dt(iPoint) / Vol;
+    for (int iVar = 0; iVar < nVar; iVar++) {
+      const double Res = res(iPoint, iVar) + trunc(iPoint, iVar);
+      if (!rk4) {
+        /*--- AddSolution(-Res*Delta*RK_AlphaCoeff): Solution = Solution_Old + du. ---*/
+        U(iPoint, iVar) = Uold(iPoint, iVar) + -Res * Delta * alpha;
+      } else {
+        const double tmp_time = -1.0 * timeCoeff * Delta;
+        const double tmp_func = -1.0 * funcCoeff * Delta;
+        if (step < 3) {
+          U(iPoint, iVar) = Uold(iPoint, iVar) + tmp_time * Res;     /*--- AddSolution ---*/
+          Unew(iPoint, iVar) = Unew(iPoint, iVar) + tmp_func * Res;  /*--- AddSolution_New ---*/
+        } else {
+          U(iPoint, iVar) = Unew(iPoint, iVar) + tmp_func * Res;
+        }
+      }
+      RRAdd(v, iPoint, iVar, Res);
+    }
+  }
+};
+
+/*--- Batch A: point loop of CSolver::AdaptCFLNumber (no turbulence / species solver), std::min / std::max semantics. ---*/
+struct CFLStats {
+  double mn, mx, sum;
+};
+struct AdaptCFLFunctor {
+  using value_type = CFLStats;
+  View1D<double> cfl, ur;
+  CNEMOKokkosData::CFLAdaptParams p;
+
+  KOKKOS_INLINE_FUNCTION void init(value_type& v) const {
+    v.mn = 1e30;
+    v.mx = 0.0;
+    v.sum = 0.0;
+  }
+  KOKKOS_INLINE_FUNCTION void join(value_type& d, const value_type& s) const {
+    d.mn = (d.mn < s.mn) ? d.mn : s.mn;
+    d.mx = (s.mx < d.mx) ? d.mx : s.mx;
+    d.sum += s.sum;
+  }
+  KOKKOS_INLINE_FUNCTION void operator()(const unsigned long iPoint, value_type& v) const {
+    double CFL = cfl(iPoint);
+    const double underRelaxationFlow = ur(iPoint);
+    const double underRelaxationTurb = 1.0;
+    const double underRelaxation = (underRelaxationTurb < underRelaxationFlow) ? underRelaxationTurb : underRelaxationFlow;
+
+    double CFLFactor = 1.0;
+    if (underRelaxation < 0.1 || p.reduceCFL) {
+      CFLFactor = p.factorDecrease;
+    } else if ((underRelaxation >= 0.1 && underRelaxation < 1.0) || !p.canIncrease) {
+      CFLFactor = 1.0;
+    } else {
+      CFLFactor = p.factorIncrease;
+    }
+
+    if (CFL * CFLFactor <= p.cflMin) {
+      CFL = p.cflMin;
+      CFLFactor = p.mgFactor;
+    } else if (CFL * CFLFactor >= p.cflMax) {
+      CFL = p.cflMax;
+      CFLFactor = p.mgFactor;
+    }
+
+    if (p.resetCFL) {
+      CFL = p.cflMin;
+      CFLFactor = p.mgFactor;
+    }
+
+    CFL *= CFLFactor;
+    cfl(iPoint) = CFL;
+
+    if (p.stats) {
+      v.mn = (v.mn < CFL) ? v.mn : CFL; /*--- min(CFL, myCFLMin) ---*/
+      v.mx = (CFL < v.mx) ? v.mx : CFL; /*--- max(CFL, myCFLMax) ---*/
+      v.sum += CFL;
+    }
+  }
+};
+
 template <class DView>
 double GroupBytes(const DView& d) {
   return double(d.span()) * sizeof(typename DView::value_type);
@@ -1203,6 +1481,21 @@ void CNEMOKokkosData::DownloadGroup(Group g) {
       rows(hostLinSysRes, st.Res, nPoint);
       rows(hostLinSysSol, st.Sol, nPoint);
       break;
+    case G_SENSOR:
+      if (st.Sensor.size()) rows(nodes->Sensor.data(), as2d(st.Sensor), nPoint);
+      break;
+    case G_AUXVAR:
+      if (st.AuxVar.size()) {
+        rows(nodes->AuxVar.data(), st.AuxVar, nPoint);
+        rows(nodes->Grad_AuxVar.data(), st.AuxGrad, nPoint);
+      }
+      break;
+    case G_TIMEN:
+      if (st.SolTimeN.size()) {
+        rows(nodes->Solution_time_n.data(), st.SolTimeN, nPoint);
+        rows(nodes->Solution_time_n1.data(), st.SolTimeN1, nPoint);
+      }
+      break;
     default: break;
   }
   P.bytes_d2h += b;
@@ -1285,6 +1578,28 @@ void CNEMOKokkosData::UploadGroup(Group g) {
       rows(st.Res, hostLinSysRes, nPoint);
       rows(st.Sol, hostLinSysSol, nPoint);
       break;
+    case G_SENSOR:
+      if (nodes->Sensor.size() < nPoint) break; /*--- not allocated (not AUSM+M) ---*/
+      if (st.Sensor.size() == 0) st.Sensor = View1D<double>("NEMO::Sensor", nPoint);
+      rows(as2(st.Sensor), nodes->Sensor.data(), nPoint);
+      sensorValid = true;
+      break;
+    case G_AUXVAR:
+      if (nodes->GetnAuxVar() != 3) break; /*--- not axisymmetric ---*/
+      AllocateAuxVar();
+      rows(st.AuxVar, nodes->AuxVar.data(), nPoint);
+      rows(st.AuxGrad, nodes->Grad_AuxVar.data(), nPoint);
+      auxDeviceValid = true;
+      break;
+    case G_TIMEN:
+      if (size_t(nodes->Solution_time_n.size()) < size_t(nPoint) * nVar) break; /*--- not dual time ---*/
+      if (st.SolTimeN.size() == 0) {
+        st.SolTimeN = View2D<double>("NEMO::Solution_time_n", nPoint, nVar);
+        st.SolTimeN1 = View2D<double>("NEMO::Solution_time_n1", nPoint, nVar);
+      }
+      rows(st.SolTimeN, nodes->Solution_time_n.data(), nPoint);
+      rows(st.SolTimeN1, nodes->Solution_time_n1.data(), nPoint);
+      break;
     default: break;
   }
   P.bytes_h2d += b;
@@ -1345,6 +1660,15 @@ void CNEMOKokkosData::PoisonGroup(Group g) {
     case G_LINSYS:
       fill(hostLinSysRes, size_t(nPoint) * nVar);
       fill(hostLinSysSol, size_t(nPoint) * nVar);
+      break;
+    case G_SENSOR: fill(nodes->Sensor.data(), nodes->Sensor.size()); break;
+    case G_AUXVAR:
+      fill(nodes->AuxVar.data(), nodes->AuxVar.size());
+      fill(nodes->Grad_AuxVar.data(), nodes->Grad_AuxVar.size());
+      break;
+    case G_TIMEN:
+      fill(nodes->Solution_time_n.data(), nodes->Solution_time_n.size());
+      fill(nodes->Solution_time_n1.data(), nodes->Solution_time_n1.size());
       break;
     default: break;
   }
@@ -1490,6 +1814,14 @@ double* CNEMOKokkosData::HaloDevicePtr(HaloQuantity q, size_t& rowLen, Group& g)
       rowLen = nPrimVarGrad;
       g = G_LIMITER;
       return st.Limiter.data();
+    case HaloQuantity::SENSOR:
+      rowLen = 1;
+      g = G_SENSOR;
+      return st.Sensor.data();
+    case HaloQuantity::AUXVAR_GRADIENT:
+      rowLen = size_t(3) * nDim;
+      g = G_AUXVAR;
+      return st.AuxGrad.data();
     default: break;
   }
   SU2_MPI::Error("CNEMOKokkosData: unknown halo quantity.", CURRENT_FUNCTION);
@@ -1502,6 +1834,8 @@ double* CNEMOKokkosData::HaloHostPtr(HaloQuantity q) {
     case HaloQuantity::GRADIENT_PRIMITIVE: return nodes->GetGradient_Primitive().data();
     case HaloQuantity::GRADIENT_RECONSTRUCTION: return nodes->GetGradient_Reconstruction().data();
     case HaloQuantity::LIMITER: return nodes->GetLimiter_Primitive().data();
+    case HaloQuantity::SENSOR: return nodes->Sensor.data();
+    case HaloQuantity::AUXVAR_GRADIENT: return nodes->Grad_AuxVar.data();
     default: break;
   }
   return nullptr;
@@ -1775,6 +2109,11 @@ void CNEMOKokkosData::SetOldSolution() {
   Kokkos::Timer timer;
   EnsureDevice(G_SOLUTION);
   Kokkos::deep_copy(st.Solution_Old, st.Solution);
+  if (rk4) {
+    /*--- CMultiGridIntegration calls Set_NewSolution right after Set_OldSolution (same Solution). ---*/
+    if (st.SolutionNew.size() == 0) st.SolutionNew = View2D<double>("NEMO::Solution_New", nPoint, nVar);
+    Kokkos::deep_copy(st.SolutionNew, st.Solution);
+  }
   Kokkos::fence();
   MarkDeviceWritten(G_SOLUTION_OLD);
   updatePerf.oldSol += timer.seconds();
@@ -1803,6 +2142,154 @@ void CNEMOKokkosData::TimeSteppingFill(double cfl, double dt) {
       });
   Kokkos::fence();
   MarkDeviceWritten(G_LOCALCFL);
+  MarkDeviceWritten(G_TIMESTEP);
+}
+
+void CNEMOKokkosData::ExplicitRKUpdate(bool rk4Update, unsigned short iRKStep, double alpha, double timeCoeff,
+                                       double funcCoeff, ResidualReduction& red) {
+  Kokkos::Timer timer;
+  EnsureDevice(G_TRUNCERR);
+  EnsureDevice(G_SOLUTION);
+  EnsureDevice(G_SOLUTION_OLD);
+  if (rk4Update && st.SolutionNew.size() == 0)
+    SU2_MPI::Error("CNEMOKokkosData: classical RK4 without the device Solution_New.", CURRENT_FUNCTION);
+  ExplicitRKFunctor f;
+  f.vol = geo.volume;
+  f.pvol = geo.periodic_volume;
+  f.dt = st.DeltaTime;
+  f.res = st.Res;
+  f.trunc = st.TruncErr;
+  f.U = st.Solution;
+  f.Uold = st.Solution_Old;
+  f.Unew = st.SolutionNew;
+  f.nVar = nVar;
+  f.step = iRKStep;
+  f.rk4 = rk4Update;
+  f.alpha = alpha;
+  f.timeCoeff = timeCoeff;
+  f.funcCoeff = funcCoeff;
+  Kokkos::parallel_reduce("NEMO::ExplicitRKIteration", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain), f, red);
+  Kokkos::fence();
+  accOnDevice = false;
+  hostAccZero = false;
+  MarkDeviceWritten(G_LINSYS);
+  MarkDeviceWritten(G_SOLUTION);
+  updatePerf.explicitUpd += timer.seconds();
+  updatePerf.nExplicit++;
+}
+
+void CNEMOKokkosData::AdaptCFL(const CFLAdaptParams& p, double& cflMin, double& cflMax, double& cflSum) {
+  auto& P = stagePerf[ST_CFL];
+  Kokkos::Timer timer;
+  EnsureDevice(G_LOCALCFL);
+  EnsureDevice(G_UNDERRELAX);
+  if (st.LocalCFL.size() == 0) SU2_MPI::Error("CNEMOKokkosData: CFL adaptation without device LocalCFL.", CURRENT_FUNCTION);
+  AdaptCFLFunctor f;
+  f.cfl = st.LocalCFL;
+  f.ur = st.UnderRelax;
+  f.p = p;
+  CFLStats v;
+  Kokkos::parallel_reduce("NEMO::AdaptCFLNumber", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain), f, v);
+  Kokkos::fence();
+  if (p.stats) {
+    cflMin = v.mn;
+    cflMax = v.mx;
+    cflSum = v.sum;
+  }
+  MarkDeviceWritten(G_LOCALCFL);
+  P.kernel += timer.seconds();
+  P.calls++;
+}
+
+void CNEMOKokkosData::DualTimeResidual(bool secondOrder, bool impl, double timeStep, bool uploadInputs) {
+  auto& P = stagePerf[ST_DUALTIME];
+  Kokkos::Timer timer;
+  if (!accOnDevice) SU2_MPI::Error("CNEMOKokkosData: dual-time stage without a device accumulator.", CURRENT_FUNCTION);
+  if (ResidentActive()) {
+    EnsureDevice(G_SOLUTION);
+    EnsureDevice(G_TIMEN);
+  } else {
+    EnsureInputsOnDevice(uploadInputs, true, false);
+    /*--- Host-authoritative: Solution_time_n(1) change once per time step on the host, uploaded every call. ---*/
+    UploadGroup(G_TIMEN);
+  }
+  if (st.SolTimeN.size() == 0) SU2_MPI::Error("CNEMOKokkosData: dual time without Solution_time_n.", CURRENT_FUNCTION);
+  Kokkos::fence();
+  P.h2d += timer.seconds();
+  timer.reset();
+  const auto U = st.Solution, Un = st.SolTimeN, Unm1 = st.SolTimeN1, res = st.Res;
+  const auto vol = geo.volume;
+  const auto dia = geo.dia_ptr;
+  const auto jac = st.JacVal;
+  const int nv = nVar;
+  const double TimeStep = timeStep;
+  /*--- CFVMFlowSolverBase::SetResidual_DualTime, static mesh: per point independent. ---*/
+  Kokkos::parallel_for(
+      "NEMO::DualTimeResidual", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
+      KOKKOS_LAMBDA(const unsigned long iPoint) {
+        const double Volume_nP1 = vol(iPoint);
+        for (int iVar = 0; iVar < nv; iVar++) {
+          if (!secondOrder)
+            res(iPoint, iVar) += (U(iPoint, iVar) - Un(iPoint, iVar)) * Volume_nP1 / TimeStep;
+          else
+            res(iPoint, iVar) += (3.0 * U(iPoint, iVar) - 4.0 * Un(iPoint, iVar) + 1.0 * Unm1(iPoint, iVar)) *
+                                 Volume_nP1 / (2.0 * TimeStep);
+        }
+        if (impl) {
+          const double val = !secondOrder ? Volume_nP1 / TimeStep : (Volume_nP1 * 3.0) / (2.0 * TimeStep);
+          const unsigned long base = dia(iPoint) * nv * nv;
+          for (int iVar = 0; iVar < nv; iVar++) jac(base + iVar * (nv + 1)) += val;
+        }
+      });
+  Kokkos::fence();
+  P.kernel += timer.seconds();
+  P.calls++;
+}
+
+void CNEMOKokkosData::DualTimeShift(double cfl) {
+  auto& P = stagePerf[ST_DUALTIME];
+  Kokkos::Timer timer;
+  EnsureDevice(G_SOLUTION);
+  EnsureDevice(G_TIMEN);
+  if (st.SolTimeN.size() == 0) SU2_MPI::Error("CNEMOKokkosData: dual time without Solution_time_n.", CURRENT_FUNCTION);
+  if (st.LocalCFL.size() == 0) st.LocalCFL = View1D<double>("NEMO::LocalCFL", nPoint);
+  /*--- CIntegration::SetDualTime_Solver: Set_Solution_time_n1, Set_Solution_time_n, UnderRelaxation, LocalCFL on all
+   *    points (copies / constants: bitwise). ---*/
+  Kokkos::deep_copy(st.SolTimeN1, st.SolTimeN);
+  Kokkos::deep_copy(st.SolTimeN, st.Solution);
+  Kokkos::deep_copy(st.UnderRelax, 1.0);
+  Kokkos::deep_copy(st.LocalCFL, cfl);
+  Kokkos::fence();
+  MarkDeviceWritten(G_TIMEN);
+  MarkDeviceWritten(G_UNDERRELAX);
+  MarkDeviceWritten(G_LOCALCFL);
+  P.kernel += timer.seconds();
+}
+
+double CNEMOKokkosData::DualTimeMinDt(double num, double init) {
+  EnsureDevice(G_LOCALCFL);
+  const auto c = st.LocalCFL;
+  double m = init;
+  Kokkos::parallel_reduce(
+      "NEMO::DualTimeMinDt", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
+      KOKKOS_LAMBDA(const unsigned long i, double& v) {
+        const double x = num / c(i);
+        v = (x < v) ? x : v; /*--- min(v, x) ---*/
+      },
+      Kokkos::Min<double>(m));
+  /*--- Kokkos::Min starts from +max: fold in the CPU initial value (min is order independent). ---*/
+  return (m < init) ? m : init;
+}
+
+void CNEMOKokkosData::DualTimeExplicitDt(double dtMax) {
+  EnsureDevice(G_TIMESTEP);
+  const auto d = st.DeltaTime;
+  Kokkos::parallel_for(
+      "NEMO::DualTimeExplicitDt", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
+      KOKKOS_LAMBDA(const unsigned long i) {
+        d(i) = (d(i) < dtMax) ? d(i) : dtMax; /*--- min(dtMax, Delta_Time) ---*/
+      });
+  Kokkos::fence();
   MarkDeviceWritten(G_TIMESTEP);
 }
 

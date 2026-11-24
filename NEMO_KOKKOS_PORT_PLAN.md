@@ -239,3 +239,55 @@ Run 2026-11-20 on the container (2 cores, no GPU, no nvcc): `TestCases/kokkos_ne
   ./ninja -C build-kokkos-v100 -j 8 2>&1 | tee build-kokkos-v100.log
   ```
   `NVCC_WRAPPER_DEFAULT_COMPILER` must name g++: without it `subprojects/Kokkos/bin/kokkos_launch_compiler` (line 107, `: ${NVCC_WRAPPER_DEFAULT_COMPILER:=${CXX_COMPILER}}`) sets nvcc_wrapper's host compiler to the dispatcher itself, which re-dispatches to nvcc_wrapper (recursion / silent failure). Keep `-Denable-cuda=false` (the legacy HAVE_CUDA path and the Kokkos CUDA backend are mutually exclusive). Every TU carrying `-DHAVE_KOKKOS` goes through nvcc_wrapper (`-extended-lambda -arch=sm_70 -std=c++20` added by the dispatcher). Expected nonfatal: CUDA 12.9 deprecation warning for offline sm_70 compilation.
+
+## Batch A status (2026-11-20): AUSM+M sensor, CFL adaptation, axisymmetry, AUSM+M supersonic BCs, RK, dual time
+All five items make device-resident mode ON where it was OFF before; every new path is bitwise vs the CPU in the strict build.
+- **Hooks (SU2_CFD core, no-op defaults)**: `CSolver::AdaptCFLNumber_Device` (called by `AdaptCFLNumber` instead of its point loop when there is no turbulence / species solver) and `CSolver::SetDualTime_Device` (called by `CIntegration::SetDualTime_Solver` instead of its host loops). `CNEMOEulerSolver::SetResidual_DualTime` overrides the base class (device stage, or the host-stage hook + base).
+- **1. AUSM+M pressure diffusion sensor** (`Device_PressureSensor`, `CNEMOKokkosData::ComputePressureSensor`): point kernel over the point CSR (CPoint::GetPoints order, std::min semantics), new residency group `G_SENSOR`, device halo exchange `HaloQuantity::SENSOR` (MPI `SENSOR` comm, Step-10 machinery; `SU2_KOKKOS_NEMO_HALO=host` legacy path works too). Resident mode only; host-authoritative mode keeps the host loop; `SU2_KOKKOS_STAGE_VERIFY=1` compares it (stage `PressureSensor`).
+- **2. CFL adaptation** (`AdaptCFLNumber_Device`, `CNEMOKokkosData::AdaptCFL`): the per-point LocalCFL update (UnderRelaxation, reduceCFL / canIncrease / resetCFL flags, min / max clamps, MG factor) with a custom {min, max, sum} reducer initialised to the CPU values (ordered on Serial = bitwise; the sum is order-dependent on GPUs, monitoring only). The global logic (linear-solver residual, nonlinear residual history, flags, MPI reductions) stays in the host code. Test params `CFL_ADAPT_PARAM= (0.5, 1.5, 1.0, 20.0, 0.9, 2)`: growth, MAX clamp, full resets and per-point reductions all occur in 21 iterations (invwedge_ausm: AVG_CFL 2.99 -> 19.3 -> reset 1.0 -> ...).
+- **3. Axisymmetric source + auxiliary gradients**: `CSource_NEMO::ComputeAxisymmetric` (2D) fused into the source kernel after chemistry / V-T in CPU order (residual + Jacobian, NaN counter `Axisymmetry`, also with MONOATOMIC), viscous part with the device `ComputeAxisymmetricAuxGradients` (AuxVar for y > EPS on all points, GG / WLS gradient with the existing kernels at nvg = 3, idxVel = -1; symmetry rows corrected with the CPU `correctGradientsSymmetry` like the primitive gradient; halo exchange `AUXVAR_GRADIENT`; group `G_AUXVAR`; stage `AxisymAuxGradient`). axi_visccone: resident ON, bitwise vs REF_MODE=HOST; added to the check.sh default case list.
+- **4. BC_Supersonic_Inlet / Outlet with AUSM+M**: the shared boundary numerics keep Gamma / Sensor from the last BC that set them. Replayed on the host (`RecordBoundaryNumerics` in BC_Far_Field / BC_Outlet / BC_Supersonic_Outlet: last domain vertex point; FAR / OUTLET: Gamma_i = Gamma(p), Gamma_j = Gamma_infty, Sensor = Sensor(p); SUPERSONIC_OUTLET: Gamma_i = Gamma_j = Gamma(p)), reset every space integration; the device kernel gets the three scalars (2 x 8 B DtoH in resident mode). Supported when a setter precedes the marker in the BC order on every rank (constructor check + Allreduce); otherwise the CPU reads uninitialised members in the first iteration -> host BC (reason printed).
+- **5. RK and dual time**: device `Explicit_Iteration_impl<RUNGE_KUTTA_EXPLICIT / CLASSICAL_RK4_EXPLICIT>` (`ExplicitRKUpdate`; RK4 Solution_New lives on the device, Set_OldSolution also copies it since CMultiGridIntegration calls Set_NewSolution right after); dual time: device SetResidual_DualTime (1st / 2nd order, Jacobian diagonal; stage `DualTimeSource`), SetDualTime_Solver state shift (`DualTimeShift`), SetTime_Step dual-time branches (UNST_CFL start-up min, explicit dt clamp), group `G_TIMEN` (Solution_time_n / n1). Dual time no longer forces eager residual sync. What forced OFF before: `Device_ResidentUnsupported` ("dual time stepping", "Runge-Kutta time integration") and `Device_DeferralUnsupported` (host SetResidual_DualTime without hook).
+- New A/B variants (ab_variants.sh and ab_resident.sh): am_impl am_first cfl_ausm cfl_am cfl_sc axi axi_gg axi_inv axi_expl supout_am supin_am supinout_am tb_rk tb_rk4 rk_ausm rk4_am dt2 dt1 dt_expl dt_unstcfl dt_sc; all report resident ON.
+
+## Feature coverage matrix (master checklist, 2026-11-20)
+"device-resident" = the whole iteration runs on the device (startup line `device-resident state: ON`); "host fallback" = the run works, with that stage (and resident mode) on the host; "unsupported" = not available on the CPU either, or not meaningful.
+
+| Area | Option / scheme | Status | Reason / note |
+|---|---|---|---|
+| Gas model | SU2_NONEQ (CSU2TCLib): N2, AIR-5, AIR-7, ARGON | device-resident | |
+| Gas model | MUTATIONPP | host fallback | no device tables (whole device path off) |
+| Gas model | IONIZATION= YES | device-resident (Euler) / host (NS walls) | the CPU NS wall BCs stop with an error |
+| Gas model | FROZEN_MIXTURE, MONOATOMIC, VT_RESIDUAL_LIMITING | device-resident | |
+| Transport | WILKE, GUPTA-YOS, SUTHERLAND | device-resident | |
+| Transport | CHAPMANN-ENSKOG | host fallback | CPU leaves stale arrays (not reproduced) |
+| Convection | AUSM, AUSM+M (incl. pressure sensor) | device-resident | |
+| Convection | AUSM+-up2 | host fallback | CPU Jacobian reads uninitialised M_L/M_R |
+| Convection | Roe, MSW, LAX-FRIEDRICH, other upwind / centered (JST) | host fallback | not ported |
+| Reconstruction | MUSCL (GG, WLS), Venkatakrishnan, BJ, Venkat-Wang, van Albada, none | device-resident | |
+| Reconstruction | LEAST_SQUARES (unweighted) gradients | device (stage) / resident OFF | resident needs GG or WLS |
+| Reconstruction | other limiters, periodic LS / limiter | host fallback | |
+| Viscous | laminar NS (CAvgGradCorrected_NEMO) | device-resident | |
+| Viscous | turbulence (SA/SST), wall functions | host fallback | eddy viscosity from the host turbulence solver |
+| Source | chemistry + V-T | device-resident | |
+| Source | AXISYMMETRIC (2D, inviscid + viscous, aux. gradients) | device-resident | batch A |
+| Source | 3D axisymmetric | unsupported | the CPU source assumes 2D |
+| BC | SYMMETRY_PLANE, EULER_WALL, FAR_FIELD (+viscous), OUTLET | device-resident | |
+| BC | SUPERSONIC_INLET / OUTLET, AUSM | device-resident | |
+| BC | SUPERSONIC_INLET / OUTLET, AUSM+M | device-resident if a FAR/OUTLET(/SUP_OUT) marker precedes it | otherwise the CPU reads uninitialised numerics in iteration 1: host |
+| BC | SUPERSONIC_INLET viscous | host fallback | viscous part not ported |
+| BC | ISOTHERMAL (non-cat., supercatalytic, partially catalytic explicit), HEAT_FLUX non-cat. | device-resident | |
+| BC | implicit partially catalytic, catalytic heat flux | unsupported | not available on the CPU |
+| BC | SMOLUCHOWSKI_MAXWELL, INLET_FLOW (BC_Inlet) | host fallback | not ported (slip: gas-state-dependent ComputeGasConstant) |
+| BC | periodic, turbomachinery / Giles, actuator disk, other kinds | host fallback | eager sync / not hooked |
+| Time | EULER_IMPLICIT (BCGSTAB, FGMRES, RESTARTED_FGMRES, CG; ILU(0), JACOBI) | device-resident | |
+| Time | ILU(n>0) | device-resident | host ILU build from downloaded values |
+| Time | other linear solvers / preconditioners (LU-SGS, LINELET), nested solver | host fallback | |
+| Time | EULER_EXPLICIT, RUNGE-KUTTA_EXPLICIT, CLASSICAL_RK4_EXPLICIT | device-resident | batch A (RK) |
+| Time | STEADY, TIME_STEPPING, DUAL_TIME_STEPPING-1ST/2ND (static mesh) | device-resident | batch A (dual time) |
+| Time | CFL_ADAPT | device-resident | batch A (no species solver) |
+| Time | multigrid (MGLEVEL > 0) | host fallback | coarse levels / CAvgGrad_NEMO not ported |
+| Time | dynamic grid / mesh motion (GCL), wind gust | host fallback | |
+| Other | MPI (device halo exchange host-staged or GPU-aware) | device-resident | |
+| Other | MARKER_ANALYZE, inverse design, verification solutions, adjoint (cont./discrete), Newton-Krylov | host fallback | |
+| Other | mixed-precision linear solver | host fallback | |

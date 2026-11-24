@@ -300,9 +300,13 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
     }
   }
   if (p.scheme == UpwindScheme::AUSMPLUSM) {
-    if (st.Sensor.size() == 0) st.Sensor = View1D<double>("NEMO::Sensor", nPoint);
-    uploadRange(st.Sensor.data(), nodes->GetSensor().data(), 0, nPoint);
-    sensorValid = true;
+    if (ResidentActive() && !uploadAll) {
+      EnsureDevice(G_SENSOR); /*--- device SetPressureDiffusionSensor + halo exchange (batch A) ---*/
+    } else {
+      if (st.Sensor.size() == 0) st.Sensor = View1D<double>("NEMO::Sensor", nPoint);
+      uploadRange(st.Sensor.data(), nodes->GetSensor().data(), 0, nPoint);
+      sensorValid = true;
+    }
   }
   Kokkos::fence();
   P.h2d += timer.seconds();

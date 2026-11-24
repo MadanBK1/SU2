@@ -830,13 +830,17 @@ namespace {
 const char* GroupName(int g) {
   static const char* names[] = {"Solution",  "Solution_Old", "Primitive+secondaries", "Gradient",
                                 "Limiter",   "TimeStep",     "LocalCFL",              "Non_Physical",
-                                "UnderRelaxation", "Res_TruncError", "LinSysRes+LinSysSol",
+                                "UnderRelaxation", "Res_TruncError", "LinSysRes+LinSysSol", "Sensor",
+                                "AuxVar+Grad_AuxVar", "Solution_time_n+n1",
                                 "boundary Primitive (+ viscous-wall gradient/transport)", "halo rows (MPI)"};
+  static_assert(sizeof(names) / sizeof(names[0]) == CNEMOKokkosData::N_SYNC, "group names");
   return names[g];
 }
 const char* StageName(int s) {
-  static const char* names[] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue",
-                                "Upwind",   "Source",  "BC",       "ResidualSync", "Viscous"};
+  static const char* names[] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue", "Upwind",
+                                "Source",   "BC",      "ResidualSync", "Viscous", "PressureSensor",
+                                "AxisymAuxGradient", "DualTimeSource", "AdaptCFL"};
+  static_assert(sizeof(names) / sizeof(names[0]) == CNEMOKokkosData::N_STAGES, "stage names");
   return names[s];
 }
 }  // namespace
@@ -927,22 +931,21 @@ void CNEMOKokkosData::PrintPerf() const {
             << " | d2h " << perf.d2h << " s (" << perf.d2h / c << "/call, " << perf.bytes_d2h / c / 1e6
             << " MB/call)"
             << " | host post " << perf.host_post << " s (" << perf.host_post / c << "/call)" << std::endl;
-  static const char* names[N_STAGES] = {"Gradient", "Limiter",  "TimeStep", "MaxEigenvalue",
-                                        "Upwind",   "Source",   "BC",       "ResidualSync", "Viscous"};
+  auto names = [](int s) { return StageName(s); };
   for (int s = 0; s < N_STAGES; ++s) {
     const auto& P = stagePerf[s];
     if (P.calls == 0) continue;
     const double n = double(P.calls);
-    std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " " << names[s] << " calls=" << P.calls << " | h2d " << P.h2d
+    std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " " << names(s) << " calls=" << P.calls << " | h2d " << P.h2d
               << " s (" << P.bytes_h2d / n / 1e6 << " MB/call) | kernel " << P.kernel << " s (" << P.kernel / n
               << "/call) | d2h " << P.d2h << " s (" << P.bytes_d2h / n / 1e6 << " MB/call) | host " << P.host
               << " s (" << P.host / n << "/call)" << std::endl;
     if (P.verifyCalls > 0)
-      std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " " << names[s] << " compares=" << P.verifyCalls
+      std::cout << "[KOKKOS_NEMO_VERIFY] MG " << iMesh << " " << names(s) << " compares=" << P.verifyCalls
                 << " entries=" << P.verifyEntries << " non-bitwise=" << P.verifyNonBitwise
                 << " max rel diff=" << P.verifyMaxRel << std::endl;
     if (P.hostRefCalls > 0)
-      std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " " << names[s] << " host reference (A/B rerun) "
+      std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " " << names(s) << " host reference (A/B rerun) "
                 << P.hostRef << " s (" << P.hostRef / P.hostRefCalls << "/call)" << std::endl;
   }
   if (outletCalls > 0)
@@ -1053,7 +1056,8 @@ void CNEMOKokkosData::PrintPerf() const {
     }
   }
   for (int q = 0; q < static_cast<int>(HaloQuantity::N); ++q) {
-    static const char* hn[] = {"SOLUTION", "PRIMITIVE_GRADIENT", "PRIMITIVE_GRAD_REC", "PRIMITIVE_LIMITER"};
+    static const char* hn[] = {"SOLUTION", "PRIMITIVE_GRADIENT", "PRIMITIVE_GRAD_REC", "PRIMITIVE_LIMITER", "SENSOR",
+                               "AUXVAR_GRADIENT"};
     if (haloPerf[q].calls > 0)
       std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " halo " << hn[q] << " calls=" << haloPerf[q].calls
                 << " | " << haloPerf[q].time << " s | MPI send " << haloPerf[q].bytesMsg / 1e6 << " MB (rank 0)"

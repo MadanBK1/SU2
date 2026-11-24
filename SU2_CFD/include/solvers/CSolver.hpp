@@ -1311,6 +1311,25 @@ public:
    */
   inline virtual su2double LinSysResSquaredNorm() const { return LinSysRes.squaredNorm(); }
 
+  /*!
+   * \brief Per-point part of AdaptCFLNumber for this (flow) solver, done where the solver keeps LocalCFL /
+   *        UnderRelaxation (device-resident Kokkos NEMO solver). Same update and statistics as the host loop:
+   *        LocalCFL from the UnderRelaxation and the global flags, min / max / sum of the new CFL (if stats).
+   * \return true if done (the host point loop is skipped); false by default.
+   */
+  inline virtual bool AdaptCFLNumber_Device(unsigned short iMesh, bool reduceCFL, bool canIncrease, bool resetCFL,
+                                            su2double CFLFactorDecrease, su2double CFLFactorIncrease, su2double CFLMin,
+                                            su2double CFLMax, su2double MGFactor, bool stats, su2double& cflMin,
+                                            su2double& cflMax, su2double& cflSum) { return false; }
+
+  /*!
+   * \brief State update of CIntegration::SetDualTime_Solver (Solution_time_n1 = Solution_time_n, Solution_time_n =
+   *        Solution, UnderRelaxation = 1, LocalCFL = cfl on every point), done where the solver keeps that state
+   *        (device-resident Kokkos NEMO solver).
+   * \return true if done (the host loops are skipped); false by default.
+   */
+  inline virtual bool SetDualTime_Device(su2double cfl) { return false; }
+
  /*!
    * \brief Get the outer state for fluid interface nodes.
    * \param[in] val_marker - marker index

@@ -994,6 +994,180 @@ void CNEMOKokkosData::ComputeMaxEigenvalue() {
   P.calls++;
 }
 
+/*====================== Batch A: pressure sensor, axisymmetric auxiliary gradient ======================*/
+
+void CNEMOKokkosData::ComputePressureSensor(double* hostOut) {
+  auto& P = stagePerf[ST_SENSOR];
+  Kokkos::Timer timer;
+  if (st.Sensor.size() == 0) st.Sensor = View1D<double>("NEMO::Sensor", nPoint);
+  if (!primDeviceValid) {
+    UploadPrimitiveOnly();
+    P.bytes_h2d += double(nPoint) * nPrimVar * sizeof(double);
+  }
+  P.h2d += timer.seconds();
+  timer.reset();
+
+  /*--- CNEMOEulerSolver::SetPressureDiffusionSensor: neighbours in CPoint::GetPoints order, std::min semantics. ---*/
+  const auto ptr = geo.point_ptr, idx = geo.point_idx;
+  const auto V = st.Primitive;
+  const auto S = st.Sensor;
+  const int P_INDEX = nSpecies + nDim + 2;
+  Kokkos::parallel_for(
+      "NEMO::PressureDiffusionSensor", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
+      KOKKOS_LAMBDA(const unsigned long iPoint) {
+        double Sensor = 1.0;
+        for (auto k = ptr(iPoint); k < ptr(iPoint + 1); ++k) {
+          const auto jPoint = idx(k);
+          const double P_k = V(jPoint, P_INDEX) / V(iPoint, P_INDEX);
+          Sensor = kmin(Sensor, kmin(P_k, 1.0 / P_k));
+        }
+        S(iPoint) = Sensor;
+      });
+  Kokkos::fence();
+  P.kernel += timer.seconds();
+  timer.reset();
+  if (hostOut != nullptr) {
+    P.bytes_d2h += DownloadRows(hostOut, Kokkos::View<double**, Kokkos::LayoutRight, mem_space, Unmanaged>(
+                                             st.Sensor.data(), nPoint, 1), geo.nPointDomain);
+  } else {
+    MarkDeviceWritten(G_SENSOR);
+  }
+  sensorValid = true; /*--- domain rows; halo rows from the caller's halo exchange ---*/
+  P.d2h += timer.seconds();
+  P.calls++;
+}
+
+double CNEMOKokkosData::DeviceSensor(unsigned long iPoint) {
+  double v = 0.0;
+  Kokkos::deep_copy(Kokkos::View<double, HostSpace, Unmanaged>(&v), Kokkos::subview(st.Sensor, iPoint));
+  syncPerf[G_SENSOR].bytes_d2h += sizeof(double);
+  return v;
+}
+
+void CNEMOKokkosData::AllocateAuxVar() {
+  if (st.AuxVar.size()) return;
+  st.AuxVar = View2D<double>("NEMO::AuxVar", nPoint, 3);
+  st.AuxGrad = View3D<double>("NEMO::Grad_AuxVar", nPoint, 3, nDim);
+}
+
+void CNEMOKokkosData::UploadAuxVar() {
+  AllocateAuxVar();
+  auto& P = stagePerf[ST_AUXGRAD];
+  P.bytes_h2d += UploadRows(st.AuxVar, nodes->AuxVar.data(), nPoint);
+  P.bytes_h2d += UploadRows(st.AuxGrad, nodes->Grad_AuxVar.data(), nPoint);
+  auxDeviceValid = true;
+}
+
+void CNEMOKokkosData::ComputeAxisymmetricAuxGradient(int method, bool deviceSymmetry) {
+  auto& P = stagePerf[ST_AUXGRAD];
+  Kokkos::Timer timer;
+  if (nodes->GetnAuxVar() != 3 || nDim != 2)
+    SU2_MPI::Error("CNEMOKokkosData: axisymmetric auxiliary variables not allocated.", CURRENT_FUNCTION);
+  AllocateAuxVar();
+  /*--- AuxVar rows with y <= EPS keep their previous value: the device copy must hold the host one once. ---*/
+  if (ResidentActive()) EnsureDevice(G_AUXVAR);
+  else if (!auxDeviceValid) UploadAuxVar();
+  if (!primDeviceValid) {
+    UploadPrimitiveOnly();
+    P.bytes_h2d += double(nPoint) * nPrimVar * sizeof(double);
+  }
+  if (!transportDeviceValid) UploadTransport();
+  P.h2d += timer.seconds();
+  timer.reset();
+
+  /*--- CFVMFlowSolverBase::ComputeAxisymmetricAuxGradients: all points (halos included). ---*/
+  {
+    const auto coord = geo.coord;
+    const auto V = st.Primitive;
+    const auto mu = st.LamVisc;
+    const auto aux = st.AuxVar;
+    const int iVel = nSpecies + 2, eddyIdx = nSpecies + nDim + 9;
+    const double eps = EPS;
+    Kokkos::parallel_for(
+        "NEMO::AxisymmetricAuxVar", Kokkos::RangePolicy<exec_space>(0, nPoint), KOKKOS_LAMBDA(const unsigned long iPoint) {
+          const double yCoord = coord(iPoint, 1);
+          const double yVelocity = V(iPoint, iVel + 1);
+          const double xVelocity = V(iPoint, iVel);
+          const double Total_Viscosity = mu(iPoint) + V(iPoint, eddyIdx);
+          if (yCoord > eps) {
+            const double nu_v_on_y = Total_Viscosity * yVelocity / yCoord;
+            aux(iPoint, 0) = nu_v_on_y;
+            aux(iPoint, 1) = nu_v_on_y * yVelocity;
+            aux(iPoint, 2) = nu_v_on_y * xVelocity;
+          }
+        });
+  }
+
+  /*--- SetAuxVar_Gradient_GG / _LS (weighted), varBegin 0, varEnd 3, idxVel -1. ---*/
+  const PrimField f{st.AuxVar, 0, 0, false};
+  if (method == 1) {
+    KernelGreenGauss<2>(geo, f, 3, -1, deviceSymmetry, st.AuxGrad);
+  } else if (method == 2) {
+    const double eps = std::pow(std::numeric_limits<passivedouble>::epsilon(), 2);
+    if (st.Rmatrix.size() == 0) st.Rmatrix = View3D<double>("NEMO::Rmatrix", nPoint, nDim, nDim);
+    KernelLeastSquares<2>(geo, f, 3, -1, true, eps, deviceSymmetry, st.AuxGrad, st.Rmatrix);
+  }
+  Kokkos::fence();
+  P.kernel += timer.seconds();
+  timer.reset();
+  if (ResidentActive()) MarkDeviceWritten(G_AUXVAR);
+  P.calls++;
+}
+
+void CNEMOKokkosData::DownloadAuxVar(double* hostAux, double* hostGrad) {
+  auto& P = stagePerf[ST_AUXGRAD];
+  P.bytes_d2h += DownloadRows(hostAux, st.AuxVar, nPoint);
+  P.bytes_d2h += DownloadRows(hostGrad, st.AuxGrad, geo.nPointDomain);
+}
+
+void CNEMOKokkosData::DownloadSymmetryRowsAux(double* hostGrad) {
+  const size_t ns = h_symPoints.size();
+  if (ns == 0) return;
+  auto& P = stagePerf[ST_AUXGRAD];
+  Kokkos::Timer timer;
+  const size_t row = size_t(3) * nDim;
+  if (symStageAux.extent(0) != ns) symStageAux = View3D<double>("NEMO::symStageAux", ns, 3, nDim);
+  const auto grad = st.AuxGrad;
+  const auto stage = symStageAux;
+  const auto pts = symPoints;
+  const int nd = nDim;
+  Kokkos::parallel_for(
+      "NEMO::GatherSymmetryRowsAux", Kokkos::RangePolicy<exec_space>(0, ns), KOKKOS_LAMBDA(const size_t k) {
+        const auto i = pts(k);
+        for (int v = 0; v < 3; ++v)
+          for (int d = 0; d < nd; ++d) stage(k, v, d) = grad(i, v, d);
+      });
+  auto hs = Kokkos::create_mirror_view_and_copy(HostSpace(), symStageAux);
+  for (size_t k = 0; k < ns; ++k) std::memcpy(hostGrad + h_symPoints[k] * row, &hs(k, 0, 0), row * sizeof(double));
+  P.bytes_d2h += double(ns * row) * sizeof(double);
+  P.d2h += timer.seconds();
+}
+
+void CNEMOKokkosData::UploadSymmetryRowsAux(const double* hostGrad) {
+  const size_t ns = h_symPoints.size();
+  if (ns == 0) return;
+  auto& P = stagePerf[ST_AUXGRAD];
+  Kokkos::Timer timer;
+  const size_t row = size_t(3) * nDim;
+  if (symStageAux.extent(0) != ns) symStageAux = View3D<double>("NEMO::symStageAux", ns, 3, nDim);
+  auto hs = Kokkos::create_mirror_view(symStageAux);
+  for (size_t k = 0; k < ns; ++k) std::memcpy(&hs(k, 0, 0), hostGrad + h_symPoints[k] * row, row * sizeof(double));
+  Kokkos::deep_copy(symStageAux, hs);
+  P.bytes_h2d += double(ns * row) * sizeof(double);
+  const auto grad = st.AuxGrad;
+  const auto stage = symStageAux;
+  const auto pts = symPoints;
+  const int nd = nDim;
+  Kokkos::parallel_for(
+      "NEMO::ScatterSymmetryRowsAux", Kokkos::RangePolicy<exec_space>(0, ns), KOKKOS_LAMBDA(const size_t k) {
+        const auto i = pts(k);
+        for (int v = 0; v < 3; ++v)
+          for (int d = 0; d < nd; ++d) grad(i, v, d) = stage(k, v, d);
+      });
+  Kokkos::fence();
+  P.h2d += timer.seconds();
+}
+
 bool CNEMOKokkosData::StageVerifyEnabled() {
   static const bool on = [] {
     const char* env = std::getenv("SU2_KOKKOS_STAGE_VERIFY");

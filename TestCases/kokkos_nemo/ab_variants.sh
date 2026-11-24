@@ -45,7 +45,33 @@ BASE[sc_n2]=$SC;  MOD[sc_n2]="GAS_MODEL= N2|GAS_COMPOSITION= (0.99, 0.01)|SUPERC
 BASE[sc_jacobi]=$SC;  MOD[sc_jacobi]="LINEAR_SOLVER_PREC= JACOBI|ITER= 11"
 BASE[partial_cat]=$TC/visc_wedge/partial_cat.cfg;  MOD[partial_cat]=""
 BASE[axi_visccone]=$TC/visc_wedge/axi_visccone.cfg;  MOD[axi_visccone]=""
-names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm ausmplusm amimpl vanalbada nolim bj_gg wang explicit first air7 air7ion ns_muscl supercat up2 tb tb_impl tb_frozen tb_vtlim tb_air5 supersonic subout subout_am sc_cat sc_partcat sc_gy sc_suth sc_gg sc_heatflux sc_explicit sc_n2 sc_jacobi partial_cat axi_visccone)
+W=$TC/invwedge/invwedge_ausm.cfg
+# Batch A: AUSM+M sensor, CFL adaptation, axisymmetry, AUSM+M supersonic BCs, RK, dual time
+AM=$TC/invwedge/invwedge_am.cfg; AXI=$TC/visc_wedge/axi_visccone.cfg
+CFLP="CFL_ADAPT= YES|CFL_ADAPT_PARAM= ( 0.5, 1.5, 1.0, 20.0, 0.9, 2 )|SCREEN_OUTPUT= (INNER_ITER, RMS_DENSITY_0, RMS_DENSITY_1, RMS_ENERGY, AVG_CFL, MIN_CFL, MAX_CFL)"
+BASE[am_impl]=$AM;        MOD[am_impl]="TIME_DISCRE_FLOW= EULER_IMPLICIT|CFL_NUMBER= 3"
+BASE[am_first]=$AM;       MOD[am_first]="MUSCL_FLOW= NO"
+BASE[cfl_ausm]=$W;        MOD[cfl_ausm]="$CFLP|ITER= 21"
+BASE[cfl_am]=$AM;         MOD[cfl_am]="TIME_DISCRE_FLOW= EULER_IMPLICIT|CFL_NUMBER= 3|$CFLP|ITER= 21"
+BASE[cfl_sc]=$TC/visc_wedge/super_cat.cfg; MOD[cfl_sc]="$CFLP|ITER= 21"
+BASE[axi]=$AXI;           MOD[axi]=""
+BASE[axi_gg]=$AXI;        MOD[axi_gg]="NUM_METHOD_GRAD= GREEN_GAUSS"
+BASE[axi_inv]=$W;         MOD[axi_inv]="AXISYMMETRIC= YES"
+BASE[axi_expl]=$AXI;      MOD[axi_expl]="TIME_DISCRE_FLOW= EULER_EXPLICIT|CFL_NUMBER= 0.5"
+BASE[supout_am]=$AM;      MOD[supout_am]="MARKER_OUTLET= DELETE|MARKER_SUPERSONIC_OUTLET= ( Exit )"
+BASE[supin_am]=$AM;       MOD[supin_am]="MARKER_FAR= ( Inlet )|MARKER_SUPERSONIC_INLET= ( Farfield, 288.15, 101325.0, 1700.0, 0.0, 0.0 )|INLET_GAS_COMPOSITION= (0.77, 0.23, 0.0, 0.0, 0.0)"
+BASE[supinout_am]=$AM;    MOD[supinout_am]="TIME_DISCRE_FLOW= EULER_IMPLICIT|CFL_NUMBER= 3|MARKER_FAR= ( Inlet )|MARKER_OUTLET= DELETE|MARKER_SUPERSONIC_OUTLET= ( Exit )|MARKER_SUPERSONIC_INLET= ( Farfield, 288.15, 101325.0, 1700.0, 0.0, 0.0 )|INLET_GAS_COMPOSITION= (0.77, 0.23, 0.0, 0.0, 0.0)"
+BASE[tb_rk]=$TB;          MOD[tb_rk]="TIME_DISCRE_FLOW= RUNGE-KUTTA_EXPLICIT"
+BASE[tb_rk4]=$TB;         MOD[tb_rk4]="TIME_DISCRE_FLOW= CLASSICAL_RK4_EXPLICIT"
+BASE[rk_ausm]=$W;         MOD[rk_ausm]="TIME_DISCRE_FLOW= RUNGE-KUTTA_EXPLICIT|CFL_NUMBER= 0.5"
+BASE[rk4_am]=$AM;         MOD[rk4_am]="TIME_DISCRE_FLOW= CLASSICAL_RK4_EXPLICIT"
+DT="TIME_DOMAIN= YES|TIME_STEP= 2e-7|TIME_ITER= 3|INNER_ITER= 4|ITER= DELETE|OUTPUT_WRT_FREQ= 1"
+BASE[dt2]=$W;             MOD[dt2]="TIME_MARCHING= DUAL_TIME_STEPPING-2ND_ORDER|$DT"
+BASE[dt1]=$W;             MOD[dt1]="TIME_MARCHING= DUAL_TIME_STEPPING-1ST_ORDER|$DT"
+BASE[dt_expl]=$W;         MOD[dt_expl]="TIME_MARCHING= DUAL_TIME_STEPPING-2ND_ORDER|TIME_DISCRE_FLOW= EULER_EXPLICIT|CFL_NUMBER= 0.5|$DT"
+BASE[dt_unstcfl]=$W;      MOD[dt_unstcfl]="TIME_MARCHING= DUAL_TIME_STEPPING-2ND_ORDER|UNST_CFL_NUMBER= 50|$DT"
+BASE[dt_sc]=$TC/visc_wedge/super_cat.cfg; MOD[dt_sc]="TIME_MARCHING= DUAL_TIME_STEPPING-2ND_ORDER|$DT"
+names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm ausmplusm amimpl vanalbada nolim bj_gg wang explicit first air7 air7ion ns_muscl supercat up2 tb tb_impl tb_frozen tb_vtlim tb_air5 supersonic subout subout_am sc_cat sc_partcat sc_gy sc_suth sc_gg sc_heatflux sc_explicit sc_n2 sc_jacobi partial_cat axi_visccone am_impl am_first cfl_ausm cfl_am cfl_sc axi axi_gg axi_inv axi_expl supout_am supin_am supinout_am tb_rk tb_rk4 rk_ausm rk4_am dt2 dt1 dt_expl dt_unstcfl dt_sc)
 st=0
 for n in "${names[@]}"; do
   d=/home/claude/runs/ab${NP:+_np$NP}/$n; rm -rf $d; mkdir -p $d; cd $d; ln -sf /home/claude/meshes/*.su2 .

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Regression check: run NEMO cases with ENABLE_KOKKOS=NO and YES on the Kokkos
 # Serial build, compare final screen residuals and restart fields.
-# Usage: check.sh [case ...]   (cases: invwedge_ausm thermalbath super_cat partial_cat axi_visccone;
-#   default: the first three)
+# Usage: check.sh [case ...]   (cases: invwedge_ausm thermalbath super_cat partial_cat axi_visccone invwedge_am;
+#   default: invwedge_ausm thermalbath super_cat axi_visccone (batch A: axisymmetric source on the device))
 # Exit 0 only if every case: both runs exit 0, YES residual row == NO residual row
 # to within RES_TOL (abs, log10 units), and max field |diff|/max|field| <= FIELD_TOL.
 # REF_MODE=NO (default): reference run is ENABLE_KOKKOS=NO (differs from YES also by the Kokkos linear solver,
@@ -42,9 +42,10 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [thermalbath]=$TC/thermalbath/finitechemistry/thermalbath.cfg
                  [super_cat]=$TC/visc_wedge/super_cat.cfg
                  [partial_cat]=$TC/visc_wedge/partial_cat.cfg
-                 [axi_visccone]=$TC/visc_wedge/axi_visccone.cfg )
+                 [axi_visccone]=$TC/visc_wedge/axi_visccone.cfg
+                 [invwedge_am]=$TC/invwedge/invwedge_am.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
-cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat)
+cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat axi_visccone)
 status=0
 for c in "${cases[@]}"; do
   for mode in NO YES; do

@@ -257,6 +257,12 @@ void CIntegration::SetDualTime_Geometry(CGeometry *geometry, CSolver *mesh_solve
 void CIntegration::SetDualTime_Solver(const CGeometry *geometry, CSolver *solver, const CConfig *config, unsigned short iMesh) {
   SU2_ZONE_SCOPED
 
+  /*--- Solvers whose state is device resident (Kokkos NEMO) do the same state update on the device. ---*/
+  if (solver->SetDualTime_Device(config->GetCFL(iMesh))) {
+    solver->ResetCFLAdapt();
+    return;
+  }
+
   SU2_OMP_PARALLEL
   {
   /*--- Store old solution ---*/

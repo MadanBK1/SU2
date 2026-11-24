@@ -184,6 +184,12 @@ class CNEMOKokkosData {
     View1D<double> BStateVisc;             /*!< far-field viscous state: Cvve | dTdU | dTvedU | gradient (node_infty) */
     View1D<unsigned long> viscWallPoints;  /*!< unique points of the viscous-wall markers (forces / heat flux) */
     View2D<double> viscWallStage;          /*!< (n, nPrimVarGrad*nDim + 3 + 2*nSpecies) staging */
+
+    /*--- Batch A (allocated on first use). Sensor above: device SetPressureDiffusionSensor (AUSM+M). ---*/
+    View2D<double> AuxVar;                 /*!< (nPoint, 3) axisymmetric auxiliary variables (CVariable::AuxVar) */
+    View3D<double> AuxGrad;                /*!< (nPoint, 3, nDim) their gradient (CVariable::Grad_AuxVar) */
+    View2D<double> SolTimeN, SolTimeN1;    /*!< (nPoint, nVar) Solution_time_n / Solution_time_n1 (dual time) */
+    View2D<double> SolutionNew;            /*!< (nPoint, nVar) CFlowVariable::Solution_New (classical RK4) */
   };
 
   /*! \brief Edge colouring of the edge kernels (Step 10, Task B; env SU2_KOKKOS_NEMO_EDGE=atomic|color|level,
@@ -334,7 +340,7 @@ class CNEMOKokkosData {
    */
   static bool StageVerifyEnabled();
   enum Stage { ST_GRADIENT = 0, ST_LIMITER, ST_TIMESTEP, ST_MAXEIG, ST_UPWIND, ST_SOURCE, ST_BC, ST_RESSYNC, ST_VISCOUS,
-               N_STAGES };
+               ST_SENSOR, ST_AUXGRAD, ST_DUALTIME, ST_CFL, N_STAGES };
   /*! \brief Compare host (CPU) result vs a copy of the device result over n entries (row-major, ncol columns,
    *         relative difference normalised per column); accumulates per stage. */
   void StageCompare(Stage s, const char* name, const double* cpu, const double* dev, size_t n, size_t ncol = 1);
@@ -392,9 +398,14 @@ class CNEMOKokkosData {
 
   struct SourceParams {
     bool implicit = false, frozen = false, monoatomic = false, vtLimiting = false;
+    /*--- Batch A: CSource_NEMO::ComputeAxisymmetric (2D), viscous part with the device AuxVar gradient. ---*/
+    bool axisymmetric = false, axiViscous = false;
+    int nHeavyNumerics = 0;   /*!< CNEMONumerics::nHeavy (config IONIZATION) */
+    double prandtlTurb = 0.0; /*!< CNumerics::Prandtl_Turb */
+    double RuSI = 0.0;        /*!< UNIVERSAL_GAS_CONSTANT */
   };
   struct SourceResult {
-    unsigned long eChm = 0, eVib = 0; /*!< NaN counters of the CPU loop (chemistry, vib. relaxation) */
+    unsigned long eChm = 0, eVib = 0, eAxi = 0; /*!< NaN counters of the CPU loop (chemistry, vib. relaxation, axisym.) */
   };
   /*!
    * \brief Device CNEMOEulerSolver::Source_Residual without axisymmetry: per domain point, fused
@@ -419,6 +430,11 @@ class CNEMOKokkosData {
     double Yst[su2kokkos::nemo::MAXNS] = {0.0}; /*!< ISOTHERMAL supercatalytic: wall composition */
     double catEff = 0.0;     /*!< ISOTHERMAL partially catalytic: CATALYTIC_EFFICIENCY */
     double heatFlux = 0.0;   /*!< HEAT_FLUX: non-dimensional (integrated: per area) wall heat flux */
+    /*--- Batch A: SUPERSONIC_INLET / SUPERSONIC_OUTLET with AUSM+M read the Gamma / Sensor the shared boundary
+     *    numerics kept from the last BC that set them (CPU semantics): SUPERSONIC_INLET Gamma_i, Gamma_j and Sensor,
+     *    SUPERSONIC_OUTLET Sensor only (it sets Gamma itself). ---*/
+    bool staleNumerics = false;
+    double staleGammaI = 0.0, staleGammaJ = 0.0, staleSensor = 0.0;
   };
   /*! \brief Far-field (node_infty) or supersonic-inlet state, uploaded only when it changes (host cache). */
   struct BoundaryState {
@@ -482,6 +498,9 @@ class CNEMOKokkosData {
     G_UNDERRELAX,   /*!< UnderRelaxation */
     G_TRUNCERR,     /*!< Res_TruncError */
     G_LINSYS,       /*!< LinSysRes and LinSysSol (CSysVector host copies) */
+    G_SENSOR,       /*!< Sensor (AUSM+M pressure diffusion sensor), batch A */
+    G_AUXVAR,       /*!< AuxVar + Grad_AuxVar (axisymmetric viscous source), batch A */
+    G_TIMEN,        /*!< Solution_time_n, Solution_time_n1 (dual time stepping), batch A */
     N_GROUPS
   };
   enum class Residency : unsigned char { HOST, DEVICE, BOTH };
@@ -524,7 +543,7 @@ class CNEMOKokkosData {
   void ExplicitEulerUpdate(ResidualReduction& red);
   /*! \brief Device ComputeUnderRelaxationFactor (NEMO) + AddSolution(UR * LinSysSol). */
   void CompleteImplicit(double allowableRatio);
-  /*! \brief Solution_Old = Solution on the device. */
+  /*! \brief Solution_Old = Solution on the device (classical RK4: also Solution_New = Solution). */
   void SetOldSolution();
   /*! \brief Squared norm of the first nElmDomain entries of the device residual (CSysVector::squaredNorm order). */
   double ResidualSquaredNorm(unsigned long nElmDomain) const;
@@ -532,13 +551,80 @@ class CNEMOKokkosData {
   void TimeSteppingFill(double cfl, double dt);
   /*! \brief Last point's Primitive row + Cons2Prim status / first-attempt Density, Pressure (host gas-state replay). */
   void ReplayGasStateLastPoint(bool full);
+
+  /*====================== Batch A: sensor, CFL adaptation, axisymmetry, RK / dual time ======================*/
+
+  /*!
+   * \brief Device CNEMOEulerSolver::SetPressureDiffusionSensor for the domain points (neighbour order of the point CSR,
+   *        std::min semantics) on the device Primitive. Halo rows: HaloExchange(SENSOR) by the caller.
+   * \param[out] hostOut - If not null: the domain rows are copied there (A/B), else (resident) G_SENSOR is marked.
+   */
+  void ComputePressureSensor(double* hostOut);
+  /*! \brief One device Sensor value (stale boundary-numerics replay in device-resident mode). */
+  double DeviceSensor(unsigned long iPoint);
+
+  /*! \brief Inputs of the point loop of CSolver::AdaptCFLNumber (host flags and parameters). */
+  struct CFLAdaptParams {
+    bool reduceCFL = false, canIncrease = false, resetCFL = false, stats = false;
+    double factorDecrease = 0.0, factorIncrease = 0.0, cflMin = 0.0, cflMax = 0.0, mgFactor = 1.0;
+  };
+  /*!
+   * \brief Device point loop of CSolver::AdaptCFLNumber (flow solver only: no turbulence / species): LocalCFL from
+   *        UnderRelaxation and the flags; min / max / sum of the new values (ordered on Serial = the CPU loop; the
+   *        sum is order-dependent on GPUs: average CFL monitoring only). Outputs start from the CPU initial values.
+   */
+  void AdaptCFL(const CFLAdaptParams& p, double& cflMin, double& cflMax, double& cflSum);
+
+  /*!
+   * \brief Device CFVMFlowSolverBase::ComputeAxisymmetricAuxGradients: AuxVar (all points with y > EPS: nu*v/y,
+   *        nu*v^2/y, nu*u*v/y; other rows keep their value) and its Green-Gauss / weighted least-squares gradient over
+   *        the domain points (no symmetry pass if !deviceSymmetry: caller, see Download/UploadSymmetryRowsAux).
+   *        Halo rows: HaloExchange(AUXVAR_GRADIENT) by the caller (device-resident mode; otherwise unread).
+   * \param[in] method - 0: no gradient (the CPU computes it only for GREEN_GAUSS / WEIGHTED_LEAST_SQUARES), 1: Green-Gauss,
+   *                     2: weighted least squares.
+   */
+  void ComputeAxisymmetricAuxGradient(int method, bool deviceSymmetry);
+  /*! \brief A/B: DtoH of the device AuxVar (all rows) and of the domain rows of its gradient. */
+  void DownloadAuxVar(double* hostAux, double* hostGrad);
+  void DownloadSymmetryRowsAux(double* hostGrad);
+  void UploadSymmetryRowsAux(const double* hostGrad);
+  /*! \brief Re-upload the host AuxVar / Grad_AuxVar (A/B isolation). */
+  void UploadAuxVar();
+
+  /*!
+   * \brief Device CFVMFlowSolverBase::SetResidual_DualTime (static mesh): residual += (U - U_n) Vol / dt (1st order) or
+   *        (3U - 4U_n + U_n1) Vol / (2 dt) (2nd order), Jacobian diagonal += Vol/dt or 3 Vol / (2 dt), into the device
+   *        accumulator (domain points, per entry after the source terms: CPU order).
+   * \param[in] uploadInputs - Re-upload Solution, Solution_time_n(1) from the host (A/B isolation).
+   */
+  void DualTimeResidual(bool secondOrder, bool implicit, double timeStep, bool uploadInputs);
+  /*! \brief CIntegration::SetDualTime_Solver on the device: U_n1 = U_n, U_n = U, UnderRelaxation = 1, LocalCFL = cfl. */
+  void DualTimeShift(double cfl);
+  /*! \brief SetTime_Step dual-time start: min over the domain points of num / LocalCFL (std::min from init). */
+  double DualTimeMinDt(double num, double init);
+  /*! \brief SetTime_Step explicit dual time: Delta_Time = min(dtMax, Delta_Time) for the domain points. */
+  void DualTimeExplicitDt(double dtMax);
+
+  /*!
+   * \brief Device Explicit_Iteration_impl<RUNGE_KUTTA_EXPLICIT> (alpha = RK alpha of the stage) and
+   *        <CLASSICAL_RK4_EXPLICIT> (timeCoeff / funcCoeff of the stage, Solution_New on the device), residual reduction.
+   * \param[in] rk4 - Classical RK4 (else general RK).
+   */
+  void ExplicitRKUpdate(bool rk4, unsigned short iRKStep, double alpha, double timeCoeff, double funcCoeff,
+                        ResidualReduction& red);
+  /*! \brief Classical RK4: Set_OldSolution also does the Set_NewSolution copy on the device (both are called back to
+   *         back by CMultiGridIntegration, from the same Solution). */
+  void SetRK4(bool on) { rk4 = on; }
   /*====================== Step 10: MPI halo exchange of device-resident arrays ======================*/
 
   /*! \brief The device arrays the NEMO host comms (InitiateComms / CompleteComms) exchange in device-resident mode:
    *         SOLUTION (Solution, nVar), PRIMITIVE_GRADIENT (Gradient_Primitive, nPrimVarGrad*nDim),
    *         PRIMITIVE_GRAD_REC (Gradient_Reconstruction, == Gradient_Primitive if not separate), PRIMITIVE_LIMITER
    *         (Limiter_Primitive only: Solution_Max / Solution_Min are not communicated by the CPU either). */
-  enum class HaloQuantity : int { SOLUTION = 0, GRADIENT_PRIMITIVE, GRADIENT_RECONSTRUCTION, LIMITER, N };
+  enum class HaloQuantity : int { SOLUTION = 0, GRADIENT_PRIMITIVE, GRADIENT_RECONSTRUCTION, LIMITER,
+                                  SENSOR,           /*!< batch A: Sensor (1 per point) */
+                                  AUXVAR_GRADIENT,  /*!< batch A: Grad_AuxVar (3*nDim per point) */
+                                  N };
   /*!
    * \brief Device halo exchange with the SU2 point-to-point layout (CGeometry nP2PSend / nPoint_P2PSend /
    *        Neighbors_P2PSend / Local_Point_P2PSend, same message order, offsets and tags as CGeometry::PostP2PSends /
@@ -631,6 +717,11 @@ class CNEMOKokkosData {
   std::vector<unsigned long> h_bndPoints;
   /*--- Step 8. ---*/
   bool deviceTransport = false, transportDeviceValid = false, bndViscHost = false;
+  /*--- Batch A. ---*/
+  bool rk4 = false;
+  bool auxDeviceValid = false; /*!< device AuxVar == host (host-authoritative mode; resident: G_AUXVAR) */
+  View3D<double> symStageAux;  /*!< (nSymPoints, 3, nDim) staging of the AuxVar gradient symmetry rows */
+  void AllocateAuxVar();
   std::vector<unsigned long> h_viscWallPoints;
   std::vector<double> bstateViscCache;
  public:

@@ -153,6 +153,37 @@ protected:
                          unsigned short iMesh, unsigned long Iteration);
   void SetMax_Eigenvalue_Host(CGeometry *geometry, CConfig *config);
   void CorrectGradientsSymmetryHost(CGeometry *geometry, const CConfig *config, CVectorOfMatrix& gradient) const;
+  void CorrectGradientsSymmetryHost(CGeometry *geometry, const CConfig *config, CVectorOfMatrix& gradient,
+                                    size_t varEnd, int idxVel) const;
+
+  /*!
+   * \brief Device (Kokkos) batch A. Each returns false when the host code must run instead.
+   *        Device_PressureSensor: SetPressureDiffusionSensor on the device (device-resident mode; A/B otherwise).
+   *        Device_AxisymAuxGradients: ComputeAxisymmetricAuxGradients on the device (inside the device source stage).
+   *        Device_DualTimeResidual: SetResidual_DualTime into the device accumulator.
+   */
+  bool Device_PressureSensor(CGeometry *geometry, const CConfig *config);
+  void Device_AxisymAuxGradients(CGeometry *geometry, const CConfig *config, bool verify);
+  bool Device_DualTimeResidual(CGeometry *geometry, CSolver **solver_container, CConfig *config,
+                               unsigned short iRKStep, unsigned short iMesh, unsigned short RunTime_EqSystem);
+  std::string Device_DualTimeUnsupported(const CConfig *config) const;
+  bool dualTimeHostOnly = false; /*!< \brief A/B rerun of the host SetResidual_DualTime. */
+  bool Device_ExplicitRK(CGeometry *geometry, CConfig *config, unsigned short iRKStep, bool rk4);
+
+  /*!
+   * \brief Batch A: the boundary numerics (CONV_BOUND_TERM, shared by every marker) keep Gamma / Sensor from the last
+   *        BC that set them; BC_Supersonic_Inlet (Gamma, Sensor) and BC_Supersonic_Outlet (Sensor) read those with
+   *        AUSM+M. Replay: the last domain vertex of the last such BC (FAR_FIELD / OUTLET: Gamma_i = Gamma(point),
+   *        Gamma_j = Gamma_infty, Sensor = Sensor(point); SUPERSONIC_OUTLET: Gamma_i = Gamma_j = Gamma(point)) in this
+   *        space integration. bndStaleOK[marker]: a setter precedes the marker in the BC order on every rank (else the
+   *        first iteration reads uninitialised values on the CPU: host BC).
+   */
+  struct BoundaryNumericsState {
+    long gammaPoint = -1, sensorPoint = -1;
+    bool gammaJInfty = false;
+  } bndNumerics;
+  std::vector<char> bndStaleOK;
+  void RecordBoundaryNumerics(CGeometry *geometry, const CConfig *config, unsigned short val_marker, int kind);
 
   /*!
    * \brief Set the maximum value of the eigenvalue.
@@ -415,6 +446,25 @@ public:
    */
   void ClassicalRK4_Iteration(CGeometry *geometry, CSolver **solver_container,
                               CConfig *config, unsigned short iRKStep) final;
+
+  /*!
+   * \brief Dual time-stepping source term (device accumulator in Kokkos runs, else the base class).
+   */
+  void SetResidual_DualTime(CGeometry *geometry, CSolver **solver_container, CConfig *config, unsigned short iRKStep,
+                            unsigned short iMesh, unsigned short RunTime_EqSystem) override;
+
+  /*!
+   * \brief Device-resident mode: point loop of AdaptCFLNumber on the device (Kokkos batch A).
+   */
+  bool AdaptCFLNumber_Device(unsigned short iMesh, bool reduceCFL, bool canIncrease, bool resetCFL,
+                             su2double CFLFactorDecrease, su2double CFLFactorIncrease, su2double CFLMin,
+                             su2double CFLMax, su2double MGFactor, bool stats, su2double& cflMin, su2double& cflMax,
+                             su2double& cflSum) override;
+
+  /*!
+   * \brief Device-resident mode: SetDualTime_Solver state update on the device (Kokkos batch A).
+   */
+  bool SetDualTime_Device(su2double cfl) override;
 
   /*!
    * \brief Prepare an implicit iteration.

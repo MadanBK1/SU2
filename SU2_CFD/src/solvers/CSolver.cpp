@@ -1889,6 +1889,14 @@ void CSolver::AdaptCFLNumber(CGeometry **geometry,
     }
     END_SU2_OMP_MASTER
 
+    /* Solvers that keep LocalCFL / UnderRelaxation elsewhere (device-resident Kokkos NEMO) do the point loop there,
+     same statements; only without turbulence / species solvers, whose LocalCFL the loop also sets. */
+    const bool deviceCFL = ((iMesh != MESH_0) || (!solverTurb && !solverSpecies)) &&
+                           solverFlow->AdaptCFLNumber_Device(iMesh, reduceCFL, canIncrease, resetCFL, CFLFactorDecrease,
+                                                             CFLFactorIncrease, CFLMin, CFLMax, MGFactor[iMesh],
+                                                             (iMesh == MESH_0) && fullComms, myCFLMin, myCFLMax, myCFLSum);
+
+    if (!deviceCFL) {
     SU2_OMP_FOR_STAT(roundUpDiv(geometry[iMesh]->GetnPointDomain(),omp_get_max_threads()))
     for (unsigned long iPoint = 0; iPoint < geometry[iMesh]->GetnPointDomain(); iPoint++) {
 
@@ -1960,6 +1968,7 @@ void CSolver::AdaptCFLNumber(CGeometry **geometry,
 
     }
     END_SU2_OMP_FOR
+    }
 
     /* Reduce the min/max/avg local CFL numbers. */
 

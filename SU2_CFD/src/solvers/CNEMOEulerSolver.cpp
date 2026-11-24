@@ -238,13 +238,32 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
     if (su2tc != nullptr) {
       kokkosData = std::make_unique<CNEMOKokkosData>(geometry, config, nodes, su2tc, iMesh);
       kokkosConfig = config;
+      /*--- Batch A: does a Gamma / Sensor setter precede each supersonic marker in the BC order (every rank)? ---*/
+      {
+        const auto nM = config->GetnMarker_All();
+        std::vector<int> ok(nM, 1);
+        bool gammaSet = false, sensorSet = false;
+        for (unsigned short iMarker = 0; iMarker < nM; iMarker++) {
+          const auto kb = config->GetMarker_All_KindBC(iMarker);
+          bool hasDomain = false;
+          for (auto iVertex = 0ul; iVertex < geometry->nVertex[iMarker]; iVertex++)
+            if (geometry->nodes->GetDomain(geometry->vertex[iMarker][iVertex]->GetNode())) hasDomain = true;
+          if (kb == SUPERSONIC_INLET && hasDomain) ok[iMarker] = gammaSet && sensorSet;
+          if (kb == SUPERSONIC_OUTLET && hasDomain) ok[iMarker] = sensorSet;
+          if (!hasDomain) continue;
+          if (kb == FAR_FIELD || kb == OUTLET_FLOW) gammaSet = sensorSet = true;
+          if (kb == SUPERSONIC_OUTLET) gammaSet = true;
+        }
+        std::vector<int> okAll(nM, 1);
+        if (nM > 0) SU2_MPI::Allreduce(ok.data(), okAll.data(), nM, MPI_INT, MPI_MIN, SU2_MPI::GetComm());
+        bndStaleOK.assign(okAll.begin(), okAll.end());
+      }
       deferResidualSync = Device_DeferralUnsupported(config).empty();
       deviceJacobianAllocated = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
-      if (rank == MASTER_NODE && iMesh == MESH_0) PrintDeviceStages(config);
-
       /*--- Step 6: device-resident state when every stage of the iteration is on the device. ---*/
       const auto whyNotResident = (iMesh == MESH_0) ? Device_ResidentUnsupported(config) : std::string("MG level");
       deviceResident = whyNotResident.empty();
+      if (rank == MASTER_NODE && iMesh == MESH_0) PrintDeviceStages(config);
       if (deviceResident) {
         const bool impl = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
         kokkosData->EnableResident(LinSysRes.GetDevicePointer(), LinSysSol.GetDevicePointer(),
@@ -254,6 +273,8 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
         LinSysRes.SetKokkosDeviceAuthoritative(true);
         LinSysSol.SetKokkosDeviceAuthoritative(true);
         if (impl) Jacobian.SetKokkosValuesOnDevice(true);
+        /*--- Batch A: classical RK4 keeps Solution_New on the device (Set_OldSolution also copies it). ---*/
+        kokkosData->SetRK4(config->GetKind_TimeIntScheme_Flow() == CLASSICAL_RK4_EXPLICIT);
         /*--- Step 8: Friction_Forces reads the gradient / transport rows of the viscous-wall points. ---*/
         if (config->GetViscous()) {
           std::vector<int> walls;
@@ -336,8 +357,12 @@ void CNEMOEulerSolver::CommonPreprocessing(CGeometry *geometry, CSolver **solver
   }
 
   /*--- Set Pressure diffusion sensor ---*/
-  if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM)
-    SetPressureDiffusionSensor(geometry, config);
+  if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) {
+    if (!Device_PressureSensor(geometry, config)) SetPressureDiffusionSensor(geometry, config);
+  }
+
+  /*--- Batch A: replay of the boundary numerics' Gamma / Sensor restarts with this space integration. ---*/
+  if (!Output) bndNumerics = BoundaryNumericsState();
 
   /*--- Initialize the Jacobian matrix and residual, not needed for the reducer strategy
    *    as we set blocks (including diagonal ones) and completely overwrite. ---*/
@@ -528,8 +553,13 @@ void CNEMOEulerSolver::SetTime_Step(CGeometry *geometry, CSolver **solver_contai
 
     if (dual_time && (Iteration == config->GetRestart_Iter()) && (config->GetUnst_CFL() != 0.0) && (iMesh == MESH_0)) {
       su2double glbDtND = 1e30;
-      for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++)
-        glbDtND = min(glbDtND, config->GetUnst_CFL()*Global_Delta_Time / nodes->GetLocalCFL(iPoint));
+      if (Device_ResidentActive()) {
+        /*--- Batch A: same min over the device LocalCFL (order independent). ---*/
+        glbDtND = kokkosData->DualTimeMinDt(config->GetUnst_CFL()*Global_Delta_Time, glbDtND);
+      } else {
+        for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++)
+          glbDtND = min(glbDtND, config->GetUnst_CFL()*Global_Delta_Time / nodes->GetLocalCFL(iPoint));
+      }
       Global_Delta_UnstTimeND = min(Global_Delta_UnstTimeND, glbDtND);
       SU2_MPI::Allreduce(&Global_Delta_UnstTimeND, &glbDtND, 1, MPI_DOUBLE, MPI_MIN, SU2_MPI::GetComm());
       Global_Delta_UnstTimeND = glbDtND;
@@ -537,9 +567,13 @@ void CNEMOEulerSolver::SetTime_Step(CGeometry *geometry, CSolver **solver_contai
     }
 
     if (dual_time && !implicit) {
-      for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++) {
-        su2double dt = min((2.0/3.0)*config->GetDelta_UnstTimeND(), nodes->GetDelta_Time(iPoint));
-        nodes->SetDelta_Time(iPoint, dt);
+      if (Device_ResidentActive()) {
+        kokkosData->DualTimeExplicitDt((2.0/3.0)*config->GetDelta_UnstTimeND());
+      } else {
+        for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++) {
+          su2double dt = min((2.0/3.0)*config->GetDelta_UnstTimeND(), nodes->GetDelta_Time(iPoint));
+          nodes->SetDelta_Time(iPoint, dt);
+        }
       }
     }
     kokkosData->stagePerf[CNEMOKokkosData::ST_TIMESTEP].host += timer.seconds();
@@ -1188,6 +1222,7 @@ void CNEMOEulerSolver::ExplicitRK_Iteration(CGeometry *geometry, CSolver **solve
                                             CConfig *config, unsigned short iRKStep) {
   SU2_ZONE_SCOPED
 
+  if (Device_ExplicitRK(geometry, config, iRKStep, false)) return;
   Device_ResidualToHost(geometry); /*--- no-op unless a device residual is pending ---*/
 
   Explicit_Iteration<RUNGE_KUTTA_EXPLICIT>(geometry, solver_container, config, iRKStep);
@@ -1197,6 +1232,7 @@ void CNEMOEulerSolver::ClassicalRK4_Iteration(CGeometry *geometry, CSolver **sol
                                               CConfig *config, unsigned short iRKStep) {
   SU2_ZONE_SCOPED
 
+  if (Device_ExplicitRK(geometry, config, iRKStep, true)) return;
   Device_ResidualToHost(geometry); /*--- no-op unless a device residual is pending ---*/
 
   Explicit_Iteration<CLASSICAL_RK4_EXPLICIT>(geometry, solver_container, config, iRKStep);
@@ -1851,6 +1887,7 @@ void CNEMOEulerSolver::BC_Far_Field(CGeometry *geometry,
                                     unsigned short val_marker) {
   SU2_ZONE_SCOPED
 
+  if (!bcHostOnly) RecordBoundaryNumerics(geometry, config, val_marker, 1); /*--- BCKind::FAR_FIELD ---*/
 #ifdef HAVE_KOKKOS
   if (!bcHostOnly && Device_BCResidual(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker,
                                        static_cast<int>(CNEMOKokkosData::BCKind::FAR_FIELD)))
@@ -2258,6 +2295,7 @@ void CNEMOEulerSolver::BC_Outlet(CGeometry *geometry, CSolver **solver_container
                                  CNumerics *conv_numerics, CNumerics *visc_numerics, CConfig *config, unsigned short val_marker) {
   SU2_ZONE_SCOPED
 
+  if (!bcHostOnly) RecordBoundaryNumerics(geometry, config, val_marker, 2); /*--- BCKind::OUTLET ---*/
 #ifdef HAVE_KOKKOS
   if (!bcHostOnly && Device_BCResidual(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker,
                                        static_cast<int>(CNEMOKokkosData::BCKind::OUTLET)))
@@ -2670,6 +2708,7 @@ void CNEMOEulerSolver::BC_Supersonic_Outlet(
     CNumerics *visc_numerics, CConfig *config, unsigned short val_marker) {
   SU2_ZONE_SCOPED
 
+  if (!bcHostOnly) RecordBoundaryNumerics(geometry, config, val_marker, 4); /*--- BCKind::SUPERSONIC_OUTLET ---*/
 #ifdef HAVE_KOKKOS
   if (!bcHostOnly && Device_BCResidual(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker,
                                        static_cast<int>(CNEMOKokkosData::BCKind::SUPERSONIC_OUTLET)))
@@ -2950,7 +2989,9 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
           Device_SourceUnsupported(config));
     if (config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_1ST ||
         config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_2ND)
-      hostStage("dual-time source");
+      stage(std::string("dual-time source (") +
+                (config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_2ND ? "2nd" : "1st") + " order)",
+            Device_DualTimeUnsupported(config));
     auto bcKind = [&](unsigned short kindBC) -> int {
       switch (kindBC) {
         case FAR_FIELD: return static_cast<int>(K::BCKind::FAR_FIELD);
@@ -3005,7 +3046,24 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
              : config->GetKind_TransCoeffModel() == TRANSCOEFFMODEL::GUPTAYOS ? "GUPTAYOS"
              : config->GetKind_TransCoeffModel() == TRANSCOEFFMODEL::SUTHERLAND ? "SUTHERLAND" : "other")
          << ", in SetPrimVar): " << (kokkosData->DeviceTransport() ? "device" : "host") << endl;
-  cout << "[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, linear solve, CFL adapt"
+  if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM && !center)
+    cout << "[KOKKOS_NEMO] stage pressure diffusion sensor (AUSM+M): "
+         << (deviceResident ? "device" : "host (device only in device-resident mode; A/B with SU2_KOKKOS_STAGE_VERIFY)")
+         << endl;
+  if (config->GetCFL_Adapt())
+    cout << "[KOKKOS_NEMO] stage CFL adaptation (point loop): " << (deviceResident ? "device" : "host") << endl;
+  if (config->GetAxisymmetric() && viscous)
+    cout << "[KOKKOS_NEMO] stage axisymmetric auxiliary gradients: "
+         << where(Device_SourceUnsupported(config)) << endl;
+  {
+    const auto ti = config->GetKind_TimeIntScheme_Flow();
+    cout << "[KOKKOS_NEMO] stage update ("
+         << (ti == EULER_IMPLICIT ? "EULER_IMPLICIT" : ti == EULER_EXPLICIT ? "EULER_EXPLICIT"
+             : ti == RUNGE_KUTTA_EXPLICIT ? "RUNGE_KUTTA_EXPLICIT" : ti == CLASSICAL_RK4_EXPLICIT ? "CLASSICAL_RK4_EXPLICIT"
+             : "other")
+         << "): " << (deviceResident ? "device" : "host") << endl;
+  }
+  cout << "[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, linear solve"
        << (viscous && !kokkosData->DeviceTransport() ? ", NS transport" : "") << endl;
   cout << "[KOKKOS_NEMO] sync: SetPrimVar HtoD U,U_old,V,secondaries + DtoH all; stages reuse device V, DtoH domain rows"
           " of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS); upwind reuses device"
@@ -3026,6 +3084,14 @@ void CNEMOEulerSolver::CorrectGradientsSymmetryHost(CGeometry *geometry, const C
   static Fn volatile fn2 = &correctGradientsSymmetry<2, CVectorOfMatrix>;
   static Fn volatile fn3 = &correctGradientsSymmetry<3, CVectorOfMatrix>;
   (nDim == 2 ? fn2 : fn3)(*geometry, *config, 0, nPrimVarGrad, prim_idx.Velocity(), gradient);
+}
+
+void CNEMOEulerSolver::CorrectGradientsSymmetryHost(CGeometry *geometry, const CConfig *config,
+                                                    CVectorOfMatrix& gradient, size_t varEnd, int idxVel) const {
+  using Fn = void (*)(CGeometry&, const CConfig&, const size_t, const size_t, const int, CVectorOfMatrix&);
+  static Fn volatile fn2 = &correctGradientsSymmetry<2, CVectorOfMatrix>;
+  static Fn volatile fn3 = &correctGradientsSymmetry<3, CVectorOfMatrix>;
+  (nDim == 2 ? fn2 : fn3)(*geometry, *config, 0, varEnd, idxVel, gradient);
 }
 
 bool CNEMOEulerSolver::Device_PrimitiveGradient(CGeometry *geometry, const CConfig *config, bool reconstruction,
@@ -3279,9 +3345,7 @@ std::string CNEMOEulerSolver::Device_DeferralUnsupported(const CConfig *config) 
   if (!kokkosData) return "no device data";
   if (CNEMOKokkosData::StageVerifyEnabled()) return "SU2_KOKKOS_STAGE_VERIFY";
   if (EagerForced()) return "SU2_KOKKOS_NEMO_EAGER";
-  if (config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_1ST ||
-      config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_2ND)
-    return "dual time stepping (host SetResidual_DualTime between source and BCs)";
+  /*--- Batch A: SetResidual_DualTime is a NEMO override with the host-stage hook (device or host). ---*/
   if (config->GetnMarker_Periodic() > 0) return "periodic markers";
   if (config->GetBoolTurbomachinery() || config->GetBoolGiles()) return "turbomachinery";
   if (ReducerStrategy) return "reducer strategy";
@@ -3309,7 +3373,17 @@ std::string CNEMOEulerSolver::Device_SourceUnsupported(const CConfig *config) co
   if (!kokkosData->geo.domain_first) return "domain points not first";
   if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
   if (ForcedHost("source")) return "SU2_KOKKOS_NEMO_HOST";
-  if (config->GetAxisymmetric()) return "axisymmetric source terms not ported";
+  if (config->GetAxisymmetric()) {
+    /*--- Batch A: CSource_NEMO::ComputeAxisymmetric (2D) + device auxiliary gradients (viscous). ---*/
+    if (nDim != 2) return "3D axisymmetric (the CPU source assumes 2D)";
+    if (nodes->GetnAuxVar() != 3) return "axisymmetric auxiliary variables not allocated";
+    if (config->GetViscous()) {
+      if (dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr) return "axisymmetric viscous terms without NS variables";
+      if (config->GetKind_Turb_Model() != TURB_MODEL::NONE) return "axisymmetric viscous terms with turbulence";
+      if (nodes->GetGradient_Primitive().size() == 0) return "gradient not allocated";
+      if (config->GetnMarker_Periodic() > 0) return "axisymmetric auxiliary gradient with periodic markers";
+    }
+  }
   if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   if (kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   return "";
@@ -3345,8 +3419,11 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
   if (config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "boundary numerics not AUSM (centered -> Roe)";
   const auto up = config->GetKind_Upwind_Flow();
   if (up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM) return "boundary numerics not AUSM / AUSM+M";
-  if ((k == K::SUPERSONIC_INLET || k == K::SUPERSONIC_OUTLET) && up != UPWIND::AUSM)
-    return "AUSM+M reads the stale Gamma/Sensor of the boundary numerics here";
+  /*--- Batch A: AUSM+M reads the Gamma / Sensor the boundary numerics kept from an earlier BC (replayed). ---*/
+  if ((k == K::SUPERSONIC_INLET || k == K::SUPERSONIC_OUTLET) && up == UPWIND::AUSMPLUSM && marker >= 0 &&
+      (size_t(marker) >= bndStaleOK.size() || !bndStaleOK[marker]))
+    return "AUSM+M: no earlier FAR_FIELD / OUTLET (/ SUPERSONIC_OUTLET) BC sets the boundary numerics' Gamma / Sensor "
+           "(the CPU reads uninitialised values in the first iteration)";
   if (k == K::SUPERSONIC_INLET && config->GetViscous()) return "viscous contribution";
   if (k == K::FAR_FIELD && config->GetViscous() && dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr)
     return "viscous contribution without NS variables";
@@ -3433,13 +3510,20 @@ bool CNEMOEulerSolver::Device_SourceResidual(CGeometry *geometry, CSolver **solv
   p.frozen = config->GetFrozen();
   p.monoatomic = config->GetMonoatomic();
   p.vtLimiting = config->GetVTTransferResidualLimiting();
+  /*--- Batch A: axisymmetric source (CSource_NEMO::ComputeAxisymmetric), viscous part with device aux. gradients. ---*/
+  p.axisymmetric = config->GetAxisymmetric();
+  p.axiViscous = p.axisymmetric && config->GetViscous();
+  p.nHeavyNumerics = nSpecies - (config->GetIonization() ? 1 : 0); /*--- CNEMONumerics::nHeavy ---*/
+  p.prandtlTurb = config->GetPrandtl_Turb();
+  p.RuSI = UNIVERSAL_GAS_CONSTANT;
+  if (p.axiViscous) Device_AxisymAuxGradients(geometry, config, verify);
   const auto r = kokkosData->ComputeSourceResidual(p, verify);
   if (!deferResidualSync) Device_ResidualToHost(geometry);
 
-  /*--- Same report as the CPU loop (axisymmetric terms are never on the device). ---*/
-  if ((r.eChm != 0) || (r.eVib != 0)) {
+  /*--- Same report as the CPU loop. ---*/
+  if ((r.eAxi != 0) || (r.eChm != 0) || (r.eVib != 0)) {
     cout << "Warning!! Instances of NaN in the following source terms: " << endl;
-    cout << "Axisymmetry: " << 0 << endl;
+    cout << "Axisymmetry: " << r.eAxi << endl;
     cout << "Chemical:    " << r.eChm << endl;
     cout << "Vib. Relax:  " << r.eVib << endl;
   }
@@ -3480,6 +3564,34 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
 
   su2mixedfloat* jac = implicit ? JacobianValues(geometry, Jacobian, nVar) : nullptr;
   const size_t nRes = size_t(nPoint) * nVar, nJac = implicit ? size_t(kokkosData->geo.nnz) * nVar * nVar : 0;
+
+  /*--- Batch A: AUSM+M supersonic BCs read the boundary numerics' Gamma / Sensor left by an earlier BC (replay). ---*/
+  const bool staleNeeded = (bk == K::BCKind::SUPERSONIC_INLET || bk == K::BCKind::SUPERSONIC_OUTLET) &&
+                           (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM);
+  K::BCParams p;
+  if (staleNeeded) {
+    const bool have = (bndNumerics.sensorPoint >= 0) &&
+                      (bk == K::BCKind::SUPERSONIC_OUTLET || bndNumerics.gammaPoint >= 0);
+    bool hasDomain = false;
+    for (auto iVertex = 0ul; iVertex < geometry->nVertex[val_marker] && !hasDomain; iVertex++)
+      hasDomain = geometry->nodes->GetDomain(geometry->vertex[val_marker][iVertex]->GetNode());
+    if (!have && hasDomain) {
+      if (Device_ResidentActive())
+        SU2_MPI::Error("Kokkos NEMO device-resident mode: boundary numerics state not replayable.", CURRENT_FUNCTION);
+      return false;
+    }
+    p.staleNumerics = true;
+    if (have) {
+      const bool res = Device_ResidentActive();
+      auto gammaOf = [&](unsigned long i) { return res ? kokkosData->DeviceGamma(i) : nodes->GetGamma(i); };
+      if (bndNumerics.gammaPoint >= 0) {
+        p.staleGammaI = gammaOf(bndNumerics.gammaPoint);
+        p.staleGammaJ = bndNumerics.gammaJInfty ? node_infty->GetGamma(0) : p.staleGammaI;
+      }
+      p.staleSensor = res ? kokkosData->DeviceSensor(bndNumerics.sensorPoint) : nodes->GetSensor(bndNumerics.sensorPoint);
+    }
+  }
+
   std::vector<su2double> res0, jac0;
   if (verify) {
     res0.assign(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes);
@@ -3489,7 +3601,6 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
   if (!Device_ResidualToDevice(geometry, config)) return false;
   SU2_ZONE_SCOPED
 
-  K::BCParams p;
   p.kind = bk;
   p.marker = val_marker;
   p.upw.scheme = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM : K::UpwindScheme::AUSM;
@@ -3793,14 +3904,21 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
     if (!whyV.empty()) return "NS gradient: " + whyV;
   }
   if (VerificationSolution) return "verification solution";
-  if (config->GetCFL_Adapt()) return "CFL adaptation on the host (TODO: device AdaptCFLNumber)";
+  /*--- Batch A: CFL adaptation on the device (AdaptCFLNumber_Device; no turbulence / species solvers here). ---*/
+  if (config->GetCFL_Adapt() && config->GetKind_Species_Model() != SPECIES_MODEL::NONE) return "CFL adaptation with species";
   if (config->GetnMarker_Analyze() > 0) return "MARKER_ANALYZE (host surface analysis each iteration)";
   if (config->GetInvDesign_Cp()) return "inverse design";
   if (config->GetWind_Gust()) return "wind gust";
   const auto tm = config->GetTime_Marching();
-  if (tm != TIME_MARCHING::STEADY && tm != TIME_MARCHING::TIME_STEPPING) return "dual time stepping";
+  if (tm == TIME_MARCHING::DT_STEPPING_1ST || tm == TIME_MARCHING::DT_STEPPING_2ND) {
+    const auto whyDT = Device_DualTimeUnsupported(config);
+    if (!whyDT.empty()) return "dual time stepping: " + whyDT;
+  } else if (tm != TIME_MARCHING::STEADY && tm != TIME_MARCHING::TIME_STEPPING) {
+    return "time marching not ported";
+  }
   const auto ti = config->GetKind_TimeIntScheme_Flow();
-  if (ti != EULER_IMPLICIT && ti != EULER_EXPLICIT) return "Runge-Kutta time integration";
+  if (ti != EULER_IMPLICIT && ti != EULER_EXPLICIT && ti != RUNGE_KUTTA_EXPLICIT && ti != CLASSICAL_RK4_EXPLICIT)
+    return "time integration scheme not ported";
   if (ti == EULER_IMPLICIT) {
     const auto ls = config->GetKind_Linear_Solver();
     if (ls != BCGSTAB && ls != FGMRES && ls != RESTARTED_FGMRES && ls != CONJUGATE_GRADIENT)
@@ -3814,7 +3932,7 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
   /*--- Every stage of the iteration on the device. ---*/
   if (CNEMOKokkosData::HostForced("c2p")) return "Cons2Prim on the host";
   if (config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "centered scheme (host)";
-  if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) return "AUSM+M pressure sensor computed on the host";
+  /*--- Batch A: AUSM+M pressure sensor on the device (Device_PressureSensor). ---*/
   auto why = Device_UpwindUnsupported(config, MESH_0);
   if (!why.empty()) return "upwind: " + why;
   const bool muscl = config->GetMUSCL_Flow();
@@ -3874,6 +3992,8 @@ void CNEMOEulerSolver::Device_StagedComms(CGeometry *geometry, const CConfig *co
     case MPI_QUANTITIES::PRIMITIVE_GRADIENT: q = HQ::GRADIENT_PRIMITIVE; break;
     case MPI_QUANTITIES::PRIMITIVE_GRAD_REC: q = HQ::GRADIENT_RECONSTRUCTION; break;
     case MPI_QUANTITIES::PRIMITIVE_LIMITER: q = HQ::LIMITER; break;
+    case MPI_QUANTITIES::SENSOR: q = HQ::SENSOR; break;
+    case MPI_QUANTITIES::AUXVAR_GRADIENT: q = HQ::AUXVAR_GRADIENT; break;
     default:
       SU2_MPI::Error("Device-resident NEMO: no device halo exchange for this MPI quantity.", CURRENT_FUNCTION);
       return;
@@ -3933,4 +4053,245 @@ su2double CNEMOEulerSolver::LinSysResSquaredNorm() const {
   }
 #endif
   return LinSysRes.squaredNorm();
+}
+
+/*============================ Device (Kokkos) batch A: sensor, CFL, axisymmetry, RK / dual time ============================*/
+
+bool CNEMOEulerSolver::Device_PressureSensor(CGeometry *geometry, const CConfig *config) {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return false;
+  using K = CNEMOKokkosData;
+  if (Device_ResidentActive()) {
+    /*--- Device SetPressureDiffusionSensor on the resident Primitive, device halo exchange of the sensor. ---*/
+    kokkosData->ComputePressureSensor(nullptr);
+    Device_StagedComms(geometry, config, MPI_QUANTITIES::SENSOR, K::G_SENSOR);
+    return true;
+  }
+  if (K::StageVerifyEnabled() && kokkosData->geo.domain_first) {
+    /*--- A/B: device sensor into a copy, then the unchanged host code (the run continues with its result). ---*/
+    kokkosData->UploadPrimitiveOnly();
+    std::vector<su2double> dev(nPointDomain);
+    kokkosData->ComputePressureSensor(dev.data());
+    Kokkos::Timer timer;
+    SetPressureDiffusionSensor(geometry, const_cast<CConfig*>(config));
+    kokkosData->stagePerf[K::ST_SENSOR].hostRef += timer.seconds();
+    kokkosData->stagePerf[K::ST_SENSOR].hostRefCalls++;
+    kokkosData->StageCompare(K::ST_SENSOR, "Sensor", nodes->GetSensor().data(), dev.data(), nPointDomain);
+    return true;
+  }
+#else
+  (void)geometry;
+  (void)config;
+#endif
+  return false;
+}
+
+void CNEMOEulerSolver::RecordBoundaryNumerics(CGeometry *geometry, const CConfig *config, unsigned short val_marker,
+                                              int kind) {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return;
+  /*--- The BC sets Gamma (and, AUSM+M, Sensor) of the shared boundary numerics at every domain vertex: the last one
+   *    remains. kind: CNEMOKokkosData::BCKind (FAR_FIELD, OUTLET: Gamma_j = node_infty; SUPERSONIC_OUTLET: Gamma_j =
+   *    Gamma_i, no sensor). ---*/
+  const bool ausmPlusM = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM);
+  for (long iVertex = long(geometry->nVertex[val_marker]) - 1; iVertex >= 0; iVertex--) {
+    const auto iPoint = geometry->vertex[val_marker][iVertex]->GetNode();
+    if (!geometry->nodes->GetDomain(iPoint)) continue;
+    bndNumerics.gammaPoint = long(iPoint);
+    if (kind == static_cast<int>(CNEMOKokkosData::BCKind::SUPERSONIC_OUTLET)) {
+      bndNumerics.gammaJInfty = false;
+    } else {
+      bndNumerics.gammaJInfty = true;
+      if (ausmPlusM) bndNumerics.sensorPoint = long(iPoint);
+    }
+    return;
+  }
+#else
+  (void)geometry;
+  (void)config;
+  (void)val_marker;
+  (void)kind;
+#endif
+}
+
+void CNEMOEulerSolver::Device_AxisymAuxGradients(CGeometry *geometry, const CConfig *config, bool verify) {
+#ifdef HAVE_KOKKOS
+  using K = CNEMOKokkosData;
+  const auto gm = config->GetKind_Gradient_Method();
+  /*--- ComputeAxisymmetricAuxGradients computes the gradient only for these two methods. ---*/
+  const int method = (gm == GREEN_GAUSS) ? 1 : (gm == WEIGHTED_LEAST_SQUARES) ? 2 : 0;
+  auto& grad = nodes->GetAuxVarGradient();
+  if (verify) {
+    kokkosData->UploadPrimitiveOnly();
+    kokkosData->UploadTransport();
+    kokkosData->UploadAuxVar();
+  }
+  const bool deviceSym = K::DeviceSymmetryEnabled();
+  kokkosData->ComputeAxisymmetricAuxGradient(method, deviceSym);
+  if (method != 0 && !deviceSym) {
+    /*--- Symmetry / Euler-wall correction with the CPU routine on the downloaded symmetry rows (as the primitives). ---*/
+    kokkosData->DownloadSymmetryRowsAux(grad.data());
+    Kokkos::Timer timer;
+    CorrectGradientsSymmetryHost(geometry, config, grad, 3, -1);
+    kokkosData->stagePerf[K::ST_AUXGRAD].host += timer.seconds();
+    kokkosData->UploadSymmetryRowsAux(grad.data());
+  }
+  if (verify) {
+    std::vector<su2double> dA(size_t(nPoint) * 3), dG(size_t(nPointDomain) * 3 * nDim);
+    kokkosData->DownloadAuxVar(dA.data(), dG.data());
+    Kokkos::Timer timer;
+    ComputeAxisymmetricAuxGradients(geometry, config);
+    kokkosData->stagePerf[K::ST_AUXGRAD].hostRef += timer.seconds();
+    kokkosData->stagePerf[K::ST_AUXGRAD].hostRefCalls++;
+    kokkosData->StageCompare(K::ST_AUXGRAD, "AuxVar", nodes->GetAuxVar().data(), dA.data(), dA.size(), 3);
+    kokkosData->StageCompare(K::ST_AUXGRAD, "Grad_AuxVar", grad.data(), dG.data(), dG.size(), size_t(3) * nDim);
+    return;
+  }
+  /*--- Halo rows: read by nothing in the device source (domain points), exchanged to keep the CPU state. ---*/
+  if (Device_ResidentActive() && method != 0)
+    Device_StagedComms(geometry, config, MPI_QUANTITIES::AUXVAR_GRADIENT, K::G_AUXVAR);
+#else
+  (void)geometry;
+  (void)config;
+  (void)verify;
+#endif
+}
+
+std::string CNEMOEulerSolver::Device_DualTimeUnsupported(const CConfig *config) const {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return "no device data";
+  if (!kokkosData->geo.domain_first) return "domain points not first";
+  if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
+  if (dynamic_grid) return "dynamic grid (GCL terms)";
+  if (ForcedHost("dualtime")) return "SU2_KOKKOS_NEMO_HOST";
+  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (size_t(nodes->GetSolution_time_n().size()) < size_t(nPoint) * nVar) return "Solution_time_n not allocated";
+  return "";
+#else
+  (void)config;
+  return "no Kokkos";
+#endif
+}
+
+void CNEMOEulerSolver::SetResidual_DualTime(CGeometry *geometry, CSolver **solver_container, CConfig *config,
+                                            unsigned short iRKStep, unsigned short iMesh,
+                                            unsigned short RunTime_EqSystem) {
+#ifdef HAVE_KOKKOS
+  if (!dualTimeHostOnly &&
+      Device_DualTimeResidual(geometry, solver_container, config, iRKStep, iMesh, RunTime_EqSystem))
+    return;
+  Device_BeginHostStage(geometry);
+#endif
+  CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE>::SetResidual_DualTime(
+      geometry, solver_container, config, iRKStep, iMesh, RunTime_EqSystem);
+}
+
+bool CNEMOEulerSolver::Device_DualTimeResidual(CGeometry *geometry, CSolver **solver_container, CConfig *config,
+                                               unsigned short iRKStep, unsigned short iMesh,
+                                               unsigned short RunTime_EqSystem) {
+#ifdef HAVE_KOKKOS
+  if (!Device_DualTimeUnsupported(config).empty()) return false;
+  using K = CNEMOKokkosData;
+  const bool verify = K::StageVerifyEnabled();
+  const bool implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
+  su2mixedfloat* jac = implicit ? JacobianValues(geometry, Jacobian, nVar) : nullptr;
+  const size_t nRes = size_t(nPoint) * nVar, nJac = implicit ? size_t(kokkosData->geo.nnz) * nVar * nVar : 0;
+  std::vector<su2double> res0, jac0;
+  if (verify) {
+    res0.assign(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes);
+    if (implicit) jac0.assign(jac, jac + nJac);
+  }
+  if (!Device_ResidualToDevice(geometry, config)) return false;
+  SU2_ZONE_SCOPED
+
+  kokkosData->DualTimeResidual(config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_2ND, implicit,
+                               config->GetDelta_UnstTimeND(), verify);
+  if (!deferResidualSync) Device_ResidualToHost(geometry);
+  if (!verify) return true;
+
+  std::vector<su2double> resD(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes), jacD;
+  if (implicit) jacD.assign(jac, jac + nJac);
+  std::copy(res0.begin(), res0.end(), LinSysRes.GetBlock(0));
+  if (implicit) std::copy(jac0.begin(), jac0.end(), jac);
+  dualTimeHostOnly = true;
+  Kokkos::Timer timer;
+  SetResidual_DualTime(geometry, solver_container, config, iRKStep, iMesh, RunTime_EqSystem);
+  kokkosData->stagePerf[K::ST_DUALTIME].hostRef += timer.seconds();
+  kokkosData->stagePerf[K::ST_DUALTIME].hostRefCalls++;
+  dualTimeHostOnly = false;
+  kokkosData->StageCompare(K::ST_DUALTIME, "LinSysRes", LinSysRes.GetBlock(0), resD.data(), nRes, nVar);
+  if (implicit) {
+    std::vector<su2double> jacH(jac, jac + nJac);
+    kokkosData->StageCompare(K::ST_DUALTIME, "Jacobian", jacH.data(), jacD.data(), nJac, size_t(nVar) * nVar);
+  }
+  return true;
+#else
+  (void)geometry;
+  (void)solver_container;
+  (void)config;
+  (void)iRKStep;
+  (void)iMesh;
+  (void)RunTime_EqSystem;
+  return false;
+#endif
+}
+
+bool CNEMOEulerSolver::SetDualTime_Device(su2double cfl) {
+#ifdef HAVE_KOKKOS
+  if (!Device_ResidentActive()) return false;
+  kokkosData->DualTimeShift(cfl);
+  return true;
+#else
+  (void)cfl;
+  return false;
+#endif
+}
+
+bool CNEMOEulerSolver::AdaptCFLNumber_Device(unsigned short iMesh, bool reduceCFL, bool canIncrease, bool resetCFL,
+                                             su2double CFLFactorDecrease, su2double CFLFactorIncrease,
+                                             su2double CFLMin, su2double CFLMax, su2double MGFactor, bool stats,
+                                             su2double& cflMin, su2double& cflMax, su2double& cflSum) {
+#ifdef HAVE_KOKKOS
+  if (iMesh != MESH_0 || !Device_ResidentActive()) return false;
+  CNEMOKokkosData::CFLAdaptParams p;
+  p.reduceCFL = reduceCFL;
+  p.canIncrease = canIncrease;
+  p.resetCFL = resetCFL;
+  p.stats = stats;
+  p.factorDecrease = CFLFactorDecrease;
+  p.factorIncrease = CFLFactorIncrease;
+  p.cflMin = CFLMin;
+  p.cflMax = CFLMax;
+  p.mgFactor = MGFactor;
+  kokkosData->AdaptCFL(p, cflMin, cflMax, cflSum);
+  return true;
+#else
+  (void)iMesh; (void)reduceCFL; (void)canIncrease; (void)resetCFL; (void)CFLFactorDecrease; (void)CFLFactorIncrease;
+  (void)CFLMin; (void)CFLMax; (void)MGFactor; (void)stats; (void)cflMin; (void)cflMax; (void)cflSum;
+  return false;
+#endif
+}
+
+bool CNEMOEulerSolver::Device_ExplicitRK(CGeometry *geometry, CConfig *config, unsigned short iRKStep, bool rk4) {
+#ifdef HAVE_KOKKOS
+  if (!Device_ResidentActive()) return false;
+  /*--- Explicit_Iteration_impl<RUNGE_KUTTA_EXPLICIT / CLASSICAL_RK4_EXPLICIT> with the Identity "preconditioner",
+   *    same coefficients (the hard-coded classical RK4 tables), staged SOLUTION comms. ---*/
+  const su2double RK_AlphaCoeff = config->Get_Alpha_RKStep(iRKStep);
+  const su2double RK_FuncCoeff[] = {1.0/6.0, 1.0/3.0, 1.0/3.0, 1.0/6.0};
+  const su2double RK_TimeCoeff[] = {0.5, 0.5, 1.0, 1.0};
+  CNEMOKokkosData::ResidualReduction red;
+  kokkosData->ExplicitRKUpdate(rk4, iRKStep, RK_AlphaCoeff, rk4 ? RK_TimeCoeff[iRKStep] : 0.0,
+                               rk4 ? RK_FuncCoeff[iRKStep] : 0.0, red);
+  ResidualReductions_FromAllThreads(geometry, config, red.rms, red.max, red.idx);
+  Device_StagedComms(geometry, config, MPI_QUANTITIES::SOLUTION, CNEMOKokkosData::G_SOLUTION);
+  ComputeVerificationError(geometry, config);
+  return true;
+#else
+  (void)geometry;
+  (void)config;
+  (void)iRKStep;
+  (void)rk4;
+  return false;
+#endif
 }
