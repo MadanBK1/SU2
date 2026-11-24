@@ -41,7 +41,7 @@ CONTEXT IS SMALL: never read a whole source file. Use grep -n to locate, then re
 Never cat build logs or diffs in full (use tail -30, git diff --stat, or git diff -- <one file> | head -150).
 Save progress to KOKKOS_PROGRESS.md and commit early (by your 10th tool call), then continue if turns remain.
 Before you finish this session ALWAYS: append status/commands/results/next step to KOKKOS_PROGRESS.md,
-commit (WIP if gates not complete), and push to origin $BRANCH.
+commit LOCALLY (WIP if gates not complete). Do NOT run git push.
 If every item in section 4 is done, write the line ALL ITEMS DONE at the end of KOKKOS_PROGRESS.md.
 Never wait for a human. If an item is blocked (credentials, permission refused, GPU busy, missing tool), mark it in
 KOKKOS_PROGRESS.md as BLOCKED <item>: <reason> (retry later), and move on to the next unchecked item.
@@ -72,7 +72,7 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
   if [ "$(git -C "$REPO" branch --show-current)" != "$BRANCH" ]; then
     echo "    WARNING: agent left $BRANCH; switching back"; git -C "$REPO" checkout -q "$BRANCH" || break
   fi
-  # autosave: commit + push whatever the round left uncommitted (tracked edits + progress file only)
+  # autosave: commit (locally) whatever the round left uncommitted (tracked edits + progress file only)
   if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || \
      [ -n "$(git -C "$REPO" status --porcelain -- KOKKOS_PROGRESS.md)" ]; then
     git -C "$REPO" add -u && git -C "$REPO" add KOKKOS_PROGRESS.md 2>/dev/null
@@ -80,10 +80,7 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
     git -C "$REPO" commit -q -m "WIP loop autosave round $r ($(date -Is)): uncommitted work left by the agent session; gates not verified" \
       && echo "    autosaved round $r"
   fi
-  if [ -n "$(git -C "$REPO" log --oneline "origin/$BRANCH..$BRANCH" 2>/dev/null)" ]; then
-    timeout 120 git -C "$REPO" push -q origin "$BRANCH" </dev/null >/dev/null 2>&1 \
-      && echo "    pushed" || echo "    push failed (no GitHub auth?) - commits kept locally, will retry next round"
-  fi
+  # local-only mode: no push (the user pushes manually for review)
   after=$(state)
   if [ "$before" = "$after" ]; then stuck=$((stuck+1)); else stuck=0; fi
   if [ $rc -ne 0 ] || [ "$before" = "$after" ]; then

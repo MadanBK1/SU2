@@ -11,7 +11,7 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
 
 ### Unattended loop mode
 The script `TestCases/kokkos_nemo/local_agent_loop.sh` restarts you in a fresh session after every round. In that mode:
-- **Each session:** do one bounded chunk, then save progress, commit and push before ending.
+- **Each session:** do one bounded chunk, then save progress and commit locally (no push) before ending.
 - **When everything is finished:** if every item in section 4 is checked, write `ALL ITEMS DONE` as the last line of `KOKKOS_PROGRESS.md`.
 - **Never wait for a person.** If an item is blocked (credentials, GPU busy, a permission refused, a missing tool), mark it `BLOCKED <item>: <reason>` in `KOKKOS_PROGRESS.md` and continue with the next unchecked item. Retry blocked items once everything else is done or blocked. When something is a decision for the user, pick the conservative option and record it.
 - **Loop hints:** obey the most recent `LOOP HINT:` line in `KOKKOS_PROGRESS.md`.
@@ -28,7 +28,7 @@ The script `TestCases/kokkos_nemo/local_agent_loop.sh` restarts you in a fresh s
   - No `sudo`, and no `rm -rf` on a path containing `..`, `~` on its own, or `/`.
   - Reading outside is fine: compilers, `/opt/rh`, CUDA.
 - **Branch:** work only on `su2kokkos_qwenlocal_agent`. **Never commit to or push `su2kokkos`** — that is the reviewed branch, and Claude merges from yours after review. Also never touch `master` or other branches, and never use `reset --hard`, `clean -fd`, force-push or rebase.
-- **Commits:** commit only after the gates in section 3 pass. Push with `git push origin su2kokkos_qwenlocal_agent`.
+- **Commits:** commit **locally only**, and only after the gates in section 3 pass. **Never run `git push`**; the user pushes for review.
 - **Untested work:** if gates could not be run, the commit message must start with `WIP` and list which gates were not run.
 - **Never commit:** build directories, `subprojects/.wraplock`, or the `subprojects/CoolProp` submodule pointer.
 - **CPU path:** `ENABLE_KOKKOS= NO` behaviour must stay bit-identical.
