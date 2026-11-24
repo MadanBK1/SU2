@@ -35,3 +35,10 @@
 BLOCKED push-to-origin: egress to github.com:443 denied by sandbox policy ("user denied", 2026-11-24 round 2); local_agent_loop.sh is in local-only mode ("Do NOT run git push", "user pushes manually for review"). Do not attempt push in future rounds; commit locally, user pushes.
 
 LOOP HINT: round 3 = item 4.2 per NEXT steps above; builds via ./meson.py or system meson (meson NOT on PATH), ninja -j4, log to file, tail -30; commit LOCALLY before ending the session — do not push (local-only loop mode).
+
+- 2026-11-24T02:32:12-05:00 [loop] round 1 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_012128_1.log
+- 2026-11-24 round 3 (this session, item 4.2 start):
+  - meson setup failed: `meson.py` preconfigure tries `git submodule update externals/codi` → sandbox refuses `.git/config` write ("Device or resource busy"); `externals/meson` is EMPTY (no vendored meson); `pip3 install meson` → pypi.org:443 denied (user denied).
+  - FOUND vendored meson 1.8.2 at /home/mpr7366/SU2/externals/meson (exact match to meson.build `>=1.8.2`). Works: `PYTHONPATH=/home/mpr7366/SU2/externals/meson python3 -m mesonbuild.mesonmain setup ...` from repo root (skips preconfigure entirely; submodules already extracted in this clone).
+  - Created driver ../kk/build.sh (setup|ninja for serial|strict|strict-mpi; logs to ../kk/logs/*.log; exports SU2_ROOT/MESH_DIR/RUN_DIR/GXX/GCC).
+  - NEXT: `bash ../kk/build.sh setup strict`, then `setup serial`, then `ninja strict 4` (background), verify SU2_CFD + nemo_gas_kokkos_validation binaries, then G1..G4 per LOOP HINT.
