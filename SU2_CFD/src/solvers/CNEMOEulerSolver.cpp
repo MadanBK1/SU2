@@ -254,9 +254,22 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
           if (kb == FAR_FIELD || kb == OUTLET_FLOW) gammaSet = sensorSet = true;
           if (kb == SUPERSONIC_OUTLET) gammaSet = true;
         }
-        std::vector<int> okAll(nM, 1);
-        if (nM > 0) SU2_MPI::Allreduce(ok.data(), okAll.data(), nM, MPI_INT, MPI_MIN, SU2_MPI::GetComm());
-        bndStaleOK.assign(okAll.begin(), okAll.end());
+        /*--- Reduce over the config-file markers, matched by tag: nMarker_All also counts this rank's
+         *    SEND_RECEIVE markers, which differ between ranks (a reduction of length nMarker_All mismatches,
+         *    MPI_ERR_TRUNCATE). SEND_RECEIVE markers are not physical BCs, so they are always "ok". ---*/
+        const auto nCfg = config->GetnMarker_CfgFile();
+        std::vector<int> okCfg(nCfg, 1), okCfgAll(nCfg, 1);
+        std::vector<int> cfgIndex(nM, -1);
+        for (unsigned short iMarker = 0; iMarker < nM; iMarker++) {
+          if (config->GetMarker_All_KindBC(iMarker) == SEND_RECEIVE) continue;
+          const auto iCfg = config->GetMarker_CfgFile_TagBound(config->GetMarker_All_TagBound(iMarker));
+          cfgIndex[iMarker] = iCfg;
+          okCfg[iCfg] = std::min(okCfg[iCfg], ok[iMarker]);
+        }
+        if (nCfg > 0) SU2_MPI::Allreduce(okCfg.data(), okCfgAll.data(), nCfg, MPI_INT, MPI_MIN, SU2_MPI::GetComm());
+        bndStaleOK.assign(nM, 1);
+        for (unsigned short iMarker = 0; iMarker < nM; iMarker++)
+          if (cfgIndex[iMarker] >= 0) bndStaleOK[iMarker] = static_cast<char>(okCfgAll[cfgIndex[iMarker]]);
       }
       deferResidualSync = Device_DeferralUnsupported(config).empty();
       deviceJacobianAllocated = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
