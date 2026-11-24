@@ -1,17 +1,17 @@
-# Task file for a local coding agent (su2kokkos)
+# Task file for a local coding agent (branch su2kokkos_qwenlocal_agent)
 
 You are continuing a validated port of SU2's two-temperature NEMO solver to Kokkos. The goal is that every compressible NEMO run goes end to end on the GPU. Read `NEMO_KOKKOS_PORT_PLAN.md` first; it has the design, the feature coverage table, the validation policy and the CUDA notes.
 
 ## 0. Restart protocol (do this every session)
-1. `cd` to the clone and run `git status`, then `git log --oneline -5`.
+1. `cd` to the clone, run `git checkout su2kokkos_qwenlocal_agent`, then `git status` and `git log --oneline -5`. Stop if you are not on that branch.
 2. Read `KOKKOS_PROGRESS.md` (create it if missing). It is the only memory you have between sessions.
 3. Continue the first unchecked item in section 4.
 4. After every meaningful step, append to `KOKKOS_PROGRESS.md`: date, what you did, the exact commands, pass/fail numbers, and the next step.
 5. Work on **one item per session**. When the item is committed, or your context is getting long, update `KOKKOS_PROGRESS.md`, commit it, and tell the user: "restart me with the same prompt". Never rely on remembering earlier chat.
 
 ## 1. Rules
-- **Branch:** work only on `su2kokkos`. Never use `reset --hard`, `clean -fd`, force-push or rebase onto others, and never commit to `master` or other branches.
-- **Commits:** commit only after the gates in section 3 pass. Push with `git push origin su2kokkos`.
+- **Branch:** work only on `su2kokkos_qwenlocal_agent`. **Never commit to or push `su2kokkos`** — that is the reviewed branch, and Claude merges from yours after review. Also never touch `master` or other branches, and never use `reset --hard`, `clean -fd`, force-push or rebase.
+- **Commits:** commit only after the gates in section 3 pass. Push with `git push origin su2kokkos_qwenlocal_agent`.
 - **Untested work:** if gates could not be run, the commit message must start with `WIP` and list which gates were not run.
 - **Never commit:** build directories, `subprojects/.wraplock`, or the `subprojects/CoolProp` submodule pointer.
 - **CPU path:** `ENABLE_KOKKOS= NO` behaviour must stay bit-identical.
@@ -26,7 +26,7 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
 ## 2. Setup on roam148-045 (V100, Rocky, GCC 12, CUDA 12.9)
 ```bash
 cd ~/software/AgenticTest
-git clone -b su2kokkos https://github.com/MadanBK1/SU2.git && cd SU2
+git clone -b su2kokkos_qwenlocal_agent https://github.com/MadanBK1/SU2.git && cd SU2
 mkdir -p ~/kk/meshes ~/kk/runs
 for f in invwedge/invwedge.su2 thermalbath/finitechemistry/5x5Mesh.su2 visc_wedge/viscwedge.su2; do
   curl -sSfL -o ~/kk/meshes/$(basename $f) https://raw.githubusercontent.com/su2code/TestCases/master/nonequilibrium/$f; done
