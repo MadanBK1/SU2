@@ -26,9 +26,11 @@ export ANTHROPIC_MODEL="$MODEL" ANTHROPIC_SMALL_FAST_MODEL="$MODEL"
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-16000}
 export MAX_THINKING_TOKENS=${MAX_THINKING_TOKENS:-4000}
 export DISABLE_AUTOUPDATER=1
-# qwen via ollama is unrecognized -> Claude Code assumes a 1M window and never compacts.
-# Cap auto-compact below the ollama context (OLLAMA_CONTEXT_LENGTH=65536). Bare number = tokens.
-export CLAUDE_CODE_AUTO_COMPACT_WINDOW=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-56000}
+# Claude Code's auto-compact window has a 100k minimum, above the 64k ollama context, so it
+# cannot help here; MAX_TURNS per round is what bounds context. Leave it unset.
+unset CLAUDE_CODE_AUTO_COMPACT_WINDOW
+# Never block on a credential prompt in unattended mode: a push without auth fails fast instead.
+export GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true SSH_ASKPASS=/bin/true GIT_SSH_COMMAND="ssh -o BatchMode=yes"
 
 PROMPT="/no_think You are running unattended in a loop; each session starts with an empty context.
 cd SU2. Follow LOCAL_AGENT_TASK.md exactly, starting with section 0 (git status/diff, read KOKKOS_PROGRESS.md).
@@ -76,7 +78,11 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
     git -C "$REPO" add -u && git -C "$REPO" add KOKKOS_PROGRESS.md 2>/dev/null
     git -C "$REPO" reset -q -- subprojects/CoolProp subprojects/.wraplock 2>/dev/null
     git -C "$REPO" commit -q -m "WIP loop autosave round $r ($(date -Is)): uncommitted work left by the agent session; gates not verified" \
-      && echo "    autosaved round $r" && git -C "$REPO" push -q origin "$BRANCH" 2>&1 | tail -1
+      && echo "    autosaved round $r"
+  fi
+  if [ -n "$(git -C "$REPO" log --oneline "origin/$BRANCH..$BRANCH" 2>/dev/null)" ]; then
+    timeout 120 git -C "$REPO" push -q origin "$BRANCH" </dev/null >/dev/null 2>&1 \
+      && echo "    pushed" || echo "    push failed (no GitHub auth?) - commits kept locally, will retry next round"
   fi
   after=$(state)
   if [ "$before" = "$after" ]; then stuck=$((stuck+1)); else stuck=0; fi
