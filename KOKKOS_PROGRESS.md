@@ -45,3 +45,8 @@ LOOP HINT: round 3 = item 4.2 per NEXT steps above; builds via ./meson.py or sys
   - externals/eigen and externals/mel were EMPTY in this clone (submodule dirs without .git/modules); copied from /home/mpr7366/SU2/externals/{eigen,mel}, removed the stray `.git` file each cp dragged (it pointed at missing .git/modules/* and broke `git status` until removed). CLI11/utils present. codi/FADO/medi still empty — OK so long as autodiff/directdiff stay disabled; fill from ~/SU2 if a TU needs them.
   - meson setup: strict + serial + strict-mpi all rc=0 (vendored meson 1.8.2 + touched su2preconfig.timestamp).
   - Compiles: strict + serial in background (ninja -j4, logs ../kk/logs/ninja-*.log). Serial failed once on mel.hpp before the mel copy; restarted.
+  - strict build DONE (ninja rc=0): build-kokkos-strict/{SU2_CFD/src/SU2_CFD, UnitTests/nemo_gas_kokkos_validation} exist.
+  - G4 strict: PASS (bitwise transport props, AIR-7 GUPTA-YOS 1250 states).
+  - build.sh now has `gate` mode: gate g1 | g1-ab | g2 | g4strict | g4serial | g6 (logs to ../kk/logs).
+  - G1 (strict, REF_MODE=HOST, RES_TOL=0, FIELD_TOL=0) launched bg b17dw21fv → ../kk/logs/g1-strict.log. Serial build b11xeexsk still compiling.
+  - NEXT after G1: g1-ab (ab_variants + ab_resident), G2 (needs serial build done), G4 serial, G3 (needs cd2cd46 baseline binaries — see NEXT above), G6 (needs strict-mpi ninja build: `bash ../kk/build.sh ninja strict-mpi 4`).
