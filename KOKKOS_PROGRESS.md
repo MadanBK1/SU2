@@ -64,3 +64,11 @@ LOOP HINT: round 3 = item 4.2 per NEXT steps above; builds via ./meson.py or sys
   - Hypotheses: (a) Batch A regression (constructor bndStaleOK Allreduce has uniform nM — unlikely culprit; Device_PressureSensor has no variable-count Allreduce); (b) PRE-EXISTING SU2 MPI bug — Batch A commit message itself says the 2-rank MPI gate was never run.
   - DISCRIMINATE: building baseline cd2cd46 strict-mpi (bg bpc596j1w, ../kk/cd2cd46/build-baseline-mpi). Then `NP=2 BIN=<baseline-mpi SU2_CFD> REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 bash $S/check.sh` (RUN_TAG=base): if baseline fails identically → pre-existing bug to fix in SU2 core (or document); if baseline passes → bisect Batch A diff (git show 35b6f39) for the offending collective.
   - G2 (bvnfeasp9), G3 (by3h19gt0), g1-ab (bie87sxsf) still running.
+
+- 2026-11-24T03:35:55-05:00 [loop] round 3 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261124_025758_3.log
+LOOP HINT: G6 fails in ENABLE_KOKKOS=NO too, so it is not the device port. Check MPI consistency first: `which mpirun mpicxx; mpirun --version; ldd build-kokkos-strict-mpi/SU2_CFD/src/SU2_CFD | grep -i mpi`. If mismatched, rebuild strict-mpi with the matching mpicxx (or run the matching mpirun). If the cd2cd46 baseline also fails, mark G6 BLOCKED (environment) and continue with 4.3 (CUDA V100 build).
+- 2026-11-24 round 5 (this session, item 4.2 finish):
+  - Collected last round's gates: G1 strict PASS; G1-ab PASS (22 variants, all exit=0, non-bitwise=0 everywhere); G2 check.sh OVERALL PASS + invwedge noisefloor PASS; super_cat noisefloor INCOMPLETE (1 line, no OVERALL — bg task died at session end, re-running); G3 PASS (both scripts); G4 strict+serial PASS.
+  - MPI consistency (per LOOP HINT): mpirun = mpicxx = same /home/mpr7366/software/openmpi-4.1.5; strict-mpi SU2_CFD ldd shows that libmpi. NO mismatch.
+  - G6 still FAIL 3/4: MPI_ERR_TRUNCATE on MPI_COMM_WORLD, rank 1, first iteration, both NO and YES; thermalbath_np2 PASS.
+  - Discriminating with cd2cd46 baseline strict-mpi build now (see commands below).
