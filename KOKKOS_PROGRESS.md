@@ -3,7 +3,7 @@
 ## Item status (mirrors section 4 of LOCAL_AGENT_TASK.md)
 - [x] 4.1 Script env-var paths (SU2_ROOT/MESH_DIR/RUN_DIR) — done 2026-11-24
 - [x] 4.2 Batch A gates: G1, G2, G3, G4, G6 all PASS after fix 4450650725 — done 2026-11-24 round 6
-- [ ] 4.3 CUDA V100 build + GPU run (G5, G7) — NEXT
+- [~] 4.3 CUDA V100 build + GPU run — G5 PASS (build-kokkos-cuda 320/320, rc=0); G7 BLOCKED (no /dev/nvidia* in sandbox; dangerouslyDisableSandbox refused); nsys BLOCKED (not installed)
 - [ ] 4.4 Device schemes: Roe, MSW, LAX, AUSM+-up2
 - [ ] 4.5 BCs: subsonic inlet, Smoluchowski–Maxwell slip, catalytic heat-flux wall
 - [ ] 4.6 Solver options: ILU(n>0), LU-SGS, MG levels, periodic markers, deforming grids
@@ -84,6 +84,12 @@ LOOP HINT: G6 bug fixed by cherry-picked 982c4ea (verified by user: invwedge_aus
   - NOTE: /dev/nvidia* is NOT visible inside the command sandbox (nvidia-smi fails; kernel modules are loaded) — GPU RUNS (g7) need unsandboxed bash (dangerouslyDisableSandbox) or the user's shell.
   - NEXT: (1) confirm g2sc PASS → 4.2 DONE (tick done); (2) 4.3: `bash kk/build.sh ninja cuda 4` → G5; then G7 via g7 gate (GPU); nsys profile invwedge_ausm 20 iter; record [KOKKOS_NEMO_PERF]; try SU2_KOKKOS_NEMO_EDGE=atomic vs color; wall vs ENABLE_KOKKOS=NO.
 LOOP HINT: 4.2 = all gates PASS except super_cat noisefloor ITER 100 (was killed, not failed). Finish with `bash kk/build.sh gate g2sc` (expect NOISEFLOOR OVERALL PASS), then 4.3: `bash kk/build.sh setup cuda` (already started bg), `bash kk/build.sh ninja cuda 4`, G5 done; G7 needs GPU access OUTSIDE the command sandbox (/dev/nvidia* hidden there).
+  - ROUND 6 FINAL STATE: **4.2 DONE (committed 83f36d9275 "Batch A gates complete")** — G1/G1-ab/G2(check+both noisefloors)/G3/G4/G6 all PASS. 4.3: G5 PASS (build-kokkos-cuda 320/320 rc=0, binary built); G7 + nsys BLOCKED (no /dev/nvidia* in sandbox, sandbox-egress refused, nsys missing).
+LOOP HINT (round 7): **Start item 4.4 (device schemes Roe/MSW/LAX/AUSM+-up2)** — it is pure code work, needs no GPU. The blocked G7 (4.3 GPU run) stays BLOCKED; retry it only AFTER 4.4-4.7 are done/blocked, or if the user has run the GPU part in their own shell. When you get to G7, it MUST run in the user's shell (not the command sandbox) — give the user the exact commands: `export SU2_ROOT=$PWD MESH_DIR=../kk/meshes RUN_DIR=../kk/runs; bash kk/build.sh gate g7` from the SU2 dir, plus `nvidia-smi` first and `ollama stop <model>` before timing runs. Tick 4.4 here + in LOCAL_AGENT_TASK.md when committed. Do NOT push.
   - g2sc DONE: super_cat noisefloor ITER 11 (ratio 0.36) + ITER 100 (ratio 0.82) both PASS, NOISEFLOOR OVERALL: PASS (g2-nf-sc.log). **4.2 COMPLETE — all gates PASS (G1, G1-ab, G2, G3, G4, G6).**
-  - 4.3 in flight: meson setup cuda rc=0 (cuda/VOLTA70); ninja cuda -j4 running (nvcc sm_70 deprecation warnings = expected).
+  - 4.3 (this session): meson setup cuda rc=0 (cuda/VOLTA70, dispatcher CXX); `ninja cuda -j4` → **320/320, rc=0** → **G5 PASS** (only benign warnings: sm_70 deprecation, duplicate -std flag, pre-existing SU2 header virtual-override notes). Binary: build-kokkos-cuda/SU2_CFD/src/SU2_CFD (31.9 MB) + nemo_gas_kokkos_validation.
+  - **G7 BLOCKED (sandbox)**: binary starts, does host I/O, then `terminate: cudaGetDeviceCount(&count) error( cudaErrorNoDevice): no CUDA-capable device is detected` (Kokkos_Core.cpp:115). Root cause: `/dev/nvidia*` absent inside the command sandbox (kernel modules ARE loaded on host); all `dangerouslyDisableSandbox` attempts refused ("Run outside of the sandbox"). GPU runs must be done by the user's shell, or when the loop env exposes /dev/nvidia.
+  - **nsys BLOCKED**: /var/lib/alternatives/nsys is a dangling link; nsys binary not installed anywhere found.
+  - BLOCKED 4.3(G7+profiling): no GPU device node in sandbox, sandbox-egress refused, nsys missing. G5 done.
+  - Committed 83f36d9275 "KOKKOS-NEMO: Batch A gates complete (4.2)" + this WIP note (local only; no push — push BLOCKED since round 2).
 LOOP HINT: 4.2 is DONE (all gates PASS, super_cat NF finished round 6). 4.3 = wait for `ninja cuda` (bg bsni3c1ny) → if rc=0, G5 PASS; then G7 gate needs GPU: run g7 OUTSIDE the command sandbox (/dev/nvidia* hidden in-sandbox — use dangerouslyDisableSandbox or user shell); record [KOKKOS_NEMO_PERF] + device-resident-state lines; then nsys profile invwedge_ausm 20 iter; wall-time vs ENABLE_KOKKOS=NO; tick 4.3.
