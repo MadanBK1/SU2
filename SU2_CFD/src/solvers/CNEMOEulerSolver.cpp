@@ -3526,9 +3526,14 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
     return "";
   }
   /*--- Flux BCs use the boundary numerics, of the same type as the convective scheme (CDriver). ---*/
-  if (config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "boundary numerics not AUSM (centered -> Roe)";
+  /*--- CDriver: LAX (centered) and ROE use CUpwRoe_NEMO as boundary numerics. ---*/
+  const bool centered = (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED);
+  if (!centered && config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "convective scheme";
   const auto up = config->GetKind_Upwind_Flow();
-  if (up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM) return "boundary numerics not AUSM / AUSM+M";
+  const bool bndRoe = centered || (up == UPWIND::ROE);
+  if (!bndRoe && up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM) return "boundary numerics not AUSM / AUSM+M / Roe";
+  if (bndRoe && config->GetIonization()) return "Roe boundary numerics + ionization (CPU RoedPdU depends on the previous call)";
+  if (bndRoe && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   /*--- Batch A: AUSM+M reads the Gamma / Sensor the boundary numerics kept from an earlier BC (replayed). ---*/
   if ((k == K::SUPERSONIC_INLET || k == K::SUPERSONIC_OUTLET) && up == UPWIND::AUSMPLUSM && marker >= 0 &&
       (size_t(marker) >= bndStaleOK.size() || !bndStaleOK[marker]))
@@ -3713,7 +3718,12 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
 
   p.kind = bk;
   p.marker = val_marker;
-  p.upw.scheme = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM : K::UpwindScheme::AUSM;
+  /*--- Boundary numerics (CDriver): CUpwRoe_NEMO for LAX and ROE, else the upwind scheme. ---*/
+  const bool bndRoe = (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED) ||
+                      (config->GetKind_Upwind_Flow() == UPWIND::ROE);
+  p.upw.scheme = bndRoe ? K::UpwindScheme::ROE
+                 : (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM
+                                                                        : K::UpwindScheme::AUSM;
   p.upw.implicit = implicit;
   p.upw.Minf = config->GetMach();
   p.upw.nElNumerics = config->GetIonization() ? 1 : 0; /*--- CNEMONumerics::nEl ---*/
@@ -3726,6 +3736,7 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
     bs.eve = node_infty->GetEve(0);
     bs.dPdU = implicit ? node_infty->GetdPdU(0) : nullptr;
     bs.Gamma = node_infty->GetGamma(0);
+    bs.U = node_infty->GetSolution(0);
   }
   if (bk == K::BCKind::OUTLET) {
     const string Marker_Tag = config->GetMarker_All_TagBound(val_marker);
@@ -3753,6 +3764,7 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
     bs.eve = node_inlet->GetEve(0);
     bs.dPdU = implicit ? node_inlet->GetdPdU(0) : nullptr;
     bs.Gamma = node_inlet->GetGamma(0);
+    bs.U = node_inlet->GetSolution(0);
   }
 
   /*--- Step 8: viscous far-field part (node_infty secondaries + gradient), NS walls. ---*/
@@ -4041,11 +4053,20 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
 
   /*--- Every stage of the iteration on the device. ---*/
   if (CNEMOKokkosData::HostForced("c2p")) return "Cons2Prim on the host";
-  if (config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "centered scheme (host)";
-  /*--- Batch A: AUSM+M pressure sensor on the device (Device_PressureSensor). ---*/
-  auto why = Device_UpwindUnsupported(config, MESH_0);
-  if (!why.empty()) return "upwind: " + why;
-  const bool muscl = config->GetMUSCL_Flow();
+  std::string why;
+  const bool centered = (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED);
+  if (!centered && config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "convective scheme (host)";
+  if (centered) {
+    /*--- 4.4-LAX: device centered residual; Lambda halo rows come from the host MAX_EIGENVALUE comms. ---*/
+    why = Device_CenteredUnsupported(config);
+    if (!why.empty()) return "centered: " + why;
+    if (kokkosData->geo.nPointDomain != nPoint) return "centered: halo Lambda rows (no device MAX_EIGENVALUE exchange)";
+  } else {
+    /*--- Batch A: AUSM+M pressure sensor on the device (Device_PressureSensor). ---*/
+    why = Device_UpwindUnsupported(config, MESH_0);
+    if (!why.empty()) return "upwind: " + why;
+  }
+  const bool muscl = !centered && config->GetMUSCL_Flow();
   if (muscl) {
     const auto gm = config->GetKind_Gradient_Method();
     if (gm != GREEN_GAUSS && gm != WEIGHTED_LEAST_SQUARES) return "gradient method";
