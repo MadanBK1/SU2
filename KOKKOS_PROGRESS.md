@@ -398,3 +398,7 @@ READY FOR REVIEW: MERGE: 4.4-Roe (interior device Roe; G1 strict invwedge_roe PA
 - 2026-11-25 (round 26, review 6 queue — device Roe BCs + LAX residency by reviewer, HEAD fc565179f9):
   - Queue: (1) build strict+serial; (2) G1 strict invwedge_lax invwedge_roe (both PASS bitwise; all BCs device; LAX device-resident ON); (3) FAIL -> .svrun.sh stage-verify + RESIDENT=0; (4) regression 6-case list; (5) A/B even on PASS (BC non-bitwise=0); (6) PERF lines + wall times; (7) READY FOR REVIEW: MERGE: 4.4-Roe-BC (+LAX resident).
   - Starting (1): ninja build-kokkos-strict + build-kokkos-serial.
+
+- 2026-11-25T05:03:19-05:00 [loop] round 26 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_045028_26.log
+
+- 2026-11-25 (round 26b, review-6 queue): builds strict+serial rc=0 "no work to do" (binaries 05:00, current). Queue item 1 done: no compile errors (dev code fc565179f9 already built round 26). Running G1 invwedge_lax+invwedge_roe (bg) → g1-bcroe-r26.log. NEXT: stage lines, regression 6-case, .svrun A/B, PERF lines, then READY FOR REVIEW: MERGE: 4.4-Roe-BC (+LAX resident).
