@@ -350,3 +350,15 @@ LOOP HINT: 2026-11-25T01:18:35-05:00 no progress for 3 rounds on the current ite
   - NEXT: if default list OVERALL PASS → write `READY FOR REVIEW: 4.4-LAX` (both results) as last line + tick progress; commit locally. If any case fails: paste StageCompare/verify lines (max 20), then per review 3 item 3 mark `BLOCKED 4.4-LAX` after 3 failed sessions (this would be session 4) and move to 4.5.
 
 - 2026-11-25T01:52:24-05:00 [loop] round 20 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_012856_20.log
+
+- 2026-11-25T02:03:42-05:00 [loop] round 21 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_015244_21.log
+
+- 2026-11-25 (round 22, item 4.4-LAX — review-3 "do next" verification finished):
+  - State: reviewer fix e69cbbb215 (CNEMOKokkosLAX.hpp + CNEMOKokkosCentered.cpp + invwedge_lax case) built in round 20 (ninja-strict-r20.log rc=0, binary current).
+  - Confirmed round-20 background gate run (started 01:42, log on disk) completed: `../kk/logs/g1-default-strict.log` → all 4 cases bitwise (max|dres|=0, max field diff=0): invwedge_ausm PASS, thermalbath PASS, super_cat PASS, axi_visccone PASS, **OVERALL: PASS**.
+  - Plus round-20 `../kk/logs/g1lax-strict.log`: invwedge_lax NO/YES both exit=0, invwedge_lax PASS, **OVERALL: PASS** (BIN=strict, REF_MODE=HOST, RES_TOL=0, FIELD_TOL=0).
+  - G1 gate for 4.4-LAX: PASS (bitwise, strict binary), LAX case + full default list. Serial fast-math build previously showed only 1–2 ulp verify diffs (fast-math noise, expected; strict is the exactness reference).
+  - 4.4 status: LAX-FRIEDRICH device port DONE + validated. Remaining in 4.4: Roe, MSW, AUSM+-up2 (document uninit-M_L/M_R quirk + deterministic CPU variant).
+  - G7 (4.3 GPU run) still BLOCKED in-sandbox (no /dev/nvidia*; user shell required). Reviewer reported in review 1 that the user ran G7 on the V100: PASS (noise floor 1.00/1.05) — pending reviewer confirmation against the current code.
+  - NEXT for reviewer: merge 4.4-LAX into su2kokkos. Next agent round (if review passes): start Roe device port (numerics/NEMO/convection/roe.cpp) following the same Centered_Residual dispatch pattern; then MSW; then AUSM+-up2 quirk documentation.
+READY FOR REVIEW: 4.4-LAX — device LAX-FRIEDRICH validated: G1 bitwise on strict binary (invwedge_lax PASS, default 4-case list OVERALL PASS; logs ../kk/logs/g1lax-strict.log, g1-default-strict.log)
