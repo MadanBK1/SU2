@@ -379,3 +379,7 @@ READY FOR REVIEW: 4.4-LAX — device LAX-FRIEDRICH validated: G1 bitwise on stri
   - LOCAL_AGENT_TASK.md 4.4: LAX subpart ticked "done (G1 strict)"; Roe/MSW/AUSM+-up2 remain open.
   - Review-4 queue complete (items 1+2). Per ROLE: reviewer writes Roe code; agent requests HEAVY review with survey results.
 READY FOR REVIEW: HEAVY: 4.4-Roe: device Roe needed (CUpwRoe_NEMO; reuses LaxInviscidProjFlux/Jac from CNEMOKokkosLAX.hpp, new GetPMatrix/invP CNEMONumerics.cpp:355-550) — survey: LAX case PASS bitwise (guard OK); partial_cat + invwedge_am PASS bitwise, both 100% device stages (no host fallback); LAX host stages only from Roe boundary numerics + host-stage wall accumulator + implicit update; PERF: Source 414ms/call, CenteredLAX 138ms/call (strict serial, 2 cores)
+
+- 2026-11-25 (round 25, review 5 "Agent: do next" — device Roe landed by reviewer as e744eb00ea):
+  - Queue: (1) build strict+serial; (2) G1 strict invwedge_roe (bitwise, report max|dres|/max field diff, stage + PERF lines); (3) debug only if FAIL; (4) regression default list + invwedge_lax invwedge_am; (5) perf line; (6) READY FOR REVIEW: MERGE or HEAVY.
+  - This round: builds + G1 invwedge_roe (chunk).
