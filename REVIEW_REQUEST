@@ -1,3 +1,3 @@
-id: 20261125T032231-3ba3adaea7
-head: 3ba3adaea79ece58aaefef6909db8dad11cb7608
-reason: READY FOR REVIEW: 4.4-LAX — device LAX-FRIEDRICH validated: G1 bitwise on strict binary (invwedge_lax PASS, default 4-case list OVERALL PASS; logs ../kk/logs/g1lax-strict.log, g1-default-strict.log)
+id: 20261125T032955-883d4141ad
+head: 883d4141ad27b62c5623c48cd2f00aa355f3e56e
+reason: READY FOR REVIEW: HEAVY: 4.4-Roe: device Roe needed (CUpwRoe_NEMO; reuses LaxInviscidProjFlux/Jac from CNEMOKokkosLAX.hpp, new GetPMatrix/invP CNEMONumerics.cpp:355-550) — survey: LAX case PASS bitwise (guard OK); partial_cat + invwedge_am PASS bitwise, both 100% device stages (no host fallback); LAX host stages only from Roe boundary numerics + host-stage wall accumulator + implicit update; PERF: Source 414ms/call, CenteredLAX 138ms/call (strict serial, 2 cores)
