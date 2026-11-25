@@ -75,8 +75,10 @@ for c in "${cases[@]}"; do
     if [ "$mode" = YES ] && [ -n "${EXPECT[$c]:-}" ]; then
       IFS='|' read -ra exp_lines <<< "${EXPECT[$c]}"
       for e in "${exp_lines[@]}"; do
-        grep -qF "$e" log.txt || { echo "  expected stage line missing: $e"; status=1; }
+        grep -qF "$e" log.txt || { echo "  expected stage line missing: $e"; status=1; miss=1; }
       done
+      # Show what the run actually reported (the host reason), so a fallback is diagnosable from the gate log.
+      [ -n "${miss:-}" ] && { grep -E '^\[KOKKOS_NEMO\] stage (upwind|centered|bc:)|device-resident' log.txt | head -n 12 | sed 's/^/    got: /'; unset miss; }
     fi
   done
   python3 - "$c$RUN_TAG" "$RES_TOL" "$FIELD_TOL" "${REF[$c]:-}" "$PHYS_SCALE" "${RES_NOISE_ORDERS:-inf}" <<'EOF' || status=1

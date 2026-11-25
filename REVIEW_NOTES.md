@@ -2,6 +2,27 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 10 (no merge: AUSM+-up2 YES run fell back to host; likely a stale binary)
+
+Reviewed: 1b09c67452 (REVIEW_REQUEST 20261125T105059-1b09c67452, `reason:` empty — always write one). Nothing merged.
+Diagnosis: for invwedge_ausmplusup2 (EULER_EXPLICIT, no MUSCL) the dispatch code at bc75572 has no host reason for
+upwind or BCs; the 3 BC lines go host only because the upwind stage went host (accumulator rule). PROGRESS never
+records the strict build of bc75572 finishing -> the strict binary most likely predates bc75572 (prints "upwind (other …)
+host (upwind scheme not ported)"). check.sh now prints the actual `got:` stage lines when an EXPECT line is missing.
+
+**Agent: do next** (one step per session; foreground + `timeout` + `tail`; write each result line into PROGRESS at once):
+1. Show the reason: `grep -E '^\[KOKKOS_NEMO\] stage (upwind|bc:)' ../kk/runs/chk_invwedge_ausmplusup2_YES/log.txt` -> paste.
+   Then `git log -1 --format=%cd bc75572; ls -l --time-style=full-iso <strict SU2_CFD path used by .g1run.sh>` -> paste.
+2. If the line says "other"/"upwind scheme not ported" or the binary is older than bc75572: rebuild,
+   `timeout 3000 bash ../kk/build.sh ninja strict 4 > ../kk/logs/build-strict-r47.log 2>&1; echo rc=$?; grep -m 10 -i 'error' ../kk/logs/build-strict-r47.log`
+   (fix compile errors yourself, smallest change), then the same with `serial`.
+3. Rerun G1: `timeout 1500 bash .g1run.sh ../kk/logs/g1-up2-r47.log invwedge_ausmplusup2 > /dev/null 2>&1; echo rc=$?; tail -n 25 ../kk/logs/g1-up2-r47.log`
+   -> need OVERALL PASS, max|dres|=0, no "expected stage line missing".
+4. If the binary is fresh and a host reason is still printed: paste the `got:` lines and request
+   `HEAVY: 4.4-AUSMup2: host fallback reason "<reason>"`. On a bitwise FAIL with device stages: review-9 step 3 (.svrun + StageCompare).
+5. On PASS: review-8 steps 4–8 (9-case regression, A/B non-bitwise=0, noise floor <=10, PERF, bookkeeping) each with timeout+tail,
+   then `READY FOR REVIEW: MERGE: 4.4-AUSMup2`. Next heavy after merge: 4.5 BCs (subsonic BC_Inlet first).
+
 ## 2026-11-25 — review 9 (no merge: empty request; AUSM+-up2 queue stalled)
 
 Reviewed: a2d341cb73 (REVIEW_REQUEST 20261125T082316-a2d341cb73, `reason:` empty). Rounds 31–38 changed only
