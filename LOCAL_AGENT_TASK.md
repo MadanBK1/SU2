@@ -108,6 +108,22 @@ Set `S=$SU2_ROOT/TestCases/kokkos_nemo`, `STRICT=$SU2_ROOT/build-kokkos-strict/S
 | G7 | GPU (once the CUDA build exists) | `BIN=<cuda SU2_CFD> PHYS_SCALE=1 RES_NOISE_ORDERS=10 $S/check.sh super_cat thermalbath`, plus `check_noisefloor.sh` with the CUDA binary | GPU results are NOT bitwise; use the noise-floor policy. Also check that the log shows `[KOKKOS_NEMO] device-resident state: ON`, and record `[KOKKOS_NEMO_PERF]` lines. Try `SU2_KOKKOS_NEMO_EDGE=atomic` vs `color`. |
 
 ## 4. Work items (in order; tick them here AND in KOKKOS_PROGRESS.md)
+
+**END-TO-END GOAL (Madan, 2026-11-26): port EVERYTHING in the NEMO solver to the GPU, end to end (device-resident ON
+for every compressible NEMO config). Items once marked "stays on host" are now in scope. Heavy queue for the reviewer
+(agent: test each one as it lands; same gates):**
+1. Roe boundary numerics + LAX residency (fc56517, testing now).
+2. LAX multi-rank residency: device MAX_EIGENVALUE (Lambda) halo exchange.
+3. MSW scheme.
+4. AUSM+-up2 (deterministically initialised M_L/M_R; document the CPU quirk; G1 vs the patched CPU variant).
+5. 4.5 BCs: subsonic BC_Inlet, Smoluchowski-Maxwell slip, catalytic heat-flux wall.
+6. Ionization with Roe / LAX (RoedPdU / MeandPdU per edge, documented deviation from the CPU's edge-order
+   dependence; gate: noise floor <= 10, not bitwise).
+7. 4.6 solver options: LU-SGS, ILU(n>0) / GPU preconditioners, multigrid coarse levels, periodic markers,
+   dynamic / deforming grids.
+8. Host-touch removal: device residual norms, output / restart every N iterations, CUDA-aware MPI halos.
+9. 4.7 turbulence coupling (SA / SST device kernels for NEMO).
+10. Then 4.8 performance.
 - [x] **4.1 Script paths:** add env-var paths to the scripts (section 2), then commit.
 - [x] **4.2 Finish Batch A** (commit `35b6f39`, WIP). Run G2, G3 (against `cd2cd46` binaries) and G6. Fix any failures, then commit "Batch A gates complete".
 - [ ] **4.3 CUDA V100 build and GPU run:** run G5 and G7.
