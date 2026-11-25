@@ -102,6 +102,7 @@ class CNEMOKokkosData {
     View2D<double> edge_normal;       /*!< (nEdge, nDim) */
     View2D<double> coord;             /*!< (nPoint, nDim) */
     View1D<double> volume;            /*!< (nPoint) */
+    View1D<unsigned short> nneighbor; /*!< (nPoint) geometry->nodes->GetnNeighbor */
     View1D<double> periodic_volume;   /*!< (nPoint) */
 
     View1D<unsigned long> point_ptr;  /*!< point -> neighbour CSR (nPoint+1) */
