@@ -135,7 +135,7 @@ KOKKOS_INLINE_FUNCTION void Reconstruct(const UpwArgs& a, unsigned long iPoint, 
 
 /*!
  * \brief CUpwAUSM_SLAU_Base_NEMO::ComputeResidual (+ ComputeInterfaceQuantities of CUpwAUSM_NEMO / CUpwAUSMPLUSM_NEMO,
- *        + ComputeJacobian if implicit). Jacobians are row-major nVar x nVar.
+ *        CUpwAUSMPLUSUP2_NEMO, + ComputeJacobian if implicit). Jacobians are row-major nVar x nVar.
  */
 template <int ND>
 KOKKOS_INLINE_FUNCTION void AUSMResidual(const UpwArgs& a, const double* Normal, const double* V_i, const double* V_j,
@@ -218,6 +218,74 @@ KOKKOS_INLINE_FUNCTION void AUSMResidual(const UpwArgs& a, const double* Normal,
 
     M_F = (M_LP + M_RM);
     for (int iDim = 0; iDim < nDim; iDim++) PressureFlux[iDim] = (P_LP + P_RM) * UnitNormal[iDim];
+  } else if (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::AUSMPLUSUP2)) {
+    /*--- CUpwAUSMPLUSUP2_NEMO (Minf = MACH_NUMBER, Kp = 0.25, sigma = 1.0 from the constructor). CPU quirk: the
+     *    M_L / M_R below are locals that shadow the members, so ComputeJacobian reads members that are never set.
+     *    Device_UpwindUnsupported / Device_BCUnsupported keep implicit AUSM+-up2 on the host; the outer M_L / M_R
+     *    (the members) are set to 0 only so they are defined (unused: explicit). ---*/
+    M_L = 0.0;
+    M_R = 0.0;
+    const double Minf = a.Minf, Kp = 0.25, sigma = 1.0;
+    double sq_veli = 0.0, sq_velj = 0.0;
+    for (int iDim = 0; iDim < nDim; ++iDim) sq_veli += Velocity_i[iDim] * Velocity_i[iDim];
+    for (int iDim = 0; iDim < nDim; ++iDim) sq_velj += Velocity_j[iDim] * Velocity_j[iDim];
+
+    /*--- Compute C*  ---*/
+    const double CstarL = Kokkos::sqrt(2.0 * (Gamma_i - 1.0) / (Gamma_i + 1.0) * Enthalpy_i);
+    const double CstarR = Kokkos::sqrt(2.0 * (Gamma_j - 1.0) / (Gamma_j + 1.0) * Enthalpy_j);
+
+    /*--- Compute C^ ---*/
+    const double ChatL = CstarL * CstarL / kmax(CstarL, ProjVelocity_i);
+    const double ChatR = CstarR * CstarR / kmax(CstarR, -ProjVelocity_j);
+
+    /*--- Interface speed of sound ---*/
+    const double aF = kmin(ChatL, ChatR);
+    A_F[0] = A_F[1] = aF;
+
+    const double M_L = ProjVelocity_i / aF;
+    const double M_R = ProjVelocity_j / aF;
+
+    const double rhoF = 0.5 * (Density_i + Density_j);
+    const double MFsq = 0.5 * (M_L * M_L + M_R * M_R);
+
+    const double param1 = kmax(MFsq, Minf * Minf);
+    const double Mrefsq = (kmin(1.0, param1));
+    const double fa = 2.0 * Kokkos::sqrt(Mrefsq) - Mrefsq;
+
+    const double alpha = 3.0 / 16.0 * (-4.0 + 5.0 * fa * fa);
+    const double beta = 1.0 / 8.0;
+
+    /*--- Pressure diffusion term ---*/
+    const double Mp = -(Kp / fa) * kmax((1.0 - sigma * MFsq), 0.0) * (Pressure_j - Pressure_i) / (rhoF * aF * aF);
+
+    double M_LP, P_LP, M_RM, P_RM;
+
+    if (Kokkos::fabs(M_L) <= 1.0) {
+      M_LP = 0.25 * (M_L + 1.0) * (M_L + 1.0) + beta * (M_L * M_L - 1.0) * (M_L * M_L - 1.0);
+      P_LP = (0.25 * (M_L + 1.0) * (M_L + 1.0) * (2.0 - M_L) + alpha * M_L * (M_L * M_L - 1.0) * (M_L * M_L - 1.0));
+    } else {
+      M_LP = 0.5 * (M_L + Kokkos::fabs(M_L));
+      P_LP = 0.5 * (M_L + Kokkos::fabs(M_L)) / M_L;
+    }
+
+    if (Kokkos::fabs(M_R) <= 1.0) {
+      M_RM = -0.25 * (M_R - 1.0) * (M_R - 1.0) - beta * (M_R * M_R - 1.0) * (M_R * M_R - 1.0);
+      P_RM = (0.25 * (M_R - 1.0) * (M_R - 1.0) * (2.0 + M_R) - alpha * M_R * (M_R * M_R - 1.0) * (M_R * M_R - 1.0));
+    } else {
+      M_RM = 0.5 * (M_R - Kokkos::fabs(M_R));
+      P_RM = 0.5 * (M_R - Kokkos::fabs(M_R)) / M_R;
+    }
+
+    /*--- Interface Mach number ---*/
+    M_F = (M_LP + M_RM + Mp);
+
+    /*--- Modified pressure flux ---*/
+    const double pFi = Kokkos::sqrt(0.5 * (sq_veli + sq_velj)) * (P_LP + P_RM - 1.0) * 0.5 * (Density_j + Density_i) * aF;
+
+    for (int iDim = 0; iDim < nDim; iDim++) {
+      PressureFlux[iDim] =
+          (0.5 * (Pressure_j + Pressure_i) + 0.5 * (P_LP - P_RM) * (Pressure_i - Pressure_j) + pFi) * UnitNormal[iDim];
+    }
   } else {
     /*--- CUpwAUSMPLUSM_NEMO ---*/
     const double Minf = a.Minf, beta = 1.0 / 8.0, PI_NUMBER = a.pi;
