@@ -341,7 +341,7 @@ class CNEMOKokkosData {
    */
   static bool StageVerifyEnabled();
   enum Stage { ST_GRADIENT = 0, ST_LIMITER, ST_TIMESTEP, ST_MAXEIG, ST_UPWIND, ST_SOURCE, ST_BC, ST_RESSYNC, ST_VISCOUS,
-               ST_SENSOR, ST_AUXGRAD, ST_DUALTIME, ST_CFL, N_STAGES };
+               ST_SENSOR, ST_AUXGRAD, ST_DUALTIME, ST_CFL, ST_CENTERED, N_STAGES };
   /*! \brief Compare host (CPU) result vs a copy of the device result over n entries (row-major, ncol columns,
    *         relative difference normalised per column); accumulates per stage. */
   void StageCompare(Stage s, const char* name, const double* cpu, const double* dev, size_t n, size_t ncol = 1);
@@ -374,6 +374,16 @@ class CNEMOKokkosData {
    * \param[in] uploadAll - Re-upload Primitive+secondaries, gradient and limiter from the host (A/B isolation).
    */
   UpwindResult ComputeUpwindResidual(const UpwindParams& p, bool uploadAll);
+
+  /*====================== 4.4-LAX: centered residual (LAX-FRIEDRICH) ======================*/
+
+  /*!
+   * \brief Device CNEMOEulerSolver::Centered_Residual for LAX-FRIEDRICH (CCentLax_NEMO::ComputeResidual incl. the
+   *        implicit Jacobian), NaN check, accumulation into the device residual accumulator (caller: AccumulatorToDevice).
+   *        Uploads only the halo rows of Lambda (domain rows resident from ComputeMaxEigenvalue).
+   * \return Mean primitive state of the last edge (nPrimVar), for the host gas-state replay (empty if no edges).
+   */
+  std::vector<double> ComputeCenteredResidual(bool implicit, double kappa0, bool uploadAll);
 
   /*====================== Step 7: residual accumulator, source terms, boundary conditions ======================*/
 
@@ -701,6 +711,7 @@ class CNEMOKokkosData {
   bool limValid = false;       /*!< device Limiter == host domain rows (set by ComputeLimiter) */
   bool consDeviceValid = false; /*!< device Solution == host (set by SetPrimVar, cleared by InvalidatePrimitive) */
   bool sensorValid = false;     /*!< device Sensor == host (uploaded by the upwind/BC stages, cleared by SetPrimVar) */
+  bool lambdaValid = false;     /*!< device Lambda domain rows == host (set by ComputeMaxEigenvalue, cleared with Primitive) */
   bool accOnDevice = false;     /*!< the device accumulator (Res, JacVal) is authoritative */
   bool hostAccZero = false;     /*!< host LinSysRes / Jacobian are known to be zero */
   bool accImplicit = false;     /*!< JacVal is part of the accumulator */

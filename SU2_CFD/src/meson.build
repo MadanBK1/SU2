@@ -20,6 +20,7 @@ if get_option('enable-kokkos')
                         'solvers/kokkos/CNEMOKokkosData.cpp',
                         'solvers/kokkos/CNEMOKokkosStages.cpp',
                         'solvers/kokkos/CNEMOKokkosUpwind.cpp',
+                        'solvers/kokkos/CNEMOKokkosCentered.cpp',
                         'solvers/kokkos/CNEMOKokkosResidual.cpp',
                         'solvers/kokkos/CNEMOKokkosViscous.cpp'])
 endif

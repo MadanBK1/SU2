@@ -990,6 +990,7 @@ void CNEMOKokkosData::ComputeMaxEigenvalue() {
   P.kernel += timer.seconds();
   timer.reset();
   P.bytes_d2h += DownloadRows(nodes->Lambda.data(), st.Lambda, geo.nPointDomain);
+  lambdaValid = true; /*--- domain rows; halo rows come from the host MAX_EIGENVALUE comms ---*/
   P.d2h += timer.seconds();
   P.calls++;
 }

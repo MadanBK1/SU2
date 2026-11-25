@@ -733,6 +733,8 @@ void CNEMOEulerSolver::Centered_Residual(CGeometry *geometry, CSolver **solver_c
   SU2_ZONE_SCOPED
 
 #ifdef HAVE_KOKKOS
+  if (!centeredHostOnly &&
+      Device_CenteredResidual(geometry, solver_container, numerics_container, config, iMesh, iRKStep)) return;
   Device_BeginHostStage(geometry);
 #endif
 
@@ -2992,7 +2994,7 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
         acc = hostZero = false;
       }
     } else {
-      hostStage("centered residual");
+      stage("centered residual (LAX-FRIEDRICH)", Device_CenteredUnsupported(config));
     }
     if (viscous) stage("viscous residual (CAvgGradCorrected_NEMO" + std::string(
                              config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT ? ", residual + Jacobian)" : ")"),
@@ -3346,6 +3348,94 @@ bool CNEMOEulerSolver::Device_UpwindResidual(CGeometry *geometry, CSolver **solv
   kokkosData->StageCompareScalar(K::ST_UPWIND, "Nonphysical_Reconstr", su2double(ErrorCounter), errD);
   return true;
 #else
+  return false;
+#endif
+}
+
+std::string CNEMOEulerSolver::Device_CenteredUnsupported(const CConfig *config) const {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData) return "no device data";
+  if (!kokkosData->geo.domain_first) return "domain points not first";
+  if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
+  if (dynamic_grid) return "dynamic grid";
+  if (ReducerStrategy) return "reducer strategy";
+  if (ForcedHost("centered")) return "SU2_KOKKOS_NEMO_HOST";
+  if (config->GetKind_Centered_Flow() != CENTERED::LAX) return "centered scheme not ported";
+  /*--- CPU MeandPdU is a persistent member updated with "-=" under ionization (edge-order dependent). ---*/
+  if (config->GetIonization()) return "LAX + ionization (CPU MeandPdU depends on the previous edge)";
+  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (kokkosData->gas.nSpecies != nSpecies) return "gas tables";
+  return "";
+#else
+  (void)config;
+  return "no Kokkos";
+#endif
+}
+
+bool CNEMOEulerSolver::Device_CenteredResidual(CGeometry *geometry, CSolver **solver_container,
+                                               CNumerics **numerics_container, CConfig *config, unsigned short iMesh,
+                                               unsigned short iRKStep) {
+#ifdef HAVE_KOKKOS
+  if (!Device_CenteredUnsupported(config).empty()) return false;
+  SU2_ZONE_SCOPED
+
+  using K = CNEMOKokkosData;
+  const bool implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
+  const bool verify = K::StageVerifyEnabled();
+  /*--- Lambda is resident only if this iteration's SetMax_Eigenvalue ran on the device. ---*/
+  const bool uploadAll = verify || !Device_TimeStepUnsupported(config).empty();
+
+  su2mixedfloat* jac = nullptr;
+  size_t nJac = 0;
+  if (implicit) {
+    const auto& pattern = geometry->GetSparsePattern(ConnectivityType::FiniteVolume, 0);
+    jac = JacobianValues(geometry, Jacobian, nVar);
+    nJac = size_t(pattern.getNumNonZeros()) * nVar * nVar;
+  }
+  const size_t nRes = size_t(nPoint) * nVar;
+
+  std::vector<su2double> res0, jac0;
+  if (verify) {
+    res0.assign(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes);
+    if (implicit) jac0.assign(jac, jac + nJac);
+  }
+
+  if (!Device_ResidualToDevice(geometry, config)) return false;
+  const auto lastMeanV = kokkosData->ComputeCenteredResidual(implicit, config->GetKappa_1st_Flow(), uploadAll);
+  if (!deferResidualSync) Device_ResidualToHost(geometry);
+
+  /*--- Host gas-state replay: the CPU loop calls ComputeSpeciesEve + ComputedPdU at every edge's mean state. ---*/
+  Kokkos::Timer timer;
+  if (!lastMeanV.empty()) {
+    su2double scratch[MAXNVAR] = {0.0};
+    const auto& eves = GetFluidModel()->ComputeSpeciesEve(lastMeanV[nSpecies + 1]); /*--- TVE_INDEX ---*/
+    GetFluidModel()->ComputedPdU(lastMeanV.data(), eves, scratch);
+  }
+  kokkosData->stagePerf[K::ST_CENTERED].host += timer.seconds();
+
+  if (!verify) return true;
+
+  /*--- A/B: keep the device results, restore the inputs, rerun the unchanged host code, compare. ---*/
+  std::vector<su2double> resD(LinSysRes.GetBlock(0), LinSysRes.GetBlock(0) + nRes), jacD;
+  if (implicit) jacD.assign(jac, jac + nJac);
+  std::copy(res0.begin(), res0.end(), LinSysRes.GetBlock(0));
+  if (implicit) std::copy(jac0.begin(), jac0.end(), jac);
+
+  centeredHostOnly = true;
+  timer.reset();
+  Centered_Residual(geometry, solver_container, numerics_container, config, iMesh, iRKStep);
+  kokkosData->stagePerf[K::ST_CENTERED].hostRef += timer.seconds();
+  kokkosData->stagePerf[K::ST_CENTERED].hostRefCalls++;
+  centeredHostOnly = false;
+
+  kokkosData->StageCompare(K::ST_CENTERED, "LinSysRes", LinSysRes.GetBlock(0), resD.data(), nRes, nVar);
+  if (implicit) {
+    std::vector<su2double> jacH(jac, jac + nJac);
+    kokkosData->StageCompare(K::ST_CENTERED, "Jacobian", jacH.data(), jacD.data(), nJac, size_t(nVar) * nVar);
+  }
+  return true;
+#else
+  (void)geometry; (void)solver_container; (void)numerics_container; (void)config; (void)iMesh; (void)iRKStep;
   return false;
 #endif
 }

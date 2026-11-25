@@ -846,7 +846,7 @@ const char* GroupName(int g) {
 const char* StageName(int s) {
   static const char* names[] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue", "Upwind",
                                 "Source",   "BC",      "ResidualSync", "Viscous", "PressureSensor",
-                                "AxisymAuxGradient", "DualTimeSource", "AdaptCFL"};
+                                "AxisymAuxGradient", "DualTimeSource", "AdaptCFL", "CenteredLAX"};
   static_assert(sizeof(names) / sizeof(names[0]) == CNEMOKokkosData::N_STAGES, "stage names");
   return names[s];
 }
