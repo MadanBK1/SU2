@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS=32000
 # Self-restarting loop for the local (ollama) Claude Code agent.
 # Every round is a FRESH session (empty context): it reads LOCAL_AGENT_TASK.md +
 # KOKKOS_PROGRESS.md, does one bounded chunk of work, saves progress, exits.
