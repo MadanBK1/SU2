@@ -383,3 +383,9 @@ READY FOR REVIEW: HEAVY: 4.4-Roe: device Roe needed (CUpwRoe_NEMO; reuses LaxInv
 - 2026-11-25 (round 25, review 5 "Agent: do next" — device Roe landed by reviewer as e744eb00ea):
   - Queue: (1) build strict+serial; (2) G1 strict invwedge_roe (bitwise, report max|dres|/max field diff, stage + PERF lines); (3) debug only if FAIL; (4) regression default list + invwedge_lax invwedge_am; (5) perf line; (6) READY FOR REVIEW: MERGE or HEAVY.
   - This round: builds + G1 invwedge_roe (chunk).
+  - (1) BUILD: ninja strict + serial both rc=0 (11/11, no compile errors) — logs ../kk/logs/ninja-{strict,serial}-r25.log.
+  - (2) G1 strict invwedge_roe: **PASS bitwise** — max|dres|=0.00e+00, max field diff=0.00e+00, OVERALL: PASS; expected stage line present ("stage upwind (ROE + MUSCL, residual + Jacobian): device"); NO wall 19.89s, YES 18.72s (log ../kk/logs/g1roe-strict-r25.log).
+    - Stage lines YES: Cons2Prim/gradient(WLS)/limiter(VENKATAKRISHNAN)/time step/upwind(ROE+MUSCL)/source all device; bc FAR_FIELD Inlet+Farfield + OUTLET_FLOW + EULER_WALL x2 host (Roe boundary numerics — next HEAVY); update EULER_IMPLICIT host; device-resident OFF.
+    - PERF (strict serial, 2 cores, 100 iter): Upwind kernel 2.629s/11 (0.239s/call); Source 4.837s/11 (0.440s/call); SetPrimVar 1.572s/22; ResidualSync d2h 0.107s/11.
+  - (4) REGRESSION (same strict binary): invwedge_ausm, thermalbath, super_cat, axi_visccone, invwedge_lax, invwedge_am all PASS bitwise, OVERALL: PASS (log ../kk/logs/g1-regress-r25.log).
+  - (5) STAGE_VERIFY run pending (.svrun.sh driver, ITER=3, RUN_TAG=_sv).
