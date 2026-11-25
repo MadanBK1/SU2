@@ -2,6 +2,52 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 12 (merged 4.4-AUSMup2; dev: 4.5 slip wall)
+
+Reviewed: 24b4086c95 (REVIEW_REQUEST 20261125T141839-24b4086c95).
+**Merged into su2kokkos (1e8c2e1):** AUSM+-up2 explicit interior + boundary and the GetKind_TimeIntScheme_Flow
+stage-report fix (CNEMOKokkosData.hpp, CNEMOKokkosAUSM.hpp, CNEMOEulerSolver.cpp, check.sh, check_noisefloor.sh,
+plan matrix). Your G1 / regression / A/B / noisefloor / perf evidence accepted.
+
+**BC_Inlet: not portable.** CPU `CNEMOEulerSolver::BC_Inlet` calls `SU2_MPI::Error("BC_INLET: Not operational in
+NEMO.")` at entry (and its body is incomplete: no Tve/Eve, species densities 0). There is no CPU reference, so it stays
+host. Tick it in LOCAL_AGENT_TASK.md 4.5 as "n/a (CPU not operational)". The catalytic heat-flux wall is the same
+(CPU not operational, already reported as such).
+
+**Dev code this round (0d7a7b9; g++ -std=c++20 -fsyntax-only -ffp-contract=off vs bundled Kokkos 5.2.2 Serial
+headers on CNEMOKokkosResidual.cpp, CNEMOEulerSolver.cpp, CNEMONSSolver.cpp; NOT validated):**
+- `KernelSmoluchowski<ND>` (CNEMOKokkosResidual.cpp) = verbatim `CNEMONSSolver::BC_Smoluchowski_Maxwell`. There is no
+  Jacobian term (as on the CPU). GasConstant = host `FluidModel->ComputeGasConstant()`, evaluated once per call
+  (`BCParams::gasConstant`), plus `prandtlLam`. SetVelocity_Old goes to Solution_Old (resident); otherwise it goes to
+  a per-vertex `st.SlipVel` buffer that the host downloads and applies, with the momentum Res_TruncError rows zeroed.
+- `BCKind::SMOLUCHOWSKI_MAXWELL` (appended): Device_BCUnsupported (ionization -> host), Device_BCResidual (+ A/B
+  verify switch), stage report, residency marker map, dispatch at the top of CNEMONSSolver::BC_Smoluchowski_Maxwell.
+- New test cfg `TestCases/nonequilibrium/visc_wedge/smol_maxwell.cfg` (= super_cat.cfg with the wall as
+  `MARKER_SMOLUCHOWSKI_MAXWELL= (Wall, 300)`, catalytic lines removed). check.sh case `smol_maxwell`, with EXPECT
+  `stage bc:SMOLUCHOWSKI_MAXWELL (Wall): device`. Noise-floor case `smol_maxwell` (HREL=1).
+
+**Agent: do next**
+1. Build strict + serial: `timeout 3000 bash ../kk/build.sh ninja strict 4`, then the serial one. Fix compile errors
+   yourself with the smallest change (nvcc/strict may flag things the syntax check did not).
+2. CPU sanity first: run the NO (host) side of smol_maxwell once. If the CPU itself diverges or aborts on this cfg
+   (NaN, "Not operational"), report it in KOKKOS_PROGRESS.md and try `ITER= 5` or `CFL_NUMBER` halved in the cfg. That
+   is a cfg edit you may make.
+3. G1 strict: `timeout 1500 bash .g1run.sh ../kk/logs/g1-smol-r55.log smol_maxwell` -> need OVERALL PASS bitwise, no
+   `expected stage line missing`.
+4. On FAIL: `timeout 1500 bash .svrun.sh ../kk/logs/sv-smol-r55.log smol_maxwell`. Paste <= 20 StageCompare lines
+   (`grep StageCompare`). Suspects, in order: the ComputeGasConstant host state (print `p.gasConstant` vs the CPU value
+   on the first call), then dTven / dTn == 0 branches, then SetVelocity_Old (Solution_Old) in resident mode.
+5. Regression: `timeout 3000 bash .g1run.sh ../kk/logs/g1-regress-r55.log` (default list) and
+   `... g1-invall-r55.log invwedge_am invwedge_lax invwedge_roe invwedge_msw invwedge_ausmplusup2 super_cat`.
+6. A/B: `.svrun.sh` on smol_maxwell (bitwise). Noise floor: `CASE=smol_maxwell bash TestCases/kokkos_nemo/check_noisefloor.sh`.
+7. PERF: BC s/call and wall NO/YES from the G1 YES log. Bookkeeping: 4.5 in LOCAL_AGENT_TASK.md (slip wall done,
+   BC_Inlet / catalytic heat flux n/a), plus the coverage matrix in NEMO_KOKKOS_PORT_PLAN.md.
+8. Request `MERGE: 4.5-SlipWall` only after steps 3, 5 and 6 pass. Request `HEAVY: ...` only for new code, or for a bug
+   you cannot localize after 3 sessions. The next heavy item after this is queue 6 (ionization with Roe / LAX), then
+   4.6. Request it as `HEAVY: 4.6-<option>` or `HEAVY: ionization-Roe`.
+
+Madan (V100, optional): G7 GPU timings are still outstanding (4.3). Commands are in the earlier notes / LOCAL_AGENT_TASK.md 4.3.
+
 ## 2026-11-25 — review 11 (no merge: AUSM+-up2 host fallback was a stage-report bug, fixed)
 
 Reviewed: 2505fadae8 (REVIEW_REQUEST 20261125T132536-2505fadae8). Nothing merged.
