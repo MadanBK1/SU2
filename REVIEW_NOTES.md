@@ -2,6 +2,46 @@
 
 Newest section first. Do the **Agent: do next** items before continuing LOCAL_AGENT_TASK.md section 4.
 
+## 2026-11-25 — review 3
+Reviewed: a912a139c56e1d6a0e65fbe8addec81e093ef29d (REVIEW_REQUEST 20261125T000426-a912a139c5)
+
+**State:**
+- Review-2 item 1 is DONE (in autosave commits bb96ce8..a912a13): `geo.nneighbor` is added, uploaded and self-checked. The code is correct: `GetnNeighbor` returns unsigned short, and CountMismatch compares bitwise.
+- Items 2 and 3 were not started. 16 rounds (~4 h) produced one 7-line change; most rounds ended rc=1 with NO progress.
+- Nothing merged into su2kokkos: nothing new has passed a gate.
+
+**Reviewer fix e69cbbb (unblocks item 2):** I wrote the whole LAX dispatch. It is NOT built/linked or run yet; it was only checked with g++ -fsyntax-only against Kokkos Serial headers.
+- `SU2_CFD/src/solvers/kokkos/CNEMOKokkosCentered.cpp` (new):
+  - `LaxEdge<ND,ATOMIC>` = LAXResidual + CheckResidualNaNs + accumulation, the same as UpwindEdge.
+  - `CNEMOKokkosData::ComputeCenteredResidual(implicit, kappa0, uploadAll)` uses EnsureInputsOnDevice (Solution + Primitive + dPdU) and uploads only the Lambda halo rows (all rows if `uploadAll` or `!lambdaValid`).
+  - It returns the last edge's mean primitive state (nPrimVar doubles) for the host gas-state replay.
+- `CNEMOEulerSolver.cpp`:
+  - `Device_CenteredUnsupported`: LAX only; ionization is refused.
+  - `Device_CenteredResidual`: ResidualToDevice → kernel → optional eager download → host replay `ComputeSpeciesEve(MeanV[nSpecies+1])` + `ComputedPdU` → A/B verify path.
+  - It is called at the top of `Centered_Residual` (guarded by `centeredHostOnly`). The stage report now says where the centered residual runs.
+- Also: a new `ST_CENTERED` perf stage ("CenteredLAX"), the `lambdaValid` flag (set in ComputeMaxEigenvalue, cleared in ActivateResident), a meson.build entry, and the `invwedge_lax` case in check.sh (uses the existing TestCases/nonequilibrium/invwedge/invwedge_lax.cfg: AIR-5, implicit, BCGSTAB).
+
+**Findings:**
+- CNEMOKokkosData.cpp:387/401/418/768 (nneighbor): OK.
+- CNEMOEulerSolver.cpp `Device_CenteredResidual`: `uploadAll = verify || !Device_TimeStepUnsupported(config).empty()`. If SetMax_Eigenvalue ran on the host, Lambda is re-uploaded in full, so it is never stale.
+- The flux BCs stay on the host for LAX, because the boundary numerics are Roe. So the accumulator goes to the host after the centered stage, and resident mode stays off for centered schemes (`"centered scheme (host)"`). That is expected; G1/G2 still apply.
+- If the strict gate shows a diff only after the first host BC, suspect the gas replay. CUpwRoe_NEMO may read FluidModel members that the CPU LAX loop left behind. Compare with `SU2_KOKKOS_STAGE_VERIFY=1` (per-stage LinSysRes/Jacobian).
+
+**Speedup/accuracy suggestions:**
+- No new per-iteration full copies: only the Lambda halo rows (none on 1 rank) and nPrimVar doubles come back.
+- The LAX kernel needs no MUSCL or limiter, and 2 Jacobian stacks of MAXNV² doubles like AUSM. The register pressure should be similar to UpwindAUSM.
+- The next big win for centered cases is a device Roe boundary flux (BC_Far_Field / BC_Outlet with CUpwRoe_NEMO). That would allow resident mode for LAX. It is a later item: do not start it now.
+
+**Agent: do next**
+1. Build the serial target (`ninja -C build-kokkos-serial`). If CNEMOKokkosCentered.cpp or CNEMOEulerSolver.cpp fails to compile or link, fix only the reported line (most likely a missing include or a name) and commit. Do not restructure it.
+2. Get meshes into MESH_DIR (invwedge.su2). Run `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 TestCases/kokkos_nemo/check.sh invwedge_lax`. The log line `[KOKKOS_NEMO] stage centered residual (LAX-FRIEDRICH): device` must appear.
+   - If it passes, also run the default case list (no args) with the same env, to prove nothing else changed.
+   - Then write `READY FOR REVIEW: 4.4-LAX` with both results in KOKKOS_PROGRESS.md.
+3. If it fails: rerun with `SU2_KOKKOS_STAGE_VERIFY=1` and paste the CenteredLAX StageCompare lines into KOKKOS_PROGRESS.md (max 20 lines).
+   - If 3 sessions pass without a pass, write `BLOCKED 4.4-LAX: <the lines>` and continue with 4.5.
+   - Keep every file read ≤ 80 lines. Run the build within your first 5 tool calls.
+
+
 ## 2026-11-25 — review 2
 Reviewed: 9008747f5db620204c0f309966a36918e6cc000e (REVIEW_REQUEST 20261124T213453-9008747f5d, periodic)
 
