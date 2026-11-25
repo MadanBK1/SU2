@@ -2,10 +2,19 @@
 
 You are continuing a validated port of SU2's two-temperature NEMO solver to Kokkos. The goal is that every compressible NEMO run goes end to end on the GPU. Read `NEMO_KOKKOS_PORT_PLAN.md` first; it has the design, the feature coverage table, the validation policy and the CUDA notes.
 
+## ROLE (from 2026-11-25, Madan's decision) — read this first
+- The Claude reviewer does only the **heavy work**: new solver code (kernels, dispatch, ports) and hard bugs. Its usage is limited, so ask it only when needed.
+- **You do everything else:** build (strict and serial), run the simulations and gates from the newest REVIEW_NOTES.md queue, analyze logs (pass/fail numbers, device/host stage lines, `[KOKKOS_NEMO_PERF]`, StageCompare), summarize in KOKKOS_PROGRESS.md, fix compile errors yourself (smallest change), make small mechanical edits (config copies, check.sh cases, ticking boxes).
+- Do **not** write new kernels/ports or restructure code.
+- Request a review (last line of KOKKOS_PROGRESS.md) ONLY in these forms:
+  - `READY FOR REVIEW: MERGE: <item> — <gate results>`: the strict gate (BIN=strict REF_MODE=HOST RES_TOL=0 FIELD_TOL=0) passed for the new code + default list.
+  - `READY FOR REVIEW: HEAVY: <item>: <what code or which bug>`: you need new code, or a failure you could not localize after 3 sessions (paste ≤ 20 StageCompare/log lines).
+- Finish the whole queue before requesting. Routine results do not need a review.
+
 ## 0. Restart protocol (do this every session)
 1. `cd` to the clone, run `git checkout su2kokkos_qwenlocal_agent`, then `git status` and `git log --oneline -5`. Stop if you are not on that branch.
 2. Read `KOKKOS_PROGRESS.md` (create it if missing). It is the only memory you have between sessions.
-3. Read the newest section of `REVIEW_NOTES.md` (from the Claude reviewer; never edit that file). Do its **Agent: do next** items first, then continue the first unchecked item in section 4.
+3. Read the newest section of `REVIEW_NOTES.md` (from the Claude reviewer; never edit that file). Do its **Agent: do next** items (tests/analysis), then write `READY FOR REVIEW` with the results (see ROLE above).
 4. After every meaningful step, append to `KOKKOS_PROGRESS.md`: date, what you did, the exact commands, pass/fail numbers, and the next step.
 5. Work on **one item per session**. When the item is committed, or your context is getting long, update `KOKKOS_PROGRESS.md`, commit it, and tell the user: "restart me with the same prompt". Never rely on remembering earlier chat.
 
