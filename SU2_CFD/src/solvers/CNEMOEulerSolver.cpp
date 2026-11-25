@@ -3247,7 +3247,7 @@ std::string CNEMOEulerSolver::Device_UpwindUnsupported(const CConfig *config, un
       kind != UPWIND::AUSMPLUSUP2)
     return "upwind scheme not ported";
   /*--- CUpwAUSMPLUSUP2_NEMO shadows M_L / M_R with locals: its ComputeJacobian reads members that are never set. ---*/
-  if (kind == UPWIND::AUSMPLUSUP2 && config->GetKind_TimeIntScheme() == EULER_IMPLICIT)
+  if (kind == UPWIND::AUSMPLUSUP2 && config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT)
     return "implicit AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members)";
   /*--- CPU RoedPdU is a persistent member: ComputedPdU with ionization reads the previous edge's state. ---*/
   if (kind == UPWIND::ROE && config->GetIonization()) return "ROE + ionization (CPU RoedPdU depends on the previous edge)";
@@ -3255,7 +3255,7 @@ std::string CNEMOEulerSolver::Device_UpwindUnsupported(const CConfig *config, un
   /*--- CPU dPdUst_i / dPdUst_j are persistent members: same edge-order dependence as RoedPdU with ionization. ---*/
   if (kind == UPWIND::MSW && config->GetIonization()) return "MSW + ionization (CPU dPdUst depends on the previous edge)";
   if (kind == UPWIND::MSW && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
-  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   const bool muscl = config->GetMUSCL_Flow() && (iMesh == MESH_0);
   if (muscl && nodes->GetGradient_Reconstruction().size() == 0) return "gradient not allocated";
   return "";
@@ -3380,7 +3380,7 @@ std::string CNEMOEulerSolver::Device_CenteredUnsupported(const CConfig *config) 
   if (config->GetKind_Centered_Flow() != CENTERED::LAX) return "centered scheme not ported";
   /*--- CPU MeandPdU is a persistent member updated with "-=" under ionization (edge-order dependent). ---*/
   if (config->GetIonization()) return "LAX + ionization (CPU MeandPdU depends on the previous edge)";
-  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   if (kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   return "";
 #else
@@ -3504,7 +3504,7 @@ std::string CNEMOEulerSolver::Device_SourceUnsupported(const CConfig *config) co
       if (config->GetnMarker_Periodic() > 0) return "axisymmetric auxiliary gradient with periodic markers";
     }
   }
-  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   if (kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   return "";
 #else
@@ -3521,7 +3521,7 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
   if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
   if (dynamic_grid) return "dynamic grid";
   if (ForcedHost("bc")) return "SU2_KOKKOS_NEMO_HOST";
-  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   const auto k = static_cast<K>(kind);
   if (k == K::SYMMETRY) return "";
   /*--- Step 8: NS walls (no boundary numerics). ---*/
@@ -3545,7 +3545,7 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
   const bool bndMSW = !centered && (up == UPWIND::MSW);
   if (!bndRoe && !bndMSW && up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM && up != UPWIND::AUSMPLUSUP2)
     return "boundary numerics not AUSM / AUSM+M / AUSM+-up2 / Roe / MSW";
-  if (!centered && up == UPWIND::AUSMPLUSUP2 && config->GetKind_TimeIntScheme() == EULER_IMPLICIT)
+  if (!centered && up == UPWIND::AUSMPLUSUP2 && config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT)
     return "implicit AUSM+-up2 boundary numerics (CPU Jacobian reads uninitialised M_L/M_R members)";
   /*--- BC_Supersonic_Inlet does not SetGamma: AUSM+-up2 (C*) reads the Gamma an earlier BC left (not replayed). ---*/
   if (!centered && up == UPWIND::AUSMPLUSUP2 && k == K::SUPERSONIC_INLET)

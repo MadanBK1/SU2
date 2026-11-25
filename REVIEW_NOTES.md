@@ -2,6 +2,25 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 11 (no merge: AUSM+-up2 host fallback was a stage-report bug, fixed)
+
+Reviewed: 2505fadae8 (REVIEW_REQUEST 20261125T132536-2505fadae8). Nothing merged.
+Diagnosis: invwedge_ausmplusup2.cfg IS explicit (`TIME_DISCRE_FLOW= EULER_EXPLICIT`; LINEAR_SOLVER is ignored when
+explicit). The Device_*Unsupported checks used the *global* `GetKind_TimeIntScheme()`, which is still at its
+CConfig default EULER_IMPLICIT (CConfig.cpp:1097) when the setup stage report runs (before SetGlobalParam), so the
+report printed "implicit AUSM+-up2" for an explicit case. No implicit up2 port is needed.
+Dev code this round: CNEMOEulerSolver.cpp — Device_UpwindUnsupported / Device_CenteredUnsupported /
+Device_SourceUnsupported / Device_BCUnsupported now use `GetKind_TimeIntScheme_Flow()` (6 lines; identical at run time
+for NEMO, fixes the setup report). Not built here.
+
+**Agent: do next** (one step per session; foreground + `timeout` + `tail`; write each result into PROGRESS at once):
+1. Build: `timeout 3000 bash ../kk/build.sh ninja strict 4 > ../kk/logs/build-strict-r52.log 2>&1; echo rc=$?; grep -m 10 -i 'error' ../kk/logs/build-strict-r52.log`, then the same with `serial` (fix compile errors yourself, smallest change).
+2. G1: `timeout 1500 bash .g1run.sh ../kk/logs/g1-up2-r52.log invwedge_ausmplusup2 > /dev/null 2>&1; echo rc=$?; tail -n 25 ../kk/logs/g1-up2-r52.log`
+   -> need OVERALL PASS, max|dres|=0, field diff 0, no "expected stage line missing"; upwind + 3 BC lines must say device.
+3. On bitwise FAIL with device stages: `timeout 1500 bash .svrun.sh ../kk/logs/sv-up2-r52.log invwedge_ausmplusup2 > /dev/null 2>&1; grep -m 20 StageCompare ../kk/logs/sv-up2-r52.log` -> paste; localize the first differing stage (3 sessions max) before asking HEAVY.
+4. Regression (the fix touches every case's stage report): G1 on the default list (all invwedge + the other check.sh cases), each with timeout+tail; all must PASS with unchanged stage lines.
+5. On PASS: review-8 steps 4–8 (A/B non-bitwise=0, noise floor <=10, PERF lines, bookkeeping), then `READY FOR REVIEW` with `reason: MERGE: 4.4-AUSMup2` (include the stage-report fix). Next heavy after merge: 4.5 BCs (subsonic BC_Inlet first) — request it as `HEAVY: 4.5-BC_Inlet`.
+
 ## 2026-11-25 — review 10 (no merge: AUSM+-up2 YES run fell back to host; likely a stale binary)
 
 Reviewed: 1b09c67452 (REVIEW_REQUEST 20261125T105059-1b09c67452, `reason:` empty — always write one). Nothing merged.
