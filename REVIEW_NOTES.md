@@ -2,6 +2,27 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 9 (no merge: empty request; AUSM+-up2 queue stalled)
+
+Reviewed: a2d341cb73 (REVIEW_REQUEST 20261125T082316-a2d341cb73, `reason:` empty). Rounds 31–38 changed only
+KOKKOS_PROGRESS.md (autosaves) — no gate result for invwedge_ausmplusup2 was ever recorded. Nothing merged.
+No new dev code this round: finish testing bc75572 (AUSM+-up2) first; 4.5 BCs come after its merge.
+
+**Agent: do next** — one step per session, write the result line into PROGRESS *immediately* after each command:
+1. Do NOT run gates in the background and do NOT `cat` whole logs. Run in the foreground with a hard limit and tail:
+   `timeout 1500 bash .g1run.sh ../kk/logs/g1-up2-r39.log invwedge_ausmplusup2 > /dev/null 2>&1; echo rc=$?; tail -n 25 ../kk/logs/g1-up2-r39.log`
+   Write rc + PASS/FAIL + max|dres| into PROGRESS before anything else.
+2. If rc=124 (timeout) or the log has no OVERALL line: run the case alone, strict YES, 11 iters, and paste the last
+   15 lines: `cd TestCases/nonequilibrium/invwedge && timeout 600 SU2_KOKKOS_NEMO=1 <strict SU2_CFD> invwedge_ausmplusup2.cfg 2>&1 | tail -n 15`
+   (use the exact binary path/env that .g1run.sh uses). Then same with `SU2_KOKKOS_NEMO_HOST=upwind` and with
+   `SU2_KOKKOS_NEMO_HOST=bc`; one line each in PROGRESS: does it finish, residual at iter 10, NaN?
+3. On FAIL (bitwise): `timeout 1500 bash .svrun.sh ../kk/logs/sv-up2-r39.log invwedge_ausmplusup2 > /dev/null 2>&1; grep -m 20 StageCompare ../kk/logs/sv-up2-r39.log`
+   Suspects: kmax/kmin argument order, `3.0 / 16.0 * (...)` order, far-field Gamma_j (node_infty).
+4. On PASS continue review-8 steps 4–8 (regression 9-case, A/B, noise floor, PERF, bookkeeping), each with
+   `timeout` + `tail`, then `READY FOR REVIEW: MERGE: 4.4-AUSMup2`.
+5. If after 3 sessions you still cannot get a result line for step 1/2: write `READY FOR REVIEW: BLOCKED 4.4-AUSMup2: <last 15 log lines>`
+   (paste the lines) — never an empty reason. Fix compile errors yourself (smallest change).
+
 ## 2026-11-25 — review 8 (MERGE 4.4-MSW; HEAVY: device AUSM+-up2, explicit)
 
 Reviewed: 716f6200f5. **Merged** 4.4-MSW code (cce61ae + check_noisefloor msw case) into `su2kokkos` (effdde0).
