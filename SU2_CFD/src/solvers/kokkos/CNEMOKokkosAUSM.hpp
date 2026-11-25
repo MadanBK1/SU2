@@ -61,6 +61,7 @@ struct UpwArgs {
   int scheme;
   bool implicit, muscl, limiter, vanAlbada;
   double kappa, musclRamp, Minf, eps, pi;
+  double mswAlpha; /*!< MSW_ALPHA (MSW only) */
 };
 
 /*! \brief CNEMOEulerSolver::CheckNonPhys. */

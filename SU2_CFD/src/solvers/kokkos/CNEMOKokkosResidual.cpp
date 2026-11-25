@@ -45,6 +45,7 @@
 #include "CNEMOKokkosAUSM.hpp"
 #include "CNEMOKokkosLAX.hpp"
 #include "CNEMOKokkosRoe.hpp"
+#include "CNEMOKokkosMSW.hpp"
 #include "CNEMOKokkosViscous.hpp"
 
 namespace {
@@ -650,7 +651,8 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
         double Gamma_j = Gammab;
 
         /*--- Conservative states (Roe boundary numerics only): SetConservative(Solution(iPoint), U_boundary). ---*/
-        const bool roe = (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::ROE));
+        const bool msw = (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::MSW));
+        const bool roe = msw || (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::ROE));
         const double* U_i = roe ? &r.U(iPoint, 0) : zero;
         const double* U_j = (roe && r.bstate.size()) ? &r.bstate(nPrimVar + nSpecies + nVar + 1) : zero;
         double U_outlet[MAXNV];
@@ -759,7 +761,10 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
         }
         const double Sensor_j = Sensor_i; /*--- SetSensor(Sensor(iPoint), Sensor(iPoint)) on the CPU ---*/
         double Flux[MAXNV], Jacobian_i[MAXNV * MAXNV], Jacobian_j[MAXNV * MAXNV];
-        if (roe)
+        if (msw)
+          MSWResidual<ND>(g, nSpecies, nVar, nPrimVar, a.implicit, a.mswAlpha, Normal, U_i, U_j, V_i, V_j, Flux,
+                          Jacobian_i, Jacobian_j);
+        else if (roe)
           RoeResidual<ND>(g, nSpecies, nVar, nPrimVar, a.implicit, Normal, U_i, U_j, V_i, V_j, dPdU_i, dPdU_j, Flux,
                           Jacobian_i, Jacobian_j);
         else
@@ -983,7 +988,7 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   const bool flux = (p.kind != BCKind::SYMMETRY) && !wall;
   const bool ausmPlusM = flux && (p.upw.scheme == UpwindScheme::AUSMPLUSM);
   /*--- Roe boundary numerics (CUpwRoe_NEMO: LAX or ROE convection) read the conservative states. ---*/
-  const bool roe = flux && (p.upw.scheme == UpwindScheme::ROE);
+  const bool roe = flux && (p.upw.scheme == UpwindScheme::ROE || p.upw.scheme == UpwindScheme::MSW);
   const bool needState = (p.kind == BCKind::FAR_FIELD || p.kind == BCKind::OUTLET || p.kind == BCKind::SUPERSONIC_INLET);
   const bool viscFar = (p.kind == BCKind::FAR_FIELD) && p.viscous;
   EnsureInputsOnDevice(uploadInputs, p.kind == BCKind::SYMMETRY || p.kind == BCKind::OUTLET || roe, ausmPlusM);
@@ -1079,6 +1084,7 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   r.a.scheme = static_cast<int>(p.upw.scheme);
   r.a.implicit = p.upw.implicit;
   r.a.Minf = p.upw.Minf;
+  r.a.mswAlpha = p.upw.mswAlpha;
   r.a.pi = PI_NUMBER;
   r.U = st.Solution;
   r.charac = st.Charac;

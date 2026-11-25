@@ -2953,7 +2953,8 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
   if (!center) {
     const auto up = config->GetKind_Upwind_Flow();
     const char* uname = up == UPWIND::AUSM ? "AUSM" : up == UPWIND::AUSMPLUSM ? "AUSM+M"
-                      : up == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2" : up == UPWIND::ROE ? "ROE" : "other";
+                      : up == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2" : up == UPWIND::ROE ? "ROE"
+                      : up == UPWIND::MSW ? "MSW" : "other";
     cout << "[KOKKOS_NEMO] stage upwind (" << uname << (muscl ? " + MUSCL" : "") << ", residual"
          << (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT ? " + Jacobian" : "") << "): "
          << where(Device_UpwindUnsupported(config, MESH_0)) << endl;
@@ -3242,12 +3243,15 @@ std::string CNEMOEulerSolver::Device_UpwindUnsupported(const CConfig *config, un
   if (ReducerStrategy) return "reducer strategy";
   if (ForcedHost("upwind")) return "SU2_KOKKOS_NEMO_HOST";
   const auto kind = config->GetKind_Upwind_Flow();
-  if (kind != UPWIND::AUSM && kind != UPWIND::AUSMPLUSM && kind != UPWIND::ROE)
+  if (kind != UPWIND::AUSM && kind != UPWIND::AUSMPLUSM && kind != UPWIND::ROE && kind != UPWIND::MSW)
     return kind == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members)"
                                        : "upwind scheme not ported";
   /*--- CPU RoedPdU is a persistent member: ComputedPdU with ionization reads the previous edge's state. ---*/
   if (kind == UPWIND::ROE && config->GetIonization()) return "ROE + ionization (CPU RoedPdU depends on the previous edge)";
   if (kind == UPWIND::ROE && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
+  /*--- CPU dPdUst_i / dPdUst_j are persistent members: same edge-order dependence as RoedPdU with ionization. ---*/
+  if (kind == UPWIND::MSW && config->GetIonization()) return "MSW + ionization (CPU dPdUst depends on the previous edge)";
+  if (kind == UPWIND::MSW && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   const bool muscl = config->GetMUSCL_Flow() && (iMesh == MESH_0);
   if (muscl && nodes->GetGradient_Reconstruction().size() == 0) return "gradient not allocated";
@@ -3267,7 +3271,9 @@ bool CNEMOEulerSolver::Device_UpwindResidual(CGeometry *geometry, CSolver **solv
   K::UpwindParams p;
   p.scheme = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM
              : (config->GetKind_Upwind_Flow() == UPWIND::ROE)     ? K::UpwindScheme::ROE
+             : (config->GetKind_Upwind_Flow() == UPWIND::MSW)     ? K::UpwindScheme::MSW
                                                                   : K::UpwindScheme::AUSM;
+  p.mswAlpha = config->GetMSW_Alpha();
   p.implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
   p.muscl = (config->GetMUSCL_Flow() && (iMesh == MESH_0));
   p.limiter = (config->GetKind_SlopeLimit_Flow() != LIMITER::NONE);
@@ -3310,7 +3316,7 @@ bool CNEMOEulerSolver::Device_UpwindResidual(CGeometry *geometry, CSolver **solv
     ComputeConsistentExtrapolation(GetFluidModel(), nSpecies, r.lastRec.data(), scratch[0], scratch[1], scratch[2],
                                    eve, scratch[3]);
     /*--- Roe / MSW: the CPU loop ends with RecomputeConservativeVector of the same state (FluidModel). ---*/
-    if (p.scheme == K::UpwindScheme::ROE) RecomputeConservativeVector(scratch[0], r.lastRec.data());
+    if (p.scheme == K::UpwindScheme::ROE || p.scheme == K::UpwindScheme::MSW) RecomputeConservativeVector(scratch[0], r.lastRec.data());
   }
   ErrorCounter = 0;
   if ((iMesh == MESH_0) && (config->GetComm_Level() == COMM_FULL)) {
@@ -3531,7 +3537,12 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
   if (!centered && config->GetKind_ConvNumScheme_Flow() != SPACE_UPWIND) return "convective scheme";
   const auto up = config->GetKind_Upwind_Flow();
   const bool bndRoe = centered || (up == UPWIND::ROE);
-  if (!bndRoe && up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM) return "boundary numerics not AUSM / AUSM+M / Roe";
+  /*--- CDriver: MSW uses CUpwMSW_NEMO as boundary numerics (conservative states, as Roe). ---*/
+  const bool bndMSW = !centered && (up == UPWIND::MSW);
+  if (!bndRoe && !bndMSW && up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM)
+    return "boundary numerics not AUSM / AUSM+M / Roe / MSW";
+  if (bndMSW && config->GetIonization()) return "MSW boundary numerics + ionization (CPU dPdUst depends on the previous call)";
+  if (bndMSW && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   if (bndRoe && config->GetIonization()) return "Roe boundary numerics + ionization (CPU RoedPdU depends on the previous call)";
   if (bndRoe && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   /*--- Batch A: AUSM+M reads the Gamma / Sensor the boundary numerics kept from an earlier BC (replayed). ---*/
@@ -3722,10 +3733,12 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
   const bool bndRoe = (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED) ||
                       (config->GetKind_Upwind_Flow() == UPWIND::ROE);
   p.upw.scheme = bndRoe ? K::UpwindScheme::ROE
+                 : (config->GetKind_Upwind_Flow() == UPWIND::MSW)       ? K::UpwindScheme::MSW
                  : (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM
                                                                         : K::UpwindScheme::AUSM;
   p.upw.implicit = implicit;
   p.upw.Minf = config->GetMach();
+  p.upw.mswAlpha = config->GetMSW_Alpha();
   p.upw.nElNumerics = config->GetIonization() ? 1 : 0; /*--- CNEMONumerics::nEl ---*/
   p.downloadCharac = verify || (config->GetKind_Turb_Model() != TURB_MODEL::NONE);
 
