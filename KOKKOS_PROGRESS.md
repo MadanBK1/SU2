@@ -328,3 +328,5 @@ LOOP HINT: 2026-11-24T23:40:39-05:00 no progress for 3 rounds on the current ite
 - 2026-11-25 (round 17, item 4.4-LAX — following REVIEW 3 "Agent: do next"):
   - Reviewer fix e69cbbb215 landed: CNEMOKokkosCentered.cpp + Device_CenteredResidual dispatch + invwedge_lax in check.sh. Not built/linked/run yet.
   - This session: build serial (ninja -C build-kokkos-serial), run `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 check.sh invwedge_lax`, then default case list; fix compile errors only if any.
+
+- 2026-11-25T00:58:38-05:00 [loop] round 17 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_004950_17.log
