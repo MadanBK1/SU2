@@ -2,6 +2,37 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 8 (MERGE 4.4-MSW; HEAVY: device AUSM+-up2, explicit)
+
+Reviewed: 716f6200f5. **Merged** 4.4-MSW code (cce61ae + check_noisefloor msw case) into `su2kokkos` (effdde0).
+
+**Dev code this round (bc75572; g++ -std=c++20 -fsyntax-only -ffp-contract=off vs Kokkos Serial headers on
+CNEMOKokkosUpwind.cpp, CNEMOKokkosResidual.cpp, CNEMOEulerSolver.cpp; NOT validated):**
+- `CNEMOKokkosAUSM.hpp` `AUSMResidual`: new branch `UpwindScheme::AUSMPLUSUP2` = verbatim
+  CUpwAUSMPLUSUP2_NEMO::ComputeInterfaceQuantities (C*, C^, aF, Mp, modified pressure flux; Kp=0.25, sigma=1, Minf=a.Minf).
+- `CNEMOKokkosData.hpp`: enum `AUSMPLUSUP2 = 4`. `CNEMOEulerSolver.cpp`: interior + BC scheme mapping;
+  `Device_UpwindUnsupported` / `Device_BCUnsupported` accept up2 **explicit only** (implicit: CPU Jacobian reads the
+  never-set M_L/M_R members -> host, documented quirk); up2 SUPERSONIC_INLET -> host (stale boundary Gamma not replayed).
+- check.sh case `invwedge_ausmplusup2` (EULER_EXPLICIT, no MUSCL, CFL 0.25) + EXPECT upwind (AUSM+-up2, residual) device
+  + 3 BC lines; check_noisefloor.sh case `invwedge_ausmplusup2`.
+
+**Agent: do next** (strict binary for gates; fix compile errors yourself with the smallest change):
+1. Build strict + serial (`bash ../kk/build.sh ninja strict 4`, then `serial`); paste first 10 error lines + fix.
+2. G1 strict: `bash .g1run.sh ../kk/logs/g1-up2-r30.log invwedge_ausmplusup2` -> PASS bitwise, no
+   "expected stage line missing". Paste YES stage lines (`grep '^\[KOKKOS_NEMO\] stage\|device-resident' log.txt`);
+   residency should be ON — if OFF paste the reason line.
+3. On FAIL: `bash .svrun.sh ../kk/logs/sv-up2-r30.log invwedge_ausmplusup2`; paste <= 20 StageCompare lines (Upwind, BC
+   first); isolate with `SU2_KOKKOS_NEMO_HOST=bc`. Look first at: kmax/kmin argument order (CPU std::max/min),
+   `3.0 / 16.0 * (...)` order, Gamma_j at the far-field (node_infty Gamma).
+4. Regression (AUSMResidual changed): `bash .g1run.sh ../kk/logs/g1-regress-r30.log invwedge_ausm thermalbath super_cat axi_visccone invwedge_lax invwedge_roe invwedge_msw invwedge_am partial_cat` -> all PASS bitwise.
+5. A/B even on PASS: `bash .svrun.sh ../kk/logs/sv-up2-r30.log invwedge_ausmplusup2` -> non-bitwise=0.
+6. Noise floor: `CASE=invwedge_ausmplusup2 bash TestCases/kokkos_nemo/check_noisefloor.sh` -> ratio <= 10.
+7. PERF: wall NO/YES + `[KOKKOS_NEMO_PERF]` Upwind s/call for invwedge_ausmplusup2.
+8. Bookkeeping after 2+4 pass: 4.4 AUSM+-up2 (explicit) ticked, coverage matrix row "AUSM+-up2: device (explicit);
+   implicit host (CPU quirk)". Then `READY FOR REVIEW: MERGE: 4.4-AUSMup2`.
+9. Next heavy after merge: 4.5 BCs (subsonic BC_Inlet first). Request `HEAVY: …` only for new code or a bug you
+   cannot localize after 3 sessions. Madan still owes G7 (V100 timings) — not your job.
+
 ## 2026-11-25 — review 7 (MERGE 4.4-Roe-BC + LAX resident; HEAVY: device MSW)
 Reviewed: 4a613f35d980b99f02dd8e39507a454d33e97164 (REVIEW_REQUEST 20261125T053245-4a613f35d9)
 
