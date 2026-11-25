@@ -1,3 +1,3 @@
-id: 20261125T032955-883d4141ad
-head: 883d4141ad27b62c5623c48cd2f00aa355f3e56e
-reason: READY FOR REVIEW: HEAVY: 4.4-Roe: device Roe needed (CUpwRoe_NEMO; reuses LaxInviscidProjFlux/Jac from CNEMOKokkosLAX.hpp, new GetPMatrix/invP CNEMONumerics.cpp:355-550) — survey: LAX case PASS bitwise (guard OK); partial_cat + invwedge_am PASS bitwise, both 100% device stages (no host fallback); LAX host stages only from Roe boundary numerics + host-stage wall accumulator + implicit update; PERF: Source 414ms/call, CenteredLAX 138ms/call (strict serial, 2 cores)
+id: 20261125T041000-0f654bab4d
+head: 0f654bab4db3b04de41e850ddaee3f1844396fb2
+reason: READY FOR REVIEW: MERGE: 4.4-Roe (interior device Roe; G1 strict invwedge_roe PASS bitwise max|dres|=0/max field diff=0 + stage-line guard OK; regression 6-case default list incl. invwedge_lax/invwedge_am PASS bitwise; STAGE_VERIFY A/B all non-bitwise=0)
