@@ -384,18 +384,21 @@ void CNEMOKokkosData::UploadGeometry(CGeometry* geometry) {
   /*--- Points. ---*/
   geo.coord = View2D<double>("NEMO::coord", np, nd);
   geo.volume = View1D<double>("NEMO::volume", np);
+  geo.nneighbor = View1D<unsigned short>("NEMO::nneighbor", np);
   geo.periodic_volume = View1D<double>("NEMO::periodic_volume", np);
   geo.point_ptr = View1D<unsigned long>("NEMO::point_ptr", np + 1);
   geo.pedge_ptr = View1D<unsigned long>("NEMO::pedge_ptr", np + 1);
   {
     auto hc = Kokkos::create_mirror_view(geo.coord);
     auto hv = Kokkos::create_mirror_view(geo.volume);
+    auto hnnb = Kokkos::create_mirror_view(geo.nneighbor);
     auto hpv = Kokkos::create_mirror_view(geo.periodic_volume);
     auto hptr = Kokkos::create_mirror_view(geo.point_ptr);
     hptr(0) = 0;
     for (auto i = 0ul; i < np; ++i) {
       for (int d = 0; d < nd; ++d) hc(i, d) = pts->GetCoord(i, d);
       hv(i) = pts->GetVolume(i);
+      hnnb(i) = pts->GetnNeighbor(i);
       hpv(i) = pts->GetPeriodicVolume(i);
       hptr(i + 1) = hptr(i) + pts->GetnPoint(i);
     }
@@ -412,6 +415,7 @@ void CNEMOKokkosData::UploadGeometry(CGeometry* geometry) {
     }
     Kokkos::deep_copy(geo.coord, hc);
     Kokkos::deep_copy(geo.volume, hv);
+    Kokkos::deep_copy(geo.nneighbor, hnnb);
     Kokkos::deep_copy(geo.periodic_volume, hpv);
     Kokkos::deep_copy(geo.point_ptr, hptr);
     Kokkos::deep_copy(geo.pedge_ptr, hptr); /*--- Point and Edge CSR share the outer pointers. ---*/
@@ -745,11 +749,13 @@ unsigned long CNEMOKokkosData::SelfCheck(CGeometry* geometry) const {
   }
   {
     std::vector<double> c(np * nd), v(np), pv(np);
+    std::vector<unsigned short> nnb(np);
     std::vector<unsigned long> ptr(np + 1, 0), idx;
     std::vector<long> eidx;
     for (auto i = 0ul; i < np; ++i) {
       for (int d = 0; d < nd; ++d) c[i * nd + d] = pts->GetCoord(i, d);
       v[i] = pts->GetVolume(i);
+      nnb[i] = pts->GetnNeighbor(i);
       pv[i] = pts->GetPeriodicVolume(i);
       for (auto k = 0ul; k < pts->GetnPoint(i); ++k) {
         idx.push_back(pts->GetPoint(i, k));
@@ -759,6 +765,7 @@ unsigned long CNEMOKokkosData::SelfCheck(CGeometry* geometry) const {
     }
     bad += CountMismatch(geo.coord, c.data(), "coord");
     bad += CountMismatch(geo.volume, v.data(), "volume");
+    bad += CountMismatch(geo.nneighbor, nnb.data(), "nneighbor");
     bad += CountMismatch(geo.periodic_volume, pv.data(), "periodic_volume");
     bad += CountMismatch(geo.point_ptr, ptr.data(), "point_ptr");
     bad += CountMismatch(geo.pedge_ptr, ptr.data(), "pedge_ptr");
@@ -839,7 +846,7 @@ const char* GroupName(int g) {
 const char* StageName(int s) {
   static const char* names[] = {"Gradient", "Limiter", "TimeStep", "MaxEigenvalue", "Upwind",
                                 "Source",   "BC",      "ResidualSync", "Viscous", "PressureSensor",
-                                "AxisymAuxGradient", "DualTimeSource", "AdaptCFL"};
+                                "AxisymAuxGradient", "DualTimeSource", "AdaptCFL", "CenteredLAX"};
   static_assert(sizeof(names) / sizeof(names[0]) == CNEMOKokkosData::N_STAGES, "stage names");
   return names[s];
 }

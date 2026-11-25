@@ -92,6 +92,15 @@ protected:
   bool upwindHostOnly = false; /*!< \brief Set while Upwind_Residual must run the host code (A/B rerun). */
 
   /*!
+   * \brief Device (Kokkos) 4.4-LAX: Centered_Residual for LAX-FRIEDRICH into the device residual accumulator.
+   *        False -> run the host Centered_Residual. A/B with SU2_KOKKOS_STAGE_VERIFY=1.
+   */
+  bool Device_CenteredResidual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
+                               CConfig *config, unsigned short iMesh, unsigned short iRKStep);
+  std::string Device_CenteredUnsupported(const CConfig *config) const;
+  bool centeredHostOnly = false; /*!< \brief Set while Centered_Residual must run the host code (A/B rerun). */
+
+  /*!
    * \brief Device (Kokkos) Step 7: source terms (chemistry + V-T relaxation) and Euler boundary conditions added into
    *        the device residual accumulator, which is downloaded once at the end of the space integration
    *        (FinalizeSpaceIntegration) when the whole residual pipeline can stay on the device ("deferred" sync), or

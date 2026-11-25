@@ -1393,7 +1393,7 @@ void CNEMOKokkosData::ActivateResident() {
   for (auto& r : residency) r = Residency::HOST;
   /*--- Device copies of the accumulator inputs that SetPrimVar's previous uploads may have left: none are trusted. ---*/
   primDeviceValid = secDeviceValid = consDeviceValid = false;
-  gradPrimValid = gradRecValid = limValid = sensorValid = false;
+  gradPrimValid = gradRecValid = limValid = sensorValid = lambdaValid = false;
   transportDeviceValid = bndViscHost = false;
 }
 
