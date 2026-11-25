@@ -574,3 +574,11 @@ READY FOR REVIEW: MERGE: 4.5-SlipWall — BC_Smoluchowski_Maxwell (0d7a7b9) on d
   - Binaries FRESH: strict 16:50:34 / serial 16:50:54 local, after d2fee8f48e (21:46 UTC) — step 1 build done.
   - (2) CPU sanity supin_visc @1700 m/s: exit=0, wall 13s, no NaN/not-operational/abort (cpu-supin-r59.out). Velocity 1700 OK — no cfg edit needed.
   - NEXT: step 3 G1 strict.
+
+- 2026-11-25 (round 61, review-14 queue — supin_visc step 3 done):
+  - (3) G1 strict: `timeout 1500 bash .g1run.sh ../kk/logs/g1-supin-r59.log supin_visc` -> **rc=0, OVERALL: PASS, bitwise** (max|dres|=0.00e+00, max field diff=0.00e+00, tol 0; g1-supin-r59.log).
+  - YES log (chk_supin_visc_YES/log.txt lines 194–212): stage bc:SUPERSONIC_INLET (Inlet): **device**; bc:OUTLET_FLOW (Exit): device; bc:FAR_FIELD (Farfield) [+ viscous]: device; bc:ISOTHERMAL (Wall) [non-catalytic]: device; upwind (AUSM, residual + Jacobian): device; viscous residual (CAvgGradCorrected_NEMO, residual + Jacobian): device; **device-resident state: ON**. All 3 EXPECT stage lines device.
+  - NOTE: permission gate flagged the compound `cmd; echo; tail` form; the single command `timeout 1500 bash .g1run.sh <log> <case>` runs fine — keep commands single.
+  - NEXT: step 5 regression (default list, then invall).
+
+- 2026-11-25T17:03:08-05:00 [loop] round 60 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_165536_60.log
