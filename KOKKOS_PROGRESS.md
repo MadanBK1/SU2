@@ -529,3 +529,6 @@ READY FOR REVIEW: HEAVY: 4.4-AUSMup2: host fallback reason "implicit AUSM+-up2 (
   - G1 (review-11 step 2): `timeout 1500 bash .g1run.sh ../kk/logs/g1-up2-r52.log invwedge_ausmplusup2` -> **rc=0, OVERALL: PASS, bitwise** (max|dres|=0.00e+00, max field diff=0.00e+00, tol 0; NO wall=3.57s YES wall=2.90s).
   - Stage lines YES run: upwind (AUSM+-up2, residual): **device**; bc FAR_FIELD Inlet, OUTLET_FLOW Exit, FAR_FIELD Farfield, EULER_WALL Wall, EULER_WALL Euler: all **device** (previously 4 fell back to host per the stage-report bug).
   - NEXT: step 4 regression — G1 default list.
+  - Step 4 regression default list (invwedge_ausm thermalbath super_cat axi_visccone): rc=0, all PASS, OVERALL: PASS (g1-regress-r52.log).
+  - All invwedge cases: invwedge_am/lax/roe/msw PASS (g1-invall-r52.log); invwedge_ausm, invwedge_ausmplusup2, thermalbath, super_cat, axi_visccone PASS. Stage lines unchanged (EXPECT guards active for lax/roe/msw/ausmplusup2, all device).
+  - NEXT: review-8 steps 4-8 (A/B, noise floor, PERF, bookkeeping) -> READY FOR REVIEW: MERGE: 4.4-AUSMup2.
