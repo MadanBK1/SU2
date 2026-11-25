@@ -480,3 +480,5 @@ LOOP HINT: 2026-11-25T09:21:42-05:00 no progress for 3 rounds on the current ite
   - NEXT: grep the YES log (../kk/runs/chk_invwedge_ausmplusup2_YES/log.txt) for `[KOKKOS_NEMO]` stage/reason lines to find the fallback reason; then review-9 step 2 variants (SU2_KOKKOS_NEMO_HOST=upwind / =bc), each one line in PROGRESS.
 
 - 2026-11-25T09:46:27-05:00 [loop] round 42 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_093203_42.log
+
+- 2026-11-25T09:54:33-05:00 [loop] round 43 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_094648_43.log
