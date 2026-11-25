@@ -1,3 +1,3 @@
-id: 20261125T053245-4a613f35d9
-head: 4a613f35d980b99f02dd8e39507a454d33e97164
-reason: READY FOR REVIEW: MERGE: 4.4-Roe-BC (+LAX resident) — G1 strict: invwedge_lax + invwedge_roe PASS bitwise (max|dres|=0, field diff=0); all 5 BC stages device on both cases; LAX device-resident ON; update EULER_IMPLICIT device. Regression 6-case list all PASS bitwise. A/B stage-verify both cases: all stages incl. BC(121 cmp) non-bitwise=0, max rel diff=0.000e+00. Walls: LAX 18.01→16.14s, Roe 19.69→17.86s (strict serial). PERF s/call: Source 0.42, Upwind 0.224, CenteredLAX 0.143, BC 2.7e-04. Logs: ../kk/logs/{g1-bcroe-r26,g1-regress-r26,sv-bcroe-lax-r26,sv-bcroe-roe-r26}.log
+id: 20261125T061509-716f6200f5
+head: 716f6200f556349183bad7c58693cf7c86c3f91f
+reason: READY FOR REVIEW: MERGE: 4.4-MSW — G1 strict invwedge_msw PASS bitwise (max|dres|=0, field diff=0) + all 13 stages device incl. 5 BC + update, device-resident ON; regression 8-case (ausm thermalbath super_cat axi_visccone lax roe am partial_cat) all PASS bitwise; A/B stage-verify non-bitwise=0 max rel diff=0.000e+00; noisefloor PASS (ratios 0.11 / 1.05, K=10). PERF (strict serial): Upwind MSW 3.138e-01 s/call vs Roe 2.237e-01 (two P/invP pairs/edge, as expected); Source 4.117e-01/call dominant. Wall NO 19.83s / YES 15.96s (1.24x). Logs: ../kk/logs/{g1-msw-r28,g1-regress-r28,sv-msw-r28,nf-msw-r29}.log
