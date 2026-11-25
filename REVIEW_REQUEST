@@ -1,3 +1,3 @@
-id: 20261125T000426-a912a139c5
-head: a912a139c56e1d6a0e65fbe8addec81e093ef29d
-reason: 
+id: 20261125T020812-f5fd2a403c
+head: f5fd2a403c35df7f86cfb547fba4376de12400d0
+reason: READY FOR REVIEW: 4.4-LAX — device LAX-FRIEDRICH validated: G1 bitwise on strict binary (invwedge_lax PASS, default 4-case list OVERALL PASS; logs ../kk/logs/g1lax-strict.log, g1-default-strict.log)
