@@ -3243,16 +3243,19 @@ std::string CNEMOEulerSolver::Device_UpwindUnsupported(const CConfig *config, un
   if (ReducerStrategy) return "reducer strategy";
   if (ForcedHost("upwind")) return "SU2_KOKKOS_NEMO_HOST";
   const auto kind = config->GetKind_Upwind_Flow();
-  if (kind != UPWIND::AUSM && kind != UPWIND::AUSMPLUSM && kind != UPWIND::ROE && kind != UPWIND::MSW)
-    return kind == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members)"
-                                       : "upwind scheme not ported";
+  if (kind != UPWIND::AUSM && kind != UPWIND::AUSMPLUSM && kind != UPWIND::ROE && kind != UPWIND::MSW &&
+      kind != UPWIND::AUSMPLUSUP2)
+    return "upwind scheme not ported";
+  /*--- CUpwAUSMPLUSUP2_NEMO shadows M_L / M_R with locals: its ComputeJacobian reads members that are never set. ---*/
+  if (kind == UPWIND::AUSMPLUSUP2 && config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT)
+    return "implicit AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members)";
   /*--- CPU RoedPdU is a persistent member: ComputedPdU with ionization reads the previous edge's state. ---*/
   if (kind == UPWIND::ROE && config->GetIonization()) return "ROE + ionization (CPU RoedPdU depends on the previous edge)";
   if (kind == UPWIND::ROE && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   /*--- CPU dPdUst_i / dPdUst_j are persistent members: same edge-order dependence as RoedPdU with ionization. ---*/
   if (kind == UPWIND::MSW && config->GetIonization()) return "MSW + ionization (CPU dPdUst depends on the previous edge)";
   if (kind == UPWIND::MSW && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
-  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   const bool muscl = config->GetMUSCL_Flow() && (iMesh == MESH_0);
   if (muscl && nodes->GetGradient_Reconstruction().size() == 0) return "gradient not allocated";
   return "";
@@ -3269,10 +3272,11 @@ bool CNEMOEulerSolver::Device_UpwindResidual(CGeometry *geometry, CSolver **solv
 
   using K = CNEMOKokkosData;
   K::UpwindParams p;
-  p.scheme = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM
-             : (config->GetKind_Upwind_Flow() == UPWIND::ROE)     ? K::UpwindScheme::ROE
-             : (config->GetKind_Upwind_Flow() == UPWIND::MSW)     ? K::UpwindScheme::MSW
-                                                                  : K::UpwindScheme::AUSM;
+  p.scheme = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM)   ? K::UpwindScheme::AUSMPLUSM
+             : (config->GetKind_Upwind_Flow() == UPWIND::ROE)       ? K::UpwindScheme::ROE
+             : (config->GetKind_Upwind_Flow() == UPWIND::MSW)       ? K::UpwindScheme::MSW
+             : (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSUP2) ? K::UpwindScheme::AUSMPLUSUP2
+                                                                    : K::UpwindScheme::AUSM;
   p.mswAlpha = config->GetMSW_Alpha();
   p.implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
   p.muscl = (config->GetMUSCL_Flow() && (iMesh == MESH_0));
@@ -3376,7 +3380,7 @@ std::string CNEMOEulerSolver::Device_CenteredUnsupported(const CConfig *config) 
   if (config->GetKind_Centered_Flow() != CENTERED::LAX) return "centered scheme not ported";
   /*--- CPU MeandPdU is a persistent member updated with "-=" under ionization (edge-order dependent). ---*/
   if (config->GetIonization()) return "LAX + ionization (CPU MeandPdU depends on the previous edge)";
-  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   if (kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   return "";
 #else
@@ -3500,7 +3504,7 @@ std::string CNEMOEulerSolver::Device_SourceUnsupported(const CConfig *config) co
       if (config->GetnMarker_Periodic() > 0) return "axisymmetric auxiliary gradient with periodic markers";
     }
   }
-  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   if (kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   return "";
 #else
@@ -3517,7 +3521,7 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
   if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
   if (dynamic_grid) return "dynamic grid";
   if (ForcedHost("bc")) return "SU2_KOKKOS_NEMO_HOST";
-  if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
+  if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   const auto k = static_cast<K>(kind);
   if (k == K::SYMMETRY) return "";
   /*--- Step 8: NS walls (no boundary numerics). ---*/
@@ -3539,8 +3543,13 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
   const bool bndRoe = centered || (up == UPWIND::ROE);
   /*--- CDriver: MSW uses CUpwMSW_NEMO as boundary numerics (conservative states, as Roe). ---*/
   const bool bndMSW = !centered && (up == UPWIND::MSW);
-  if (!bndRoe && !bndMSW && up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM)
-    return "boundary numerics not AUSM / AUSM+M / Roe / MSW";
+  if (!bndRoe && !bndMSW && up != UPWIND::AUSM && up != UPWIND::AUSMPLUSM && up != UPWIND::AUSMPLUSUP2)
+    return "boundary numerics not AUSM / AUSM+M / AUSM+-up2 / Roe / MSW";
+  if (!centered && up == UPWIND::AUSMPLUSUP2 && config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT)
+    return "implicit AUSM+-up2 boundary numerics (CPU Jacobian reads uninitialised M_L/M_R members)";
+  /*--- BC_Supersonic_Inlet does not SetGamma: AUSM+-up2 (C*) reads the Gamma an earlier BC left (not replayed). ---*/
+  if (!centered && up == UPWIND::AUSMPLUSUP2 && k == K::SUPERSONIC_INLET)
+    return "AUSM+-up2: supersonic inlet reads the boundary numerics' stale Gamma (replay not ported)";
   if (bndMSW && config->GetIonization()) return "MSW boundary numerics + ionization (CPU dPdUst depends on the previous call)";
   if (bndMSW && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   if (bndRoe && config->GetIonization()) return "Roe boundary numerics + ionization (CPU RoedPdU depends on the previous call)";
@@ -3735,6 +3744,7 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
   p.upw.scheme = bndRoe ? K::UpwindScheme::ROE
                  : (config->GetKind_Upwind_Flow() == UPWIND::MSW)       ? K::UpwindScheme::MSW
                  : (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM
+                 : (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSUP2) ? K::UpwindScheme::AUSMPLUSUP2
                                                                         : K::UpwindScheme::AUSM;
   p.upw.implicit = implicit;
   p.upw.Minf = config->GetMach();

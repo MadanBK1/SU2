@@ -349,7 +349,7 @@ class CNEMOKokkosData {
 
   /*====================== Step 5: upwind residual (AUSM family) ======================*/
 
-  enum class UpwindScheme { AUSM = 0, AUSMPLUSM = 1, ROE = 2, MSW = 3 };
+  enum class UpwindScheme { AUSM = 0, AUSMPLUSM = 1, ROE = 2, MSW = 3, AUSMPLUSUP2 = 4 };
   struct UpwindParams {
     UpwindScheme scheme = UpwindScheme::AUSM;
     bool implicit = false, muscl = false, limiter = false, vanAlbada = false;

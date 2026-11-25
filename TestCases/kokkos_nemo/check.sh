@@ -47,13 +47,15 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [invwedge_am]=$TC/invwedge/invwedge_am.cfg
                  [invwedge_lax]=$TC/invwedge/invwedge_lax.cfg
                  [invwedge_roe]=$TC/invwedge/invwedge_roe.cfg
-                 [invwedge_msw]=$TC/invwedge/invwedge_msw.cfg )
+                 [invwedge_msw]=$TC/invwedge/invwedge_msw.cfg
+                 [invwedge_ausmplusup2]=$TC/invwedge/invwedge_ausmplusup2.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
 declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [invwedge_roe]="stage upwind (ROE + MUSCL, residual + Jacobian): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
-                    [invwedge_msw]="stage upwind (MSW + MUSCL, residual + Jacobian): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device" )
+                    [invwedge_msw]="stage upwind (MSW + MUSCL, residual + Jacobian): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
+                    [invwedge_ausmplusup2]="stage upwind (AUSM+-up2, residual): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device" )
 cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat axi_visccone)
 status=0
 for c in "${cases[@]}"; do
@@ -73,8 +75,10 @@ for c in "${cases[@]}"; do
     if [ "$mode" = YES ] && [ -n "${EXPECT[$c]:-}" ]; then
       IFS='|' read -ra exp_lines <<< "${EXPECT[$c]}"
       for e in "${exp_lines[@]}"; do
-        grep -qF "$e" log.txt || { echo "  expected stage line missing: $e"; status=1; }
+        grep -qF "$e" log.txt || { echo "  expected stage line missing: $e"; status=1; miss=1; }
       done
+      # Show what the run actually reported (the host reason), so a fallback is diagnosable from the gate log.
+      [ -n "${miss:-}" ] && { grep -E '^\[KOKKOS_NEMO\] stage (upwind|centered|bc:)|device-resident' log.txt | head -n 12 | sed 's/^/    got: /'; unset miss; }
     fi
   done
   python3 - "$c$RUN_TAG" "$RES_TOL" "$FIELD_TOL" "${REF[$c]:-}" "$PHYS_SCALE" "${RES_NOISE_ORDERS:-inf}" <<'EOF' || status=1

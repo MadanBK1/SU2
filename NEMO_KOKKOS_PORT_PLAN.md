@@ -122,7 +122,7 @@ Each step runs behind `ENABLE_KOKKOS`, keeps the CPU path, and is validated agai
 - Files: `SU2_CFD/src/solvers/kokkos/CNEMOKokkosUpwind.cpp` (new), dispatch `CNEMOEulerSolver::Device_UpwindResidual` (called at the top of `Upwind_Residual`; `upwindHostOnly` reruns the unchanged CPU body for A/B).
 - Kernels: (1) edge: MUSCL reconstruction (device gradient + Venkatakrishnan/BJ/Wang limiter, or van Albada, or none) and raw CheckNonPhys; (2) point: replay of `SetNon_Physical`/`GetNon_Physical` over the point's edges in increasing edge order (point→(edge,side) CSR), giving the flag each edge reads back and the final Non_Physical / Non_Physical_Counter; reduction of the non-physical counter and of the last consistent extrapolation (host gas-state replay); (3) edge: Eve/Gamma at reconstructed states, AUSM or AUSM+M flux + approximate Jacobian with MAXNVAR stack arrays, CheckResidualNaNs, `Kokkos::atomic_add/sub` into a device residual and a device copy of the block-CSR values (`edge_nnz`, `dia_ptr`; UpdateBlocks ii+=Ji, ij+=Jj, ji-=Ji, jj-=Jj). Then DtoH and `host += device` (host residual/Jacobian are zero at that point in the CPU stage order, so bitwise).
 - Serial runs kernel 3 sequentially in edge order → per-entry summation order equals the CPU. On GPUs the atomics are order-nondeterministic (ULP, run-to-run). Edge-coloured variant: Step 10 (`SU2_KOKKOS_NEMO_EDGE=color`, deterministic; `level` keeps the CPU order).
-- Not ported (host fallback): AUSM+-up2 (the CPU `ComputeJacobian` reads the members M_L/M_R, which up2 never sets because it shadows them with locals → uninitialised), Roe/MSW/LAX/centered, dynamic grids, discrete adjoint. Not separately validated: 3D, periodic halos.
+- Not ported (host fallback): AUSM+-up2 IMPLICIT (the CPU `ComputeJacobian` reads the members M_L/M_R, which up2 never sets because it shadows them with locals → uninitialised; the EXPLICIT up2 residual IS device-resident, G1 bitwise + A/B + noise floor, merge pending), other upwind / centered (JST), dynamic grids, discrete adjoint. Roe/LAX/MSW are device-resident (MSW pending merge). Not separately validated: 3D, periodic halos.
 - CPU semantics reproduced on purpose (pre-existing issues, not fixed):
   - `ComputeConsistentExtrapolation` computes only Eve and Gamma. For a reconstructed state the zero-initialised local dPdU/dTdU/dTvedU/Cvve arrays are used, so the AUSM Jacobian of a reconstructed state uses dPdU = 0.
   - Primitive entries ≥ nPrimVarGrad of reconstructed states are 0. P, ρ, h, a and ρCv are extrapolated independently.
@@ -262,8 +262,10 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | Transport | WILKE, GUPTA-YOS, SUTHERLAND | device-resident | |
 | Transport | CHAPMANN-ENSKOG | host fallback | CPU leaves stale arrays (not reproduced) |
 | Convection | AUSM, AUSM+M (incl. pressure sensor) | device-resident | |
-| Convection | AUSM+-up2 | host fallback | CPU Jacobian reads uninitialised M_L/M_R |
-| Convection | Roe, MSW, LAX-FRIEDRICH, other upwind / centered (JST) | host fallback | not ported |
+| Convection | AUSM+-up2 (explicit residual) | device-resident | G1 strict bitwise + A/B + noise floor (r52/r53); merge pending |
+| Convection | AUSM+-up2 (implicit) | host fallback | CPU Jacobian reads uninitialised M_L/M_R (documented quirk) |
+| Convection | Roe, LAX-FRIEDRICH, MSW | device-resident | Roe/LAX merged; MSW G1-bitwise-validated, merge pending |
+| Convection | other upwind / centered (JST) | host fallback | not ported |
 | Reconstruction | MUSCL (GG, WLS), Venkatakrishnan, BJ, Venkat-Wang, van Albada, none | device-resident | |
 | Reconstruction | LEAST_SQUARES (unweighted) gradients | device (stage) / resident OFF | resident needs GG or WLS |
 | Reconstruction | other limiters, periodic LS / limiter | host fallback | |
