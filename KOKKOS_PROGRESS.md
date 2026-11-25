@@ -447,3 +447,5 @@ READY FOR REVIEW: MERGE: 4.4-MSW — G1 strict invwedge_msw PASS bitwise (max|dr
 - 2026-11-25 (round 32, review-8 queue cont. — device AUSM+-up2 testing; round 31 ended with NO progress mid-queue):
   - (1) BUILD OK (done round 30, re-verified): strict 11/11 rc=0 (ninja-strict-r30.log, 0 errors); serial 11/11 rc=0 (ninja-serial-r30.log); binaries 06:52/06:53 current vs HEAD 24dc14392f.
   - (2) G1 strict invwedge_ausmplusup2: running (g1-up2-r32.log). NEXT on PASS: stage lines + residency, (4) regression 9-case, (5) A/B svrun, (6) noisefloor, (7) PERF walls, (8) bookkeeping + READY FOR REVIEW: MERGE: 4.4-AUSMup2.
+
+- 2026-11-25T07:06:22-05:00 [loop] round 32 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_065645_32.log
