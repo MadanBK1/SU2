@@ -114,7 +114,7 @@ Set `S=$SU2_ROOT/TestCases/kokkos_nemo`, `STRICT=$SU2_ROOT/build-kokkos-strict/S
   - On a runtime failure, check `cudaLimitStackSize`; the big-stack kernels are `KernelBoundaryFlux` (~15.5 KB) and `KernelViscousEdges` (~12.4 KB).
   - Profile: `nsys profile -o nemo SU2_CFD run.cfg` for 20 iterations of invwedge_ausm.
   - Report the per-stage times, and wall time vs `ENABLE_KOKKOS=NO`.
-- [ ] **4.4 Device-side schemes:** Roe, MSW, LAX and AUSM+-up2. The CPU AUSM+-up2 Jacobian reads uninitialized members: document it, then match a deterministically initialized CPU variant.
+- [ ] **4.4 Device-side schemes:** Roe, MSW, ~~LAX~~ (LAX done, G1 strict bitwise incl. stage-line guard, merged to su2kokkos 20eabd2) and AUSM+-up2. The CPU AUSM+-up2 Jacobian reads uninitialized members: document it, then match a deterministically initialized CPU variant.
 - [ ] **4.5 BCs:** subsonic `BC_Inlet`, Smoluchowski–Maxwell slip (its gas-state-dependent `ComputeGasConstant`), and the catalytic heat-flux wall.
 - [ ] **4.6 Solver options:** ILU(n>0) device factorization, LU-SGS, the multigrid coarse levels (`MGLEVEL>0`), periodic markers, and dynamic/deforming grids (geometry re-upload hook).
 - [ ] **4.7 Turbulence coupling** for NEMO (SA/SST device kernels), or leave it host-only with a clear notice.
