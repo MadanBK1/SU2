@@ -2,6 +2,56 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 15 (merged 4.5-SupInVisc; dev: 4.6 device LU_SGS)
+
+**Reviewed:** 632c23260f. Strict-gate claims checked (G1 strict supin_visc + default list + invall 7/7 bitwise, no
+missing stage line; code unchanged since d2fee8f). **Merged into su2kokkos (986dc2b):** the d2fee8f code files
+(CNEMOEulerSolver.cpp, CNEMOKokkosResidual.cpp, check.sh, check_noisefloor.sh, supin_visc.cfg).
+
+**Dev code this round (g++ -std=c++20 -fsyntax-only -ffp-contract=off -DHAVE_KOKKOS vs bundled Kokkos Serial headers
+on CSysMatrixKokkos.cpp, CSysMatrix.cpp, CSysSolve.cpp, CNEMOEulerSolver.cpp; NOT validated):**
+- `CSysMatrix::KokkosComputeLU_SGSPreconditioner` (CSysMatrixKokkos.cpp, end of file): transcription of
+  `ComputeLU_SGSPreconditioner`. Forward sweep (LowerProduct col_lb=partition begin, b - L.x, Gauss_Elimination on a
+  copy of the diagonal block) -> halo exchange -> backward sweep (DiagonalProduct, UpperProduct col_ub=partition end
+  + halos, Gauss_Elimination) -> halo exchange. Level-scheduled, one persistent team per sweep (ILU pattern);
+  levels + per-row partition bounds built once from omp_partitions (`EnsureKokkosLU_SGSStructure`). Same accumulation
+  order as gemv_impl, so it should be bitwise. `DeviceGaussElimination` = non-MKL Gauss_Elimination verbatim.
+- `CLU_SGSPreconditioner`: device apply only when `Jacobian.GetKokkosValuesOnDevice()` (resident owner). So the
+  REF_MODE=HOST reference still runs the CPU LU_SGS: G1 really tests the device sweep.
+- NEMO: `Device_ResidentUnsupported` accepts LU_SGS; new report line
+  `[KOKKOS_NEMO] stage linear preconditioner (LU_SGS apply): device|host`; destructor prints
+  `[KOKKOS_NEMO_PERF] device LU_SGS applies=…` and, with `SU2_KOKKOS_PRECOND_VERIFY=1`,
+  `[KOKKOS_NEMO_VERIFY] LU_SGS device apply vs host apply: compares=N non-bitwise=M` (A/B on every apply).
+- Gate case `invwedge_lusgs` (= invwedge_ausm + `LINEAR_SOLVER_PREC= LU_SGS`), EXPECT LU_SGS device + resident ON;
+  noise-floor case added.
+- Perf note (do not fix now): Gauss_Elimination of the diagonal block is redone per row per sweep (as on the CPU);
+  levels for natural ordering can be many (one team, one barrier per level). If G7 shows LU_SGS slow, the next step
+  is a level-count report, not a physics change.
+
+**Agent: do next**
+1. Build strict + serial (ninja, as before). Fix compile errors yourself with the smallest change.
+2. G1 strict: `timeout 1500 bash .g1run.sh ../kk/logs/g1-lusgs-r64.log invwedge_lusgs` -> OVERALL: PASS bitwise,
+   both EXPECT lines present (LU_SGS device, resident ON).
+3. If it fails: `SU2_KOKKOS_PRECOND_VERIFY=1` YES run of invwedge_lusgs, paste the `[KOKKOS_NEMO_VERIFY] LU_SGS`
+   line and ≤ 20 StageCompare lines (`timeout 1500 bash .svrun.sh ../kk/logs/sv-lusgs-r64.log invwedge_lusgs`).
+   non-bitwise=0 but G1 fails -> the problem is outside the apply (report it). non-bitwise>0 -> check (a) the
+   halo exchange between the sweeps, (b) MAXNVAR local arrays, (c) partitions (print omp_num_parts). 3 sessions,
+   then `HEAVY: 4.6-LUSGS: <finding>`.
+4. Viscous check: `EXTRA_CFG="LINEAR_SOLVER_PREC= LU_SGS" RUN_TAG=_lusgs timeout 1500 bash .g1run.sh
+   ../kk/logs/g1-lusgs-visc-r64.log super_cat` -> PASS bitwise, and grep the YES log for `LU_SGS apply): device`.
+5. Regression: default list + `invwedge_roe invwedge_msw smol_maxwell supin_visc` (ILU/Jacobi paths unchanged),
+   all PASS bitwise.
+6. A/B with `SU2_KOKKOS_PRECOND_VERIFY=1` (non-bitwise=0) and noise floor:
+   `CASE=invwedge_lusgs bash TestCases/kokkos_nemo/check_noisefloor.sh` (ratio ≤ 10).
+7. PERF: `device LU_SGS applies=… (s)` line + wall NO/YES into KOKKOS_PROGRESS.md.
+8. Bookkeeping: plan matrix row LU_SGS -> device-resident (validated); LOCAL_AGENT_TASK 4.6 note. Then request
+   `MERGE: 4.6-LUSGS`. Next heavy after that: `HEAVY: 4.6-MG` (multigrid coarse levels) — or periodic markers if
+   you find a periodic NEMO cfg first. Item 6 (ionization) still waits for Madan.
+
+**Madan (V100, optional):** after the agent's strict PASS, time it on the GPU:
+`cd $RUN && BIN=<cuda SU2_CFD> bash TestCases/kokkos_nemo/check.sh invwedge_lusgs` and
+`nsys profile -o lusgs SU2_CFD run.cfg` (look at SU2::KokkosLUSGSForward/Backward).
+
 ## 2026-11-25 — review 14 (merged 4.5-SlipWall; dev: viscous SUPERSONIC_INLET)
 
 **Reviewed:** 59fb0105e2. Strict-gate claims checked (REF_MODE=HOST RES_TOL=0 FIELD_TOL=0, OVERALL PASS, code

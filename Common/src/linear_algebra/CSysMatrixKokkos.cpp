@@ -977,4 +977,230 @@ void CSysMatrix<ScalarType>::KokkosBuildILUPreconditioner() {
   kokkos_build_seconds += timer.seconds();
 }
 
+
+/*============================== 4.6: device LU_SGS apply ==============================*/
+namespace {
+
+/*--- CSysMatrix::Gauss_Elimination(ScalarType*, ScalarType*) (non-MKL path), same statement order. A is destroyed. ---*/
+template <class T>
+KOKKOS_INLINE_FUNCTION void DeviceGaussElimination(unsigned long nVar, T* A_, T* vec) {
+#define A(I, J) A_[(I)*nVar + (J)]
+  for (unsigned long iVar = 1; iVar < nVar; iVar++) {
+    for (unsigned long jVar = 0; jVar < iVar; jVar++) {
+      DeviceRegularizePivot(A(jVar, jVar));
+      T weight = A(iVar, jVar) / A(jVar, jVar);
+      for (unsigned long kVar = jVar; kVar < nVar; kVar++) A(iVar, kVar) -= weight * A(jVar, kVar);
+      vec[iVar] -= weight * vec[jVar];
+    }
+  }
+  for (unsigned long iVar = nVar; iVar > 0ul;) {
+    iVar--;
+    for (unsigned long jVar = iVar + 1; jVar < nVar; jVar++) vec[iVar] -= A(iVar, jVar) * vec[jVar];
+    DeviceRegularizePivot(A(iVar, iVar));
+    vec[iVar] /= A(iVar, iVar);
+  }
+#undef A
+}
+
+/*--- Rows grouped by level (CSR), ascending row index inside a level. ---*/
+void GroupByLevel(const std::vector<unsigned long>& lev, unsigned long nLev, std::vector<unsigned long>& ptr,
+                  std::vector<unsigned long>& rows) {
+  ptr.assign(nLev + 1, 0);
+  for (auto l : lev) ptr[l + 1]++;
+  for (unsigned long l = 0; l < nLev; ++l) ptr[l + 1] += ptr[l];
+  rows.resize(lev.size());
+  std::vector<unsigned long> pos(ptr.begin(), ptr.end() - 1);
+  for (unsigned long i = 0; i < lev.size(); ++i) rows[pos[lev[i]]++] = i;
+}
+
+}  // namespace
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::EnsureKokkosLU_SGSStructure() const {
+  if (d_lusgs_fwd_ptr != nullptr) return;
+  if (d_dia_ptr == nullptr)
+    d_dia_ptr = GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(dia_ptr, nPointDomain * sizeof(unsigned long));
+
+  /*--- Partition bounds of every row, exactly as the omp loop of ComputeLU_SGSPreconditioner sees them
+   *    (redundant partitions with begin == end own no rows). ---*/
+  std::vector<unsigned long> lb(nPointDomain, 0), ub(nPointDomain, nPointDomain);
+  for (unsigned long t = 0; t < omp_num_parts; ++t) {
+    const auto begin = omp_partitions[t], end = omp_partitions[t + 1];
+    for (auto i = begin; i < end; ++i) { lb[i] = begin; ub[i] = end; }
+  }
+
+  /*--- Forward: row i needs the lower columns j in [lb, i). Backward: the upper domain columns j in (i, ub);
+   *    halo columns are inputs (exchanged between the sweeps). ---*/
+  std::vector<unsigned long> lf(nPointDomain, 0), lbk(nPointDomain, 0);
+  unsigned long nf = 0, nb = 0;
+  for (unsigned long i = 0; i < nPointDomain; ++i) {
+    unsigned long l = 0;
+    for (auto k = row_ptr[i]; k < dia_ptr[i]; ++k) {
+      const auto j = col_ind[k];
+      if (j >= lb[i]) l = std::max(l, lf[j] + 1);
+    }
+    lf[i] = l; nf = std::max(nf, l + 1);
+  }
+  for (unsigned long i = nPointDomain; i > 0;) {
+    --i;
+    unsigned long l = 0;
+    for (auto k = dia_ptr[i] + 1; k < row_ptr[i + 1]; ++k) {
+      const auto j = col_ind[k];
+      if (j < ub[i]) l = std::max(l, lbk[j] + 1);
+    }
+    lbk[i] = l; nb = std::max(nb, l + 1);
+  }
+  if (nPointDomain == 0) nf = nb = 0;
+  std::vector<unsigned long> fp, fr, bp, br;
+  GroupByLevel(lf, nf, fp, fr);
+  GroupByLevel(lbk, nb, bp, br);
+  lusgs_n_fwd = nf;
+  lusgs_n_bwd = nb;
+
+  auto up = [](const std::vector<unsigned long>& v) {
+    return GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(v.data(), std::max<size_t>(v.size(), 1) * sizeof(unsigned long));
+  };
+  d_lusgs_fwd_ptr = up(fp);
+  d_lusgs_fwd_rows = up(fr);
+  d_lusgs_bwd_ptr = up(bp);
+  d_lusgs_bwd_rows = up(br);
+  d_lusgs_lb = up(lb);
+  d_lusgs_ub = up(ub);
+}
+
+/*--- Transcription of ComputeLU_SGSPreconditioner: LowerProduct / VectorSubtraction / Gauss_Elimination per row
+ *    (forward), halo exchange, DiagonalProduct / UpperProduct / VectorSubtraction / Gauss_Elimination per row
+ *    (backward), halo exchange. Every row reads only rows of earlier levels (same values as the sequential sweep)
+ *    and accumulates in the CPU order (gemv_impl: c[i] += a[i*m+j]*b[j], column order of the row). ---*/
+template <class ScalarType>
+void CSysMatrix<ScalarType>::KokkosComputeLU_SGSPreconditioner(const CSysVector<ScalarType>& vec,
+                                                               CSysVector<ScalarType>& prod, CGeometry* geometry,
+                                                               const CConfig* config) const {
+  if (nVar != nEqn || nVar > MAXNVAR) SU2_MPI::Error("Kokkos LU_SGS needs square blocks <= MAXNVAR.", CURRENT_FUNCTION);
+  Kokkos::Timer timer;
+  EnsureKokkosLU_SGSStructure();
+
+  const bool matrix_on_device = kokkos_spmv_mode.active && kokkos_spmv_mode.matrix_on_device;
+  if (!matrix_on_device && !kokkos_values_on_device) HtDTransfer();
+
+  using execution_space = Kokkos::DefaultExecutionSpace;
+  using team_policy = Kokkos::TeamPolicy<execution_space>;
+  using member_type = typename team_policy::member_type;
+  execution_space exec;
+  const int team_size = static_cast<int>(std::min<long>(64, static_cast<long>(exec.concurrency())));
+
+  const auto values = d_matrix;
+  const auto rows = d_row_ptr;
+  const auto diag = d_dia_ptr;
+  const auto cols = d_col_ind;
+  const auto lbound = d_lusgs_lb;
+  const auto ubound = d_lusgs_ub;
+  const auto fptr = d_lusgs_fwd_ptr;
+  const auto frows = d_lusgs_fwd_rows;
+  const auto bptr = d_lusgs_bwd_ptr;
+  const auto brows = d_lusgs_bwd_rows;
+  const auto n_fwd = lusgs_n_fwd;
+  const auto n_bwd = lusgs_n_bwd;
+  const auto input = vec.GetDevicePointer();
+  const auto output = prod.GetDevicePointer();
+  const unsigned long nv = nVar, ne = nEqn, bs = nVar * nEqn, nPD = nPointDomain;
+
+  /*--- First part of the symmetric iteration: (D+L).x* = b ---*/
+  Kokkos::parallel_for(
+      "SU2::KokkosLUSGSForward", team_policy(exec, 1, team_size), KOKKOS_LAMBDA(const member_type& team) {
+        for (unsigned long level = 0; level < n_fwd; ++level) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange(team, fptr[level], fptr[level + 1]), [&](const unsigned long k) {
+            const auto iPoint = frows[k];
+            const auto idx = iPoint * nv;
+            ScalarType low_prod[MAXNVAR];
+            /*--- LowerProduct(prod, iPoint, begin, low_prod) ---*/
+            for (unsigned long iVar = 0; iVar < nv; iVar++) low_prod[iVar] = 0.0;
+            for (auto index = rows[iPoint]; index < diag[iPoint]; index++) {
+              const auto col_j = cols[index];
+              if (col_j >= lbound[iPoint]) {
+                const auto* a = values + index * bs;
+                const auto* b = output + col_j * ne;
+                for (unsigned long i = 0; i < nv; i++)
+                  for (unsigned long j = 0; j < ne; j++) low_prod[i] += a[i * ne + j] * b[j];
+              }
+            }
+            /*--- VectorSubtraction(&vec[idx], low_prod, &prod[idx]) ---*/
+            for (unsigned long iVar = 0; iVar < nv; iVar++) output[idx + iVar] = input[idx + iVar] - low_prod[iVar];
+            /*--- Gauss_Elimination(iPoint, &prod[idx]) ---*/
+            ScalarType block[MAXNVAR * MAXNVAR];
+            const auto* src = values + diag[iPoint] * bs;
+            for (unsigned long m = 0; m < nv * nv; ++m) block[m] = src[m];
+            DeviceGaussElimination(nv, block, output + idx);
+          });
+          team.team_barrier();
+        }
+      });
+  exec.fence("SU2::Kokkos LU_SGS forward sweep complete");
+
+  if (config->GetKokkosGPUAwareMPI()) KokkosGPUAwareHaloExchange(prod, geometry, false);
+  else KokkosHostStagedHaloExchange(prod, geometry, false);
+
+  /*--- Second part of the symmetric iteration: (D+U).x_(1) = D.x* ---*/
+  Kokkos::parallel_for(
+      "SU2::KokkosLUSGSBackward", team_policy(exec, 1, team_size), KOKKOS_LAMBDA(const member_type& team) {
+        for (unsigned long level = 0; level < n_bwd; ++level) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange(team, bptr[level], bptr[level + 1]), [&](const unsigned long k) {
+            const auto iPoint = brows[k];
+            const auto idx = iPoint * nv;
+            ScalarType up_prod[MAXNVAR], dia_prod[MAXNVAR];
+            /*--- DiagonalProduct(prod, iPoint, dia_prod) ---*/
+            {
+              const auto* a = values + diag[iPoint] * bs;
+              const auto* b = output + iPoint * ne;
+              for (unsigned long i = 0; i < nv; i++) {
+                dia_prod[i] = 0.0;
+                for (unsigned long j = 0; j < ne; j++) dia_prod[i] += a[i * ne + j] * b[j];
+              }
+            }
+            /*--- UpperProduct(prod, iPoint, row_end, up_prod): always include halos. ---*/
+            for (unsigned long iVar = 0; iVar < nv; iVar++) up_prod[iVar] = 0.0;
+            for (auto index = diag[iPoint] + 1; index < rows[iPoint + 1]; index++) {
+              const auto col_j = cols[index];
+              if (col_j < ubound[iPoint] || col_j >= nPD) {
+                const auto* a = values + index * bs;
+                const auto* b = output + col_j * ne;
+                for (unsigned long i = 0; i < nv; i++)
+                  for (unsigned long j = 0; j < ne; j++) up_prod[i] += a[i * ne + j] * b[j];
+              }
+            }
+            /*--- VectorSubtraction(dia_prod, up_prod, &prod[idx]); Gauss_Elimination(iPoint, &prod[idx]) ---*/
+            for (unsigned long iVar = 0; iVar < nv; iVar++) output[idx + iVar] = dia_prod[iVar] - up_prod[iVar];
+            ScalarType block[MAXNVAR * MAXNVAR];
+            const auto* src = values + diag[iPoint] * bs;
+            for (unsigned long m = 0; m < nv * nv; ++m) block[m] = src[m];
+            DeviceGaussElimination(nv, block, output + idx);
+          });
+          team.team_barrier();
+        }
+      });
+  exec.fence("SU2::Kokkos LU_SGS backward sweep complete");
+
+  if (config->GetKokkosGPUAwareMPI()) KokkosGPUAwareHaloExchange(prod, geometry, false);
+  else KokkosHostStagedHaloExchange(prod, geometry, false);
+
+  kokkos_lusgs_applies++;
+
+  if (PrecondVerifyEnabled()) {
+    /*--- A/B: host apply on host copies of the device input and matrix values (debug only, full transfers). ---*/
+    const auto n = prod.GetLocSize();
+    std::vector<ScalarType> dev(n);
+    Kokkos::deep_copy(HostView<ScalarType>(dev.data(), n), DeviceView<const ScalarType>(output, n));
+    if (nnz > 0) {
+      const auto count = nnz * nVar * nEqn;
+      Kokkos::deep_copy(HostView<ScalarType>(matrix, count), DeviceView<const ScalarType>(d_matrix, count));
+    }
+    vec.DtHTransfer();
+    CSysVector<ScalarType> hin(vec), hout(prod);
+    ComputeLU_SGSPreconditioner(hin, hout, geometry, config);
+    kokkos_lusgs_verify++;
+    kokkos_lusgs_verify_nonbitwise += CountNonBitwise(&hout[0], dev.data(), n);
+  }
+  kokkos_lusgs_seconds += timer.seconds();
+}
+
 template class CSysMatrix<su2mixedfloat>;

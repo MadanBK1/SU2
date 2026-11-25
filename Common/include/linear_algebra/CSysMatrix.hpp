@@ -179,7 +179,7 @@ class CSysMatrix {
 #ifdef HAVE_KOKKOS
   /*--- KOKKOS JACOBI DEVICE STORAGE: persistent mirror of invM. ---*/
   ScalarType* d_invM = nullptr;
-  const unsigned long* d_dia_ptr = nullptr; /*!< \brief Device dia_ptr (nPointDomain), for the device Jacobi build. */
+  mutable const unsigned long* d_dia_ptr = nullptr; /*!< \brief Device dia_ptr (nPointDomain), device Jacobi build / LU_SGS. */
 
   /*--- Residency (Step 6 of NEMO_KOKKOS_PORT_PLAN.md). When set by the owner, d_matrix holds the authoritative
    *    values (assembled on the device) and the host "matrix" is stale: the SpMV does not HtDTransfer, and the
@@ -189,6 +189,19 @@ class CSysMatrix {
   bool kokkos_force_host_build = false; /*!< \brief Internal: host rebuild for SU2_KOKKOS_PRECOND_VERIFY. */
   unsigned long kokkos_device_builds = 0, kokkos_verify_builds = 0, kokkos_verify_nonbitwise = 0;
   double kokkos_build_seconds = 0.0;
+
+  /*--- 4.6 KOKKOS DEVICE LU_SGS (apply only, nothing to build): dependency levels of the forward (lower, within the
+   *    row's omp partition) and backward (upper, within the partition) sweeps of ComputeLU_SGSPreconditioner, and the
+   *    per-row partition bounds (col_lb / col_ub). Pattern-only, built once on first use (hence mutable). ---*/
+  mutable const unsigned long* d_lusgs_fwd_ptr = nullptr;
+  mutable const unsigned long* d_lusgs_fwd_rows = nullptr;
+  mutable const unsigned long* d_lusgs_bwd_ptr = nullptr;
+  mutable const unsigned long* d_lusgs_bwd_rows = nullptr;
+  mutable const unsigned long* d_lusgs_lb = nullptr;
+  mutable const unsigned long* d_lusgs_ub = nullptr;
+  mutable unsigned long lusgs_n_fwd = 0, lusgs_n_bwd = 0;
+  mutable unsigned long kokkos_lusgs_applies = 0, kokkos_lusgs_verify = 0, kokkos_lusgs_verify_nonbitwise = 0;
+  mutable double kokkos_lusgs_seconds = 0.0;
 #endif
 
   /*--- Temporary (hence mutable) working memory used in the Linelet preconditioner, outer vector is for threads ---*/
@@ -936,6 +949,17 @@ class CSysMatrix {
   /*! rief Apply the already-built ILU factors entirely in Kokkos device memory. */
   void KokkosComputeILUPreconditioner(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
                                       CGeometry* geometry, const CConfig* config) const;
+
+  /*! \brief 4.6: ComputeLU_SGSPreconditioner on the device (level-scheduled sweeps, same per-row arithmetic).
+   *         Reads d_matrix; A/B vs the host apply with SU2_KOKKOS_PRECOND_VERIFY=1. */
+  void KokkosComputeLU_SGSPreconditioner(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
+                                         CGeometry* geometry, const CConfig* config) const;
+  /*! \brief Build / upload the LU_SGS level structure once. */
+  void EnsureKokkosLU_SGSStructure() const;
+  inline unsigned long GetKokkosLU_SGSApplies() const { return kokkos_lusgs_applies; }
+  inline unsigned long GetKokkosLU_SGSVerify() const { return kokkos_lusgs_verify; }
+  inline unsigned long GetKokkosLU_SGSVerifyNonBitwise() const { return kokkos_lusgs_verify_nonbitwise; }
+  inline double GetKokkosLU_SGSSeconds() const { return kokkos_lusgs_seconds; }
 
   /*!
    * \brief The device values (d_matrix, CSysMatrix layout, nnz*nVar*nEqn) are authoritative (on = true), e.g. because
