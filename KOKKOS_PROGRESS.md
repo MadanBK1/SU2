@@ -362,3 +362,14 @@ LOOP HINT: 2026-11-25T01:18:35-05:00 no progress for 3 rounds on the current ite
   - G7 (4.3 GPU run) still BLOCKED in-sandbox (no /dev/nvidia*; user shell required). Reviewer reported in review 1 that the user ran G7 on the V100: PASS (noise floor 1.00/1.05) — pending reviewer confirmation against the current code.
   - NEXT for reviewer: merge 4.4-LAX into su2kokkos. Next agent round (if review passes): start Roe device port (numerics/NEMO/convection/roe.cpp) following the same Centered_Residual dispatch pattern; then MSW; then AUSM+-up2 quirk documentation.
 READY FOR REVIEW: 4.4-LAX — device LAX-FRIEDRICH validated: G1 bitwise on strict binary (invwedge_lax PASS, default 4-case list OVERALL PASS; logs ../kk/logs/g1lax-strict.log, g1-default-strict.log)
+
+- 2026-11-25T03:22:31-05:00 [loop] round 23 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_024836_23.log
+
+- 2026-11-25 (round 24, item 4.4-Roe prep — review 4 "Agent: do next", tests/analysis only; NO Roe code per ROLE change):
+  - Review 4: LAX merged into su2kokkos (20eabd2); check.sh now has EXPECT[invwedge_lax] stage-line guard (check.sh:51) — already on this branch.
+  - Item 1 DONE: `bash .g1run.sh ../kk/logs/g1lax-r24.log invwedge_lax` (BIN=strict, REF_MODE=HOST, RES_TOL=0 FIELD_TOL=0) → invwedge_lax PASS bitwise (max|dres|=0, max field diff=0), OVERALL: PASS, no "expected stage line missing".
+  - YES-run stage lines (../kk/runs/chk_invwedge_lax_YES/log.txt):
+    - Cons2Prim: device; time step: device; max eigenvalue: device; centered residual (LAX-FRIEDRICH): device; source: device
+    - host stages: bc FAR_FIELD(Inlet)/OUTLET_FLOW(Farfield) "boundary numerics not AUSM (centered -> Roe)"; EULER_WALL x2 "accumulator on the host after a host stage; SU2_KOKKOS_NEMO_MIXED=1 uploads it"; update (EULER_IMPLICIT): host
+  - PERF (same log): SetPrimVar kernel 1.489s/22 calls; Source kernel 4.556s/11 (414ms/call — dominant); CenteredLAX kernel 1.517s/11 (138ms/call); ResidualSync d2h 0.107s/11.
+  - NEXT: survey `check.sh partial_cat` then `check.sh invwedge_am` (same env), report PASS/FAIL + max|dres| + host-stage lines, then `READY FOR REVIEW: HEAVY: 4.4-Roe`.
