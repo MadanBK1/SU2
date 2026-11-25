@@ -449,3 +449,7 @@ READY FOR REVIEW: MERGE: 4.4-MSW — G1 strict invwedge_msw PASS bitwise (max|dr
   - (2) G1 strict invwedge_ausmplusup2: running (g1-up2-r32.log). NEXT on PASS: stage lines + residency, (4) regression 9-case, (5) A/B svrun, (6) noisefloor, (7) PERF walls, (8) bookkeeping + READY FOR REVIEW: MERGE: 4.4-AUSMup2.
 
 - 2026-11-25T07:06:22-05:00 [loop] round 32 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_065645_32.log
+
+- 2026-11-25T07:15:16-05:00 [loop] round 33 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_070642_33.log
+
+LOOP HINT: 2026-11-25T07:15:16-05:00 no progress for 3 rounds on the current item. No code changed (only the progress log). Stop planning: in THIS session write code immediately - the smallest compilable piece (e.g. one device function + its call site), build it, commit it. If you cannot, mark the item BLOCKED and move to the next unchecked item.
