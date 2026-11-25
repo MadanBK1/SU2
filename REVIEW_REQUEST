@@ -1,3 +1,3 @@
-id: 20261125T141839-24b4086c95
-head: 24b4086c95a6a5c7b39627067596687ea8e98114
+id: 20261125T145530-16fffed237
+head: 16fffed2375a15b3e832f52ac88bcd4948c9a2af
 reason: READY FOR REVIEW: MERGE: 4.4-AUSMup2 — incl. the stage-report fix (e08f9fabd3, Device_*Unsupported now use GetKind_TimeIntScheme_Flow). Gates: G1 strict invwedge_ausmplusup2 PASS bitwise (max|dres|=0, field diff=0, NO wall 3.57s / YES 2.90s) with upwind (AUSM+-up2, residual) + all 5 BC stage lines on DEVICE, no host-fallback reasons (g1-up2-r52.log); regression default list (invwedge_ausm thermalbath super_cat axi_visccone) + all invwedge (ausm/ausmplusup2/am/lax/roe/msw) all PASS bitwise (g1-regress-r52.log, g1-invall-r52.log); A/B stage-verify PASS bitwise (sv-up2-r53.log); noisefloor PASS ratios 0.64/1.17 (K=10) (nf-up2-r53.log). PERF (strict serial): Upwind up2 8.551e-03 s/call vs Roe 2.237e-01 / MSW 3.138e-01 (single flux pair, no MUSCL); Source 7.897e-02 s/call dominant. Next heavy: 4.5 BCs — request as `HEAVY: 4.5-BC_Inlet`.
