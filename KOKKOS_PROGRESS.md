@@ -550,3 +550,16 @@ READY FOR REVIEW: MERGE: 4.4-AUSMup2 — incl. the stage-report fix (e08f9fabd3,
 - 2026-11-25T15:45:34-05:00 [loop] round 55 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_144902_55.log
 
 - 2026-11-25T15:53:05-05:00 [loop] round 56 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_154554_56.log
+
+- 2026-11-25T16:10:29-05:00 [loop] round 57 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_155325_57.log
+
+- 2026-11-25 (round 58, review-13 queue COMPLETE — slip wall steps 1–8 done; bookkeeping + MERGE request):
+  - State check this session: rounds 55–57 already ran the full gate queue for `smol_maxwell` (0d7a7b9 slip-wall code; binaries fresh — strict/serial mtimes 14:52/14:53 local, after 0d7a7b9 at 14:47). Verified all logs below.
+  - (2) CPU sanity: smol_maxwell NO side exit=0 (g1-smol-r57.log).
+  - (3) G1 strict `smol_maxwell`: **OVERALL: PASS, bitwise** — max|dres|=0.00e+00, max field diff=0.00e+00, tol 0; NO wall 15.94s / YES wall 15.57s (YES 1.02x, strict serial); YES log shows `stage bc:SMOLUCHOWSKI_MAXWELL (Wall): device`, `device-resident state: ON` (g1-smol-r57.log, chk_smol_maxwell_YES/log.txt).
+  - (5) Regression: default list (invwedge_ausm thermalbath super_cat axi_visccone) **PASS bitwise** (g1-regress-r57.log); invall list (invwedge_am lax roe msw ausmplusup2 super_cat) **PASS bitwise** (g1-invall-r57.log).
+  - (6) A/B: `sv-smol-r57.log` **PASS bitwise** (max|dres|=0, field diff=0). Noise floor: `nf-smol-r57.log` **NOISEFLOOR OVERALL: PASS** — ITER 11 ratio 0.61, ITER 100 ratio 0.50 (K=10).
+  - (7) PERF (strict serial, from chk_smol_maxwell_YES): BC kernel 2.742e-04 s/call (55 calls); Upwind 1.112e-01; Viscous 1.745e-01; Source 4.190e-01 (dominant); SetPrimVar 1.086e-01 s/call; wall NO 15.94s / YES 15.57s.
+  - (7) BOOKKEEPING (this session): LOCAL_AGENT_TASK.md 4.5 ticked [x] (slip done; BC_Inlet / catalytic n/a — CPU not operational); heavy-queue item 6 (ionization Roe/LAX) marked "BLOCKED: CPU ComputedPdU ionization undefined (review 13), Madan decision pending". NEMO_KOKKOS_PORT_PLAN.md: BC matrix row split — SMOLUCHOWSKI_MAXWELL device-resident (gas constant host-evaluated once per call; no Jacobian as on CPU; ionization -> host), INLET_FLOW unsupported (CPU not operational); NS-walls section + TODO line updated.
+  - NEXT: reviewer MERGE decision; after merge, next heavy item is 4.6 (request `HEAVY: 4.6-LUSGS` or `HEAVY: 4.6-ILU`); queue item 6 stays BLOCKED for Madan.
+READY FOR REVIEW: MERGE: 4.5-SlipWall — BC_Smoluchowski_Maxwell (0d7a7b9) on device, all gates: G1 strict smol_maxwell PASS bitwise (max|dres|=0, field diff=0, NO 15.94s/YES 15.57s, stage bc:SMOLUCHOWSKI_MAXWELL (Wall): device, resident ON) + default-list regression PASS bitwise + invall regression PASS bitwise + A/B PASS bitwise + noisefloor PASS (ratios 0.61/0.50); PERF BC 2.742e-04 s/call, Source 4.190e-01 s/call dominant; bookkeeping done (task 4.5 ticked w/ BC_Inlet+catalytic n/a, queue item 6 blocked pending Madan, plan matrix updated).

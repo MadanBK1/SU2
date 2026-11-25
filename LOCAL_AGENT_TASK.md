@@ -118,7 +118,7 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
 4. AUSM+-up2 (deterministically initialised M_L/M_R; document the CPU quirk; G1 vs the patched CPU variant).
 5. 4.5 BCs: subsonic BC_Inlet, Smoluchowski-Maxwell slip, catalytic heat-flux wall.
 6. Ionization with Roe / LAX (RoedPdU / MeandPdU per edge, documented deviation from the CPU's edge-order
-   dependence; gate: noise floor <= 10, not bitwise).
+   dependence; gate: noise floor <= 10, not bitwise). **BLOCKED: CPU ComputedPdU ionization undefined (review 13), Madan decision pending — skip until then.**
 7. 4.6 solver options: LU-SGS, ILU(n>0) / GPU preconditioners, multigrid coarse levels, periodic markers,
    dynamic / deforming grids.
 8. Host-touch removal: device residual norms, output / restart every N iterations, CUDA-aware MPI halos.
@@ -131,7 +131,7 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
   - Profile: `nsys profile -o nemo SU2_CFD run.cfg` for 20 iterations of invwedge_ausm.
   - Report the per-stage times, and wall time vs `ENABLE_KOKKOS=NO`.
 - [x] **4.4 Device-side schemes:** ~~Roe~~ (done, G1 strict bitwise, merged d761e92), ~~MSW~~ (done, G1 strict bitwise + 8-case regression, merge pending), ~~LAX~~ (LAX done, G1 strict bitwise incl. stage-line guard, merged to su2kokkos 20eabd2) ~~AUSM+-up2 (explicit)~~ (done 2026-11-25, G1 strict bitwise + A/B bitwise + noisefloor PASS; implicit stays host — CPU quirk: Jacobian reads uninitialised M_L/M_R, documented).
-- [ ] **4.5 BCs:** subsonic `BC_Inlet`, Smoluchowski–Maxwell slip (its gas-state-dependent `ComputeGasConstant`), and the catalytic heat-flux wall.
+- [x] **4.5 BCs:** Smoluchowski–Maxwell slip **done 2026-11-25** (G1 strict bitwise + regression + A/B bitwise + noisefloor PASS, merge requested `MERGE: 4.5-SlipWall`); `BC_Inlet` **n/a** (CPU not operational — `SU2_MPI::Error` at entry); catalytic heat-flux wall **n/a** (CPU not operational, already reported as such).
 - [ ] **4.6 Solver options:** ILU(n>0) device factorization, LU-SGS, the multigrid coarse levels (`MGLEVEL>0`), periodic markers, and dynamic/deforming grids (geometry re-upload hook).
 - [ ] **4.7 Turbulence coupling** for NEMO (SA/SST device kernels), or leave it host-only with a clear notice.
 - [ ] **4.8 Performance** (only after 4.3): 32-bit indices, LayoutLeft for coalesced access, fusing Cons2Prim, transport and gradient, reducing the 81-entry atomics per Jacobian block, and a polynomial/block-Jacobi preconditioner option.
