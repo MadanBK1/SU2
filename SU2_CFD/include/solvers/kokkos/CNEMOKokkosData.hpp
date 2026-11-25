@@ -349,11 +349,12 @@ class CNEMOKokkosData {
 
   /*====================== Step 5: upwind residual (AUSM family) ======================*/
 
-  enum class UpwindScheme { AUSM = 0, AUSMPLUSM = 1, ROE = 2 };
+  enum class UpwindScheme { AUSM = 0, AUSMPLUSM = 1, ROE = 2, MSW = 3 };
   struct UpwindParams {
     UpwindScheme scheme = UpwindScheme::AUSM;
     bool implicit = false, muscl = false, limiter = false, vanAlbada = false;
     double kappa = 0.0, musclRamp = 1.0, Minf = 0.0;
+    double mswAlpha = 5.0; /*!< config MSW_ALPHA (MSW only) */
     int nElNumerics = 0; /*!< CNEMONumerics::nEl = config IONIZATION (may differ from the gas model's, e.g. AIR-7) */
   };
   /*! \brief Host results of ComputeUpwindResidual (besides the accumulated residual/Jacobian). */

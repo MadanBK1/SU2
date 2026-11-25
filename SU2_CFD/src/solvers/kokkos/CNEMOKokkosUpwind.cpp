@@ -53,6 +53,7 @@
 #include "CNEMOKokkosAUSM.hpp"
 #include "CNEMOKokkosLAX.hpp"
 #include "CNEMOKokkosRoe.hpp"
+#include "CNEMOKokkosMSW.hpp"
 
 namespace {
 
@@ -118,8 +119,10 @@ KOKKOS_INLINE_FUNCTION void UpwindEdge(const UpwArgs& a, const unsigned long iEd
 
   double Primitive_i[MAXNP], Primitive_j[MAXNP];
   double Eve_i[MAXNS], Eve_j[MAXNS];
-  const bool roe = (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::ROE));
-  /*--- Roe: conservative cell values, or RecomputeConservativeVector of the MUSCL state. ---*/
+  const bool msw = (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::MSW));
+  /*--- Roe / MSW read the conservative states (CPU: "Recompute Conserved variables if Roe or MSW scheme"). ---*/
+  const bool roe = msw || (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::ROE));
+  /*--- Roe / MSW: conservative cell values, or RecomputeConservativeVector of the MUSCL state. ---*/
   const double* U_i = roe ? &a.U(iPoint, 0) : zero;
   const double* U_j = roe ? &a.U(jPoint, 0) : zero;
   double Conserved_i[MAXNV], Conserved_j[MAXNV];
@@ -164,7 +167,10 @@ KOKKOS_INLINE_FUNCTION void UpwindEdge(const UpwArgs& a, const unsigned long iEd
 
   double Flux[MAXNV];
   double Jacobian_i[MAXNV * MAXNV], Jacobian_j[MAXNV * MAXNV];
-  if (roe)
+  if (msw)
+    MSWResidual<ND>(a.gas, ns, nVar, a.nPrimVar, a.implicit, a.mswAlpha, Normal, U_i, U_j, V_i, V_j, Flux,
+                    Jacobian_i, Jacobian_j);
+  else if (roe)
     RoeResidual<ND>(a.gas, ns, nVar, a.nPrimVar, a.implicit, Normal, U_i, U_j, V_i, V_j, dPdU_i, dPdU_j, Flux,
                     Jacobian_i, Jacobian_j);
   else
@@ -329,7 +335,7 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
       sensorValid = true;
     }
   }
-  if (p.scheme == UpwindScheme::ROE) { /*--- Solution: resident from SetPrimVar / the implicit update ---*/
+  if (p.scheme == UpwindScheme::ROE || p.scheme == UpwindScheme::MSW) { /*--- Solution: resident from SetPrimVar / the implicit update ---*/
     if (uploadAll || !consDeviceValid) P.bytes_h2d += double(nPoint) * nVar * sizeof(double);
     EnsureInputsOnDevice(uploadAll, true, false);
   }
@@ -344,7 +350,7 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
   a.dia_ptr = geo.dia_ptr;
   a.edge_nnz = geo.edge_nnz;
   a.V = st.Primitive;
-  a.U = (p.scheme == UpwindScheme::ROE) ? st.Solution : View2D<double>();
+  a.U = (p.scheme == UpwindScheme::ROE || p.scheme == UpwindScheme::MSW) ? st.Solution : View2D<double>();
   a.dPdU = st.dPdU;
   a.eves = st.eves;
   a.Gamma = st.Gamma;
@@ -368,6 +374,7 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
   a.limiter = p.limiter;
   a.vanAlbada = p.vanAlbada;
   a.kappa = p.kappa;
+  a.mswAlpha = p.mswAlpha;
   a.musclRamp = p.musclRamp;
   a.Minf = p.Minf;
   a.eps = EPS;
