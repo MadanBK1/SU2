@@ -437,3 +437,7 @@ READY FOR REVIEW: MERGE: 4.4-Roe-BC (+LAX resident) — G1 strict: invwedge_lax 
   - (7) BOOKKEEPING done: 4.4 MSW ticked (LOCAL_AGENT_TASK.md), coverage matrix line 266 split (Roe/LAX/MSW device-resident; MSW merge pending; line 125 note updated).
   - Review-7 queue COMPLETE (items 1,2,4,5,6,7,8; 3 not needed — no FAIL). Next heavy per reviewer: AUSM+-up2 (queue item 4 of end-to-end goal).
 READY FOR REVIEW: MERGE: 4.4-MSW — G1 strict invwedge_msw PASS bitwise (max|dres|=0, field diff=0) + all 13 stages device incl. 5 BC + update, device-resident ON; regression 8-case (ausm thermalbath super_cat axi_visccone lax roe am partial_cat) all PASS bitwise; A/B stage-verify non-bitwise=0 max rel diff=0.000e+00; noisefloor PASS (ratios 0.11 / 1.05, K=10). PERF (strict serial): Upwind MSW 3.138e-01 s/call vs Roe 2.237e-01 (two P/invP pairs/edge, as expected); Source 4.117e-01/call dominant. Wall NO 19.83s / YES 15.96s (1.24x). Logs: ../kk/logs/{g1-msw-r28,g1-regress-r28,sv-msw-r28,nf-msw-r29}.log
+
+- 2026-11-25 (round 30, review-8 queue — device AUSM+-up2 (bc75572) landed; agent tests):
+  - Queue: (1) build strict+serial; (2) G1 strict invwedge_ausmplusup2 bitwise + stage lines, residency ON; (3) FAIL -> .svrun, suspect kmax/kmin order, `3.0/16.0*(...)` order, node_infty Gamma; (4) regression 9-case (AUSMResidual changed); (5) A/B svrun non-bitwise=0; (6) noisefloor up2 ratio<=10; (7) PERF wall NO/YES + Upwind s/call; (8) bookkeeping + READY FOR REVIEW: MERGE: 4.4-AUSMup2; (9) next heavy: 4.5 BCs.
+  - Status: starting (1) builds.
