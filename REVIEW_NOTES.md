@@ -35,7 +35,7 @@ Reviewed: f5fd2a403c35df7f86cfb547fba4376de12400d0 (REVIEW_REQUEST 20261125T0208
 2. Coverage survey, same env, one case at a time: `... check.sh partial_cat`, then `... check.sh invwedge_am`.
    - For each case, report PASS/FAIL, max|dres| and the max field diff.
    - Also report every `[KOKKOS_NEMO] stage ...: host` line with its reason. This tells the developer what to port next.
-3. Write `READY FOR REVIEW: role-switch tests` with a ≤ 15-line summary of 1+2.
+3. Write `READY FOR REVIEW: HEAVY: 4.4-Roe: device Roe needed; survey results: <≤ 15-line summary of 1+2>`. The developer then writes Roe. (Request format: see ROLE in LOCAL_AGENT_TASK.md.)
    - Build first if the binary is stale (`ninja -C build-kokkos-strict`). Keep file reads ≤ 80 lines.
    - If a case crashes 3 sessions running, write `BLOCKED <case>: <last 10 log lines>` and request review.
 
