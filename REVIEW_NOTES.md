@@ -1,44 +1,18 @@
 # Review notes for the local agent (written by the Claude reviewer; agent: read, never edit)
 
-Newest section first. Do the **Agent: do next** items before continuing LOCAL_AGENT_TASK.md section 4.
+Newest section first. Do the **ROLE CHANGE (Madan, 2026-11-25):** the reviewer now writes the solver code; you build, run, analyze and report. See ROLE at the top of LOCAL_AGENT_TASK.md. **Do NOT write the Roe code**: the reviewer writes it next round.
 
-## 2026-11-25 — review 4
-Reviewed: f5fd2a403c35df7f86cfb547fba4376de12400d0 (REVIEW_REQUEST 20261125T020812-f5fd2a403c)
-
-**State:**
-- Review-3 items 1+2 DONE. No new solver code from the agent: the reviewer LAX code (e69cbbb + CNEMOKokkosLAX.hpp) built unchanged, and the agent ran the gates.
-- Claimed G1 (strict binary, REF_MODE=HOST, RES_TOL=0, FIELD_TOL=0): invwedge_lax PASS bitwise, default 4-case list OVERALL PASS bitwise. Plausible: the agent also saw [KOKKOS_NEMO_VERIFY] CenteredLAX lines (only printed by Device_CenteredResidual), so the device path really ran.
-- Good catch by the agent: the fast-math serial build cannot be bitwise; use BIN=strict for G1. Keep doing that.
-- Not re-run here (container has 2 cores and no meson; a full build would not finish in time).
-- **MERGED into su2kokkos (20eabd2):** 4.4-LAX = CNEMOKokkosLAX.hpp, CNEMOKokkosCentered.cpp, the dispatch in CNEMOEulerSolver, geo.nneighbor, ST_CENTERED, lambdaValid, meson entry, invwedge_lax in check.sh. local_agent_loop.sh was NOT merged (agent infrastructure).
-- 4.4 LAX: tick it in LOCAL_AGENT_TASK.md as "LAX done (G1 strict)". Roe, MSW and AUSM+-up2 remain.
-
-**Reviewer fix (this commit):** check.sh now has `EXPECT[invwedge_lax]`: the YES run must print `stage centered residual (LAX-FRIEDRICH): device`, else the case fails. This stops a silent host fallback from passing G1 trivially. Add an EXPECT entry for every new device scheme you gate.
-
-**Findings:**
-- CNEMOKokkosCentered.cpp:~185: `create_mirror_view_and_copy` allocates a host view every call (nPrimVar doubles). Harmless; later reuse a persistent host mirror.
-- CNEMOEulerSolver.cpp Device_CenteredResidual: the host gas replay (ComputeSpeciesEve + ComputedPdU at the last edge's mean state) is needed for bitwise while the BCs run on the host with Roe. Keep it.
-- LAX still runs with resident mode off, because the boundary flux numerics for centered schemes are CUpwRoe_NEMO (host). So a device Roe fixes two things at once: Roe interior cases, and full residency for LAX.
-
-**Speedup/accuracy suggestions:**
-- Next big step is the device Roe (CUpwRoe_NEMO). It reuses LaxInviscidProjFlux/LaxInviscidProjJac from CNEMOKokkosLAX.hpp; only GetPMatrix / GetPMatrix_inv (CNEMONumerics.cpp:355-~550) are new.
-- The Roe kernel has 3 MAXNV² matrices (P, invP, Jacobian work). That is heavier than LAX, so watch registers on the V100; colored accumulation as in UpwindEdge.
-- G7 on the V100 for invwedge_lax (Madan): see the commands at the end.
-
-**Agent: do next**
-1. Create `SU2_CFD/src/solvers/kokkos/CNEMOKokkosRoe.hpp`: `#include "CNEMOKokkosLAX.hpp"`, then two `template <int ND> KOKKOS_INLINE_FUNCTION` functions:
-   - `NemoPMatrix(...)`: a verbatim transcription of `CNEMONumerics::GetPMatrix` (SU2_CFD/src/numerics/NEMO/CNEMONumerics.cpp:355).
-   - `NemoPMatrixInv(...)`: a verbatim transcription of `GetPMatrix_inv` (line 451).
-   - Pass nSpecies/nVar as args; output is a row-major `double P[MAXNV*MAXNV]` (`P[i*nVar+j]` = CPU `P[i][j]`). Keep the CPU statement order; no std::, no lambdas.
-   - Read the CPU code in ≤ 80-line chunks: 355-434, then 435-514, then 515-end.
-   - Add `#include "CNEMOKokkosRoe.hpp"` to CNEMOKokkosUpwind.cpp so it compiles. Build serial, commit. Not dispatched yet, so gates are unaffected.
-2. In the same header, add `RoeResidual<ND>(...)`: a transcription of `CUpwRoe_NEMO::ComputeResidual` (SU2_CFD/src/numerics/NEMO/convection/roe.cpp:92-198).
-   - For the Roe-averaged gas: `ComputeSpeciesEve` + `ComputedPdU` at RoeV. Call the same device gas functions that LAXResidual in CNEMOKokkosLAX.hpp uses at its mean state (copy those 2 lines).
-   - Use `CreateBasis` as on the CPU. If no device version exists, write a 10-line one next to it.
-   - Build serial, commit. Still not dispatched.
-3. Only after 1+2 compile: write `READY FOR REVIEW: 4.4-Roe-kernel`. The reviewer will wire the dispatch (Upwind_Residual + BC flux) unless you finish it first.
-   - If an item does not compile after 3 sessions, write `BLOCKED 4.4-Roe: <error line>` and go to 4.5 (subsonic BC_Inlet).
-   - Run the build within your first 5 tool calls of every session.
+**Agent: do next** (tests/analysis only)
+1. Pull the check.sh guard (already on this branch). Rerun G1 for LAX on the strict binary:
+   `BIN=<strict SU2_CFD> REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 TestCases/kokkos_nemo/check.sh invwedge_lax`
+   - Report PASS/FAIL and confirm the log has no `expected stage line missing`.
+   - Paste the `[KOKKOS_NEMO] stage ...` lines and the `[KOKKOS_NEMO_PERF]` lines of the YES run (`chk_invwedge_lax_YES/log.txt`, max 30 lines) into KOKKOS_PROGRESS.md.
+2. Coverage survey, same env, one case at a time: `... check.sh partial_cat`, then `... check.sh invwedge_am`.
+   - For each case, report PASS/FAIL, max|dres| and the max field diff.
+   - Also report every `[KOKKOS_NEMO] stage ...: host` line with its reason. This tells the developer what to port next.
+3. Write `READY FOR REVIEW: role-switch tests` with a ≤ 15-line summary of 1+2.
+   - Build first if the binary is stale (`ninja -C build-kokkos-strict`). Keep file reads ≤ 80 lines.
+   - If a case crashes 3 sessions running, write `BLOCKED <case>: <last 10 log lines>` and request review.
 
 **Madan: run on the V100 (G7 for LAX, optional):**
 ```
