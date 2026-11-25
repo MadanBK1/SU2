@@ -945,7 +945,8 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
         AddRow(a.res, iPoint, nVar, Flux, 1.0);
         if (a.implicit) AddDiag(a, iPoint, Jacobian_i, 1.0);
 
-        /*--- Step 8: viscous contribution of BC_Far_Field (CAvgGrad_NEMO, node_infty, reflected normal neighbour;
+        /*--- Step 8: viscous contribution of BC_Far_Field / BC_Supersonic_Inlet (CAvgGrad_NEMO, node_infty /
+         *    node_inlet, reflected normal neighbour;
          *    transport properties of iPoint on both sides). ---*/
         if (r.viscous) {
           using namespace nemo_visc;
@@ -1162,7 +1163,8 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   /*--- Roe boundary numerics (CUpwRoe_NEMO: LAX or ROE convection) read the conservative states. ---*/
   const bool roe = flux && (p.upw.scheme == UpwindScheme::ROE || p.upw.scheme == UpwindScheme::MSW);
   const bool needState = (p.kind == BCKind::FAR_FIELD || p.kind == BCKind::OUTLET || p.kind == BCKind::SUPERSONIC_INLET);
-  const bool viscFar = (p.kind == BCKind::FAR_FIELD) && p.viscous;
+  /*--- viscous part of BC_Far_Field (node_infty) or BC_Supersonic_Inlet (node_inlet): same CAvgGrad_NEMO call. ---*/
+  const bool viscFar = (p.kind == BCKind::FAR_FIELD || p.kind == BCKind::SUPERSONIC_INLET) && p.viscous;
   EnsureInputsOnDevice(uploadInputs, p.kind == BCKind::SYMMETRY || p.kind == BCKind::OUTLET || roe, ausmPlusM);
 
   /*--- Step 8: NS inputs (gradient, transport), host-authoritative mode only (resident: always on the device). ---*/

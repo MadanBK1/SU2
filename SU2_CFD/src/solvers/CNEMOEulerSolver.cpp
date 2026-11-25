@@ -3568,8 +3568,9 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
       (size_t(marker) >= bndStaleOK.size() || !bndStaleOK[marker]))
     return "AUSM+M: no earlier FAR_FIELD / OUTLET (/ SUPERSONIC_OUTLET) BC sets the boundary numerics' Gamma / Sensor "
            "(the CPU reads uninitialised values in the first iteration)";
-  if (k == K::SUPERSONIC_INLET && config->GetViscous()) return "viscous contribution";
-  if (k == K::FAR_FIELD && config->GetViscous() && dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr)
+  /*--- 4.5: the viscous part of BC_Supersonic_Inlet is ported (same CAvgGrad_NEMO pattern as BC_Far_Field). ---*/
+  if ((k == K::FAR_FIELD || k == K::SUPERSONIC_INLET) && config->GetViscous() &&
+      dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr)
     return "viscous contribution without NS variables";
   if (k == K::OUTLET && config->GetGravityForce()) return "gravity";
   return "";
@@ -3799,15 +3800,16 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
     bs.U = node_inlet->GetSolution(0);
   }
 
-  /*--- Step 8: viscous far-field part (node_infty secondaries + gradient), NS walls. ---*/
+  /*--- Step 8: viscous far-field / supersonic-inlet part (node_infty / node_inlet secondaries + gradient), NS walls. ---*/
   std::vector<su2double> inftyGrad;
-  if (bk == K::BCKind::FAR_FIELD && config->GetViscous()) {
+  if ((bk == K::BCKind::FAR_FIELD || bk == K::BCKind::SUPERSONIC_INLET) && config->GetViscous()) {
+    CNEMOEulerVariable* nb = (bk == K::BCKind::FAR_FIELD) ? node_infty : node_inlet.get();
     p.viscous = true;
-    bs.Cvve = node_infty->GetCvve(0);
-    bs.dTdU = node_infty->GetdTdU(0);
-    bs.dTvedU = node_infty->GetdTvedU(0);
+    bs.Cvve = nb->GetCvve(0);
+    bs.dTdU = nb->GetdTdU(0);
+    bs.dTvedU = nb->GetdTvedU(0);
     const size_t ng = size_t(nPrimVarGrad) * nDim;
-    auto& g = node_infty->GetGradient_Primitive();
+    auto& g = nb->GetGradient_Primitive();
     inftyGrad.assign(ng, 0.0);
     if (size_t(g.size()) >= ng) std::copy_n(g.data(), ng, inftyGrad.begin());
     bs.grad = inftyGrad.data();
