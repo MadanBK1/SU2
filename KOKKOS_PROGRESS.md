@@ -394,3 +394,7 @@ READY FOR REVIEW: HEAVY: 4.4-Roe: device Roe needed (CUpwRoe_NEMO; reuses LaxInv
   - 4.4 status: LAX done+merged; **Roe interior DONE (awaiting merge)**; remaining: MSW, AUSM+-up2 quirk doc.
   - Review-5 queue complete (items 1,2,4,5; 3 not needed, 6 below).
 READY FOR REVIEW: MERGE: 4.4-Roe (interior device Roe; G1 strict invwedge_roe PASS bitwise max|dres|=0/max field diff=0 + stage-line guard OK; regression 6-case default list incl. invwedge_lax/invwedge_am PASS bitwise; STAGE_VERIFY A/B all non-bitwise=0)
+
+- 2026-11-25 (round 26, review 6 queue — device Roe BCs + LAX residency by reviewer, HEAD fc565179f9):
+  - Queue: (1) build strict+serial; (2) G1 strict invwedge_lax invwedge_roe (both PASS bitwise; all BCs device; LAX device-resident ON); (3) FAIL -> .svrun.sh stage-verify + RESIDENT=0; (4) regression 6-case list; (5) A/B even on PASS (BC non-bitwise=0); (6) PERF lines + wall times; (7) READY FOR REVIEW: MERGE: 4.4-Roe-BC (+LAX resident).
+  - Starting (1): ninja build-kokkos-strict + build-kokkos-serial.
