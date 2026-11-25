@@ -20,8 +20,10 @@ MAX_STUCK=${MAX_STUCK:-3}                       # after N no-progress rounds: ba
 PAUSE=${PAUSE:-20}
 LOGS=$WS/agent_logs; mkdir -p "$LOGS"
 PUSH_URL=${PUSH_URL:-git@github.com:MadanBK1/SU2.git}   # SSH (key on roam148-045); fetch stays on https origin
-PUSH_EVERY=${PUSH_EVERY:-7200}                          # seconds between pushes (2 h)
-LAST_PUSH_FILE=$WS/.last_push
+REVIEW_EVERY_ROUNDS=${REVIEW_EVERY_ROUNDS:-8}           # request a review at least every N rounds of real work
+REVIEW_POLL=${REVIEW_POLL:-300}                         # seconds between checks for the reviewer's answer
+REVIEW_MAX_WAIT=${REVIEW_MAX_WAIT:-21600}               # give up waiting after 6 h and continue
+rounds_since_review=0
 
 # Point Claude Code at the local ollama server (Anthropic-compatible API).
 export ANTHROPIC_BASE_URL="http://$OLLAMA_HOST" ANTHROPIC_AUTH_TOKEN=ollama ANTHROPIC_API_KEY=""
@@ -52,6 +54,8 @@ Retry BLOCKED items only after all other items are done or blocked.
 If KOKKOS_PROGRESS.md contains a line starting with LOOP HINT:, obey the most recent one.
 REVIEW_NOTES.md (written by the Claude reviewer every ~2 h; never edit it yourself) has priority over your own plan:
 read its newest section first and do its "Agent: do next" items before continuing the task list.
+When you finish a work item or a meaningful compiled+tested chunk, write the line READY FOR REVIEW: <what> as the
+last line of KOKKOS_PROGRESS.md and end the session; the loop then pushes and waits for the Claude reviewer.
 Standing goals: improve GPU speedup AND keep numerical accuracy (strict gate G1 bitwise, noise floor <= 10);
 never trade accuracy for speed.
 Then end the session."
@@ -94,12 +98,29 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
     git -C "$REPO" commit -q -m "WIP loop autosave round $r ($(date -Is)): uncommitted work left by the agent session; gates not verified" \
       && echo "    autosaved round $r"
   fi
-  # push to GitHub every PUSH_EVERY seconds (loop-side, outside the agent sandbox; SSH key, never prompts)
-  now=$(date +%s); last=$(cat "$LAST_PUSH_FILE" 2>/dev/null || echo 0)
-  if [ $((now - last)) -ge "$PUSH_EVERY" ]; then
+  # ---- review handshake: push, then wait for the reviewer's answer (REVIEW_DONE == REVIEW_REQUEST id) ----
+  rounds_since_review=$((rounds_since_review+1))
+  if tail -3 "$REPO/KOKKOS_PROGRESS.md" 2>/dev/null | grep -q '^READY FOR REVIEW' || [ $rounds_since_review -ge "$REVIEW_EVERY_ROUNDS" ]; then
+    rid="$(date +%Y%m%dT%H%M%S)-$(git -C "$REPO" rev-parse --short HEAD)"
+    printf 'id: %s\nhead: %s\nreason: %s\n' "$rid" "$(git -C "$REPO" rev-parse HEAD)" \
+      "$(tail -3 "$REPO/KOKKOS_PROGRESS.md" | grep '^READY FOR REVIEW' | tail -1 || echo "periodic ($rounds_since_review rounds)")" > "$REPO/REVIEW_REQUEST"
+    git -C "$REPO" add REVIEW_REQUEST && git -C "$REPO" commit -q -m "REVIEW REQUEST $rid"
     if timeout 180 git -C "$REPO" push -q "$PUSH_URL" "$BRANCH" </dev/null >/dev/null 2>&1; then
-      echo "$now" > "$LAST_PUSH_FILE"; echo "    pushed to GitHub"
-    else echo "    push failed (will retry next round)"; fi
+      echo "    review requested ($rid); waiting for Claude (poll ${REVIEW_POLL}s, max ${REVIEW_MAX_WAIT}s)"
+      waited=0
+      while [ $waited -lt "$REVIEW_MAX_WAIT" ] && [ ! -e "$WS/STOP_AGENT" ]; do
+        sleep "$REVIEW_POLL"; waited=$((waited+REVIEW_POLL))
+        timeout 120 git -C "$REPO" fetch -q origin "$BRANCH" </dev/null 2>/dev/null || continue
+        if git -C "$REPO" show "origin/$BRANCH:REVIEW_DONE" 2>/dev/null | grep -q "^id: $rid"; then
+          git -C "$REPO" merge -q --no-edit "origin/$BRANCH" </dev/null >/dev/null 2>&1 || git -C "$REPO" merge --abort 2>/dev/null
+          echo "    review received after ${waited}s; continuing"; break
+        fi
+      done
+      [ $waited -ge "$REVIEW_MAX_WAIT" ] && echo "    no review after ${REVIEW_MAX_WAIT}s; continuing without it"
+    else
+      echo "    push failed; continuing without review this time"
+    fi
+    rounds_since_review=0
   fi
   after=$(state)
   if [ "$before" = "$after" ]; then stuck=$((stuck+1)); else stuck=0; fi

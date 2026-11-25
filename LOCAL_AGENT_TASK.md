@@ -14,6 +14,7 @@ The script `TestCases/kokkos_nemo/local_agent_loop.sh` restarts you in a fresh s
 - **Each session:** do one bounded chunk, then save progress and commit locally (no push) before ending.
 - **When everything is finished:** if every item in section 4 is checked, write `ALL ITEMS DONE` as the last line of `KOKKOS_PROGRESS.md`.
 - **Never wait for a person.** If an item is blocked (credentials, GPU busy, a permission refused, a missing tool), mark it `BLOCKED <item>: <reason>` in `KOKKOS_PROGRESS.md` and continue with the next unchecked item. Retry blocked items once everything else is done or blocked. When something is a decision for the user, pick the conservative option and record it.
+- **Review handshake:** when an item or a compiled-and-tested chunk is done, write `READY FOR REVIEW: <what>` as the last line of `KOKKOS_PROGRESS.md` and end the session. The loop pushes and waits for the Claude review in `REVIEW_NOTES.md`, then you continue with its **Agent: do next** items. Never edit `REVIEW_NOTES.md`, `REVIEW_REQUEST` or `REVIEW_DONE`.
 - **Loop hints:** obey the most recent `LOOP HINT:` line in `KOKKOS_PROGRESS.md`.
 - **Stopping:** the loop stops only on `ALL ITEMS DONE` or when the user creates the file `STOP_AGENT`.
 
