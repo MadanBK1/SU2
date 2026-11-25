@@ -523,3 +523,9 @@ READY FOR REVIEW: HEAVY: 4.4-AUSMup2: host fallback reason "implicit AUSM+-up2 (
 - 2026-11-25 (round 52, review-11 queue step 1 — reviewer fix e08f9fabd3 landed in HEAD; building strict+serial):
   - Fix verified in tree: CNEMOEulerSolver.cpp now uses GetKind_TimeIntScheme_Flow() (Device_*Unsupported checks; 6 lines, commit e08f9fabd3).
   - Building: `timeout 3000 bash ../kk/build.sh ninja strict 4` -> see below.
+  - BUILD strict: rc=0 (ninja [4/4] SU2_CFD relinked; build-strict-r52.log, 0 errors).
+  - BUILD serial: rc=0 (ninja [4/4] SU2_CFD relinked; build-serial-r52.log, 0 errors).
+  - NEXT: G1 invwedge_ausmplusup2.
+  - G1 (review-11 step 2): `timeout 1500 bash .g1run.sh ../kk/logs/g1-up2-r52.log invwedge_ausmplusup2` -> **rc=0, OVERALL: PASS, bitwise** (max|dres|=0.00e+00, max field diff=0.00e+00, tol 0; NO wall=3.57s YES wall=2.90s).
+  - Stage lines YES run: upwind (AUSM+-up2, residual): **device**; bc FAR_FIELD Inlet, OUTLET_FLOW Exit, FAR_FIELD Farfield, EULER_WALL Wall, EULER_WALL Euler: all **device** (previously 4 fell back to host per the stage-report bug).
+  - NEXT: step 4 regression — G1 default list.
