@@ -5,7 +5,7 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
 ## 0. Restart protocol (do this every session)
 1. `cd` to the clone, run `git checkout su2kokkos_qwenlocal_agent`, then `git status` and `git log --oneline -5`. Stop if you are not on that branch.
 2. Read `KOKKOS_PROGRESS.md` (create it if missing). It is the only memory you have between sessions.
-3. Continue the first unchecked item in section 4.
+3. Read the newest section of `REVIEW_NOTES.md` (from the Claude reviewer; never edit that file). Do its **Agent: do next** items first, then continue the first unchecked item in section 4.
 4. After every meaningful step, append to `KOKKOS_PROGRESS.md`: date, what you did, the exact commands, pass/fail numbers, and the next step.
 5. Work on **one item per session**. When the item is committed, or your context is getting long, update `KOKKOS_PROGRESS.md`, commit it, and tell the user: "restart me with the same prompt". Never rely on remembering earlier chat.
 
@@ -109,6 +109,7 @@ Set `S=$SU2_ROOT/TestCases/kokkos_nemo`, `STRICT=$SU2_ROOT/build-kokkos-strict/S
 - [ ] **4.6 Solver options:** ILU(n>0) device factorization, LU-SGS, the multigrid coarse levels (`MGLEVEL>0`), periodic markers, and dynamic/deforming grids (geometry re-upload hook).
 - [ ] **4.7 Turbulence coupling** for NEMO (SA/SST device kernels), or leave it host-only with a clear notice.
 - [ ] **4.8 Performance** (only after 4.3): 32-bit indices, LayoutLeft for coalesced access, fusing Cons2Prim, transport and gradient, reducing the 81-entry atomics per Jacobian block, and a polynomial/block-Jacobi preconditioner option.
+- [ ] **4.8b Speedup with accuracy:** this is a standing goal. Every performance change must keep G1 bitwise (strict) and the noise-floor ratio ≤ 10. Record wall time and `[KOKKOS_NEMO_PERF]` before and after. The user runs GPU timings (G7) from their own shell, so leave exact commands for them in `KOKKOS_PROGRESS.md`.
 - [ ] **4.9** Keep the "Feature coverage matrix" in `NEMO_KOKKOS_PORT_PLAN.md` accurate after every item.
 
 Out of scope on the device: Mutation++ (an external host-only library). Leave it on the host path with a notice.

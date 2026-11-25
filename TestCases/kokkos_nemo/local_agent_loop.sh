@@ -19,6 +19,9 @@ MAX_ROUNDS=${MAX_ROUNDS:-1000000}             # effectively unlimited
 MAX_STUCK=${MAX_STUCK:-3}                       # after N no-progress rounds: back off + tell agent to change approach/skip
 PAUSE=${PAUSE:-20}
 LOGS=$WS/agent_logs; mkdir -p "$LOGS"
+PUSH_URL=${PUSH_URL:-git@github.com:MadanBK1/SU2.git}   # SSH (key on roam148-045); fetch stays on https origin
+PUSH_EVERY=${PUSH_EVERY:-7200}                          # seconds between pushes (2 h)
+LAST_PUSH_FILE=$WS/.last_push
 
 # Point Claude Code at the local ollama server (Anthropic-compatible API).
 export ANTHROPIC_BASE_URL="http://$OLLAMA_HOST" ANTHROPIC_AUTH_TOKEN=ollama ANTHROPIC_API_KEY=""
@@ -47,6 +50,10 @@ Never wait for a human. If an item is blocked (credentials, permission refused, 
 KOKKOS_PROGRESS.md as BLOCKED <item>: <reason> (retry later), and move on to the next unchecked item.
 Retry BLOCKED items only after all other items are done or blocked.
 If KOKKOS_PROGRESS.md contains a line starting with LOOP HINT:, obey the most recent one.
+REVIEW_NOTES.md (written by the Claude reviewer every ~2 h; never edit it yourself) has priority over your own plan:
+read its newest section first and do its "Agent: do next" items before continuing the task list.
+Standing goals: improve GPU speedup AND keep numerical accuracy (strict gate G1 bitwise, noise floor <= 10);
+never trade accuracy for speed.
 Then end the session."
 
 # "Progress" = change to anything except the progress log (log-only rounds count as stuck).
@@ -63,6 +70,12 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
   # make sure ollama is up
   curl -sf "http://$OLLAMA_HOST/api/tags" >/dev/null || { echo "$(date) ollama not reachable at $OLLAMA_HOST; retry in 60s"; sleep 60; continue; }
 
+  # pull reviewer notes (REVIEW_NOTES.md) and reviewer fixes from GitHub before the round
+  if timeout 120 git -C "$REPO" fetch -q origin "$BRANCH" </dev/null 2>/dev/null; then
+    if ! git -C "$REPO" merge -q --no-edit "origin/$BRANCH" </dev/null >/dev/null 2>&1; then
+      git -C "$REPO" merge --abort 2>/dev/null; echo "    merge of origin/$BRANCH conflicted; skipped this round"
+    fi
+  fi
   before=$(state); log=$LOGS/round_$(date +%Y%m%d_%H%M%S)_$r.log; ln -sf "$log" "$LOGS/latest.log"
   echo "=== $(date) round $r (stuck=$stuck) -> $log"
   ( cd "$WS" && timeout "$ROUND_TIMEOUT" claude -p "$PROMPT" --model "$MODEL" --max-turns "$MAX_TURNS" \
@@ -81,7 +94,13 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
     git -C "$REPO" commit -q -m "WIP loop autosave round $r ($(date -Is)): uncommitted work left by the agent session; gates not verified" \
       && echo "    autosaved round $r"
   fi
-  # local-only mode: no push (the user pushes manually for review)
+  # push to GitHub every PUSH_EVERY seconds (loop-side, outside the agent sandbox; SSH key, never prompts)
+  now=$(date +%s); last=$(cat "$LAST_PUSH_FILE" 2>/dev/null || echo 0)
+  if [ $((now - last)) -ge "$PUSH_EVERY" ]; then
+    if timeout 180 git -C "$REPO" push -q "$PUSH_URL" "$BRANCH" </dev/null >/dev/null 2>&1; then
+      echo "$now" > "$LAST_PUSH_FILE"; echo "    pushed to GitHub"
+    else echo "    push failed (will retry next round)"; fi
+  fi
   after=$(state)
   if [ "$before" = "$after" ]; then stuck=$((stuck+1)); else stuck=0; fi
   if [ $rc -ne 0 ] || [ "$before" = "$after" ]; then
