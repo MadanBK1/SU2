@@ -348,3 +348,5 @@ LOOP HINT: 2026-11-25T01:18:35-05:00 no progress for 3 rounds on the current ite
   - Command note: the sandbox rejects compound `export ...; cmd` lines ("A variable in this command can't be checked"); use single inline `VAR=path cmd` lines or write a driver script.
   - Running now (bg b61w28z85): G1 default case list (invwedge_ausm thermalbath super_cat axi_visccone) with BIN=strict, RES_TOL=0 FIELD_TOL=0 → g1-default-strict.log.
   - NEXT: if default list OVERALL PASS → write `READY FOR REVIEW: 4.4-LAX` (both results) as last line + tick progress; commit locally. If any case fails: paste StageCompare/verify lines (max 20), then per review 3 item 3 mark `BLOCKED 4.4-LAX` after 3 failed sessions (this would be session 4) and move to 4.5.
+
+- 2026-11-25T01:52:24-05:00 [loop] round 20 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_012856_20.log
