@@ -49,7 +49,8 @@ Retry BLOCKED items only after all other items are done or blocked.
 If KOKKOS_PROGRESS.md contains a line starting with LOOP HINT:, obey the most recent one.
 Then end the session."
 
-state() { (cd "$REPO" && git rev-parse HEAD 2>/dev/null; md5sum KOKKOS_PROGRESS.md 2>/dev/null; git diff --stat | tail -1) | md5sum | cut -c1-12; }
+# "Progress" = change to anything except the progress log (log-only rounds count as stuck).
+state() { (cd "$REPO" && git log -1 --format=%H -- . ':!KOKKOS_PROGRESS.md'; git diff --stat -- . ':!KOKKOS_PROGRESS.md' | tail -1) | md5sum | cut -c1-12; }
 
 command -v claude >/dev/null || { echo "claude CLI not found in PATH"; exit 1; }
 cd "$REPO" && git checkout -q "$BRANCH" || { echo "cannot checkout $BRANCH"; exit 1; }
@@ -89,7 +90,7 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
   fi
   if [ $stuck -ge $MAX_STUCK ]; then
     echo "    no progress for $stuck rounds: backing off 10 min and steering the agent"
-    printf '\nLOOP HINT: %s no progress for %d rounds on the current item. Try a different, smaller approach; if it still fails, mark it BLOCKED and move to the next unchecked item.\n' "$(date -Is)" "$stuck" >> "$REPO/KOKKOS_PROGRESS.md"
+    printf '\nLOOP HINT: %s no progress for %d rounds on the current item. No code changed (only the progress log). Stop planning: in THIS session write code immediately - the smallest compilable piece (e.g. one device function + its call site), build it, commit it. If you cannot, mark the item BLOCKED and move to the next unchecked item.\n' "$(date -Is)" "$stuck" >> "$REPO/KOKKOS_PROGRESS.md"
     sleep 600; stuck=0
   fi
   sleep "$PAUSE"
