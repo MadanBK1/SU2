@@ -2843,6 +2843,7 @@ const char* BCKindName(int kind) {
     case K::SUPERSONIC_OUTLET: return "SUPERSONIC_OUTLET";
     case K::ISOTHERMAL: return "ISOTHERMAL";
     case K::HEAT_FLUX: return "HEAT_FLUX";
+    case K::SMOLUCHOWSKI_MAXWELL: return "SMOLUCHOWSKI_MAXWELL";
   }
   return "?";
 }
@@ -3017,6 +3018,7 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
         case SYMMETRY_PLANE: case EULER_WALL: return static_cast<int>(K::BCKind::SYMMETRY);
         case ISOTHERMAL: return static_cast<int>(K::BCKind::ISOTHERMAL);
         case HEAT_FLUX: return static_cast<int>(K::BCKind::HEAT_FLUX);
+        case SMOLUCHOWSKI_MAXWELL: return static_cast<int>(K::BCKind::SMOLUCHOWSKI_MAXWELL);
         default: return -1;
       }
     };
@@ -3535,6 +3537,13 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
       return "implicit partially catalytic wall (not available on the CPU either)";
     return "";
   }
+  /*--- 4.5: BC_Smoluchowski_Maxwell (no boundary numerics, no Jacobian contribution). ---*/
+  if (k == K::SMOLUCHOWSKI_MAXWELL) {
+    if (!config->GetViscous() || dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr) return "no NS variables";
+    if (config->GetIonization()) return "ionization (the CPU slip wall stops with an error)";
+    if (FluidModel == nullptr) return "no host gas model (ComputeGasConstant)";
+    return "";
+  }
   /*--- Flux BCs use the boundary numerics, of the same type as the convective scheme (CDriver). ---*/
   /*--- CDriver: LAX (centered) and ROE use CUpwRoe_NEMO as boundary numerics. ---*/
   const bool centered = (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED);
@@ -3821,6 +3830,16 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
       p.heatFlux = Wall_HeatFlux;
     }
   }
+  const bool smolBC = (bk == K::BCKind::SMOLUCHOWSKI_MAXWELL);
+  if (smolBC) {
+    const string Marker_Tag = config->GetMarker_All_TagBound(val_marker);
+    p.Twall = config->GetIsothermal_Temperature(Marker_Tag);
+    /*--- CPU: FluidModel->ComputeGasConstant() per vertex; the gas-model state is constant over the marker loop (the
+     *    host gas model is kept in the CPU state: SetPrimVar / BC_Outlet replays), so one host evaluation. ---*/
+    p.gasConstant = FluidModel->ComputeGasConstant();
+    p.prandtlLam = Prandtl_Lam;
+    p.downloadSlip = !Device_ResidentActive();
+  }
 
   const auto r = kokkosData->ComputeBCResidual(p, bs, verify);
 
@@ -3833,6 +3852,17 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
       if (!geometry->nodes->GetDomain(iPoint)) continue;
       nodes->SetVelocity_Old(iPoint, zero);
       nodes->SetVel_ResTruncError_Zero(iPoint);
+    }
+    kokkosData->stagePerf[K::ST_BC].host += timer.seconds();
+  }
+  /*--- Host-authoritative slip wall: SetVelocity_Old(slip velocity), momentum Res_TruncError rows. ---*/
+  if (smolBC && !Device_ResidentActive()) {
+    Kokkos::Timer timer;
+    for (auto iVertex = 0ul; iVertex < geometry->nVertex[val_marker]; iVertex++) {
+      const auto iPoint = geometry->vertex[val_marker][iVertex]->GetNode();
+      if (!geometry->nodes->GetDomain(iPoint)) continue;
+      nodes->SetVelocity_Old(iPoint, &r.slipVel[iVertex * nDim]);
+      for (auto iDim = 0ul; iDim < nDim; iDim++) nodes->SetVal_ResTruncError_Zero(iPoint, nSpecies + iDim);
     }
     kokkosData->stagePerf[K::ST_BC].host += timer.seconds();
   }
@@ -3898,6 +3928,9 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
       break;
     case K::BCKind::HEAT_FLUX:
       BC_HeatFlux_Wall(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker);
+      break;
+    case K::BCKind::SMOLUCHOWSKI_MAXWELL:
+      BC_Smoluchowski_Maxwell(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker);
       break;
   }
   kokkosData->stagePerf[K::ST_BC].hostRef += timer.seconds();
@@ -4115,6 +4148,7 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
       case SYMMETRY_PLANE: case EULER_WALL: k = static_cast<int>(K::BCKind::SYMMETRY); break;
       case ISOTHERMAL: k = static_cast<int>(K::BCKind::ISOTHERMAL); break;
       case HEAT_FLUX: k = static_cast<int>(K::BCKind::HEAT_FLUX); break;
+      case SMOLUCHOWSKI_MAXWELL: k = static_cast<int>(K::BCKind::SMOLUCHOWSKI_MAXWELL); break;
       case SEND_RECEIVE: continue;
       default: return "marker " + config->GetMarker_All_TagBound(iMarker) + ": BC not ported";
     }

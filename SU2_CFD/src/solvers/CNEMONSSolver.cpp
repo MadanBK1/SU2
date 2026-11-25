@@ -955,6 +955,9 @@ void CNEMONSSolver::BC_Smoluchowski_Maxwell(CGeometry *geometry,
   SU2_ZONE_SCOPED
 
 #ifdef HAVE_KOKKOS
+  if (!bcHostOnly && Device_BCResidual(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker,
+                                       static_cast<int>(CNEMOKokkosData::BCKind::SMOLUCHOWSKI_MAXWELL)))
+    return;
   Device_BeginHostStage(geometry); /*--- device residual accumulator -> host ---*/
 #endif
 
