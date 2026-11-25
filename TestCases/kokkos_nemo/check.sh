@@ -59,7 +59,7 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invwedge_msw]="stage upwind (MSW + MUSCL, residual + Jacobian): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [invwedge_ausmplusup2]="stage upwind (AUSM+-up2, residual): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [smol_maxwell]="stage bc:SMOLUCHOWSKI_MAXWELL (Wall): device"
-                    [supin_visc]="stage bc:SUPERSONIC_INLET (Inlet): device|stage bc:FAR_FIELD (Farfield): device|stage bc:ISOTHERMAL (Wall): device" )
+                    [supin_visc]="stage bc:SUPERSONIC_INLET (Inlet): device|stage bc:FAR_FIELD (Farfield) [+ viscous]: device|stage bc:ISOTHERMAL (Wall) [non-catalytic]: device" )
 cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat axi_visccone)
 status=0
 for c in "${cases[@]}"; do

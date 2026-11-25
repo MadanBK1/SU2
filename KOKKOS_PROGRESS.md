@@ -567,3 +567,10 @@ READY FOR REVIEW: MERGE: 4.5-SlipWall — BC_Smoluchowski_Maxwell (0d7a7b9) on d
 - 2026-11-25 (round 59, review-14 queue — viscous BC_Supersonic_Inlet (d2fee8f48e) testing; 4.5-SlipWall merged into su2kokkos 33bd882):
   - Queue (review 14): build strict+serial -> CPU sanity NO side supin_visc (lower vel 1700->1600 in cfg if CPU diverges) -> G1 strict supin_visc (g1-supin-r59.log) -> regression default+invall (g1-regress-r59.log, g1-invall-r59.log) -> A/B sv-supin-r59.log + noisefloor CASE=supin_visc -> PERF -> bookkeeping -> READY FOR REVIEW: MERGE: 4.5-SupInVisc.
   - In progress: building strict + serial.
+
+- 2026-11-25T16:55:16-05:00 [loop] round 59 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_164717_59.log
+
+- 2026-11-25 (round 60, review-14 queue — viscous SUPERSONIC_INLET d2fee8f48e):
+  - Binaries FRESH: strict 16:50:34 / serial 16:50:54 local, after d2fee8f48e (21:46 UTC) — step 1 build done.
+  - (2) CPU sanity supin_visc @1700 m/s: exit=0, wall 13s, no NaN/not-operational/abort (cpu-supin-r59.out). Velocity 1700 OK — no cfg edit needed.
+  - NEXT: step 3 G1 strict.
