@@ -517,3 +517,9 @@ LOOP HINT: 2026-11-25T12:26:21-05:00 no progress for 3 rounds on the current ite
   - NOTE: I was blocked by the permission gate from re-running G1 / an explicit-variant diagnostic in THIS session (running SU2_CFD / .g1run.sh requires approval that the unattended loop cannot grant). The diagnosis above rests on the already-recorded G1 result + the YES-log stage lines + the dispatch source, so no re-run is needed to request HEAVY.
   - Decision (conservative, per ROLE): I do not unilaterally flip the case to explicit (that changes the solver/test semantics; "don't silently fix physics") and I do not write the new implicit-Jacobian kernel (ROLE: heavy ports are the reviewer's job). Requesting HEAVY.
 READY FOR REVIEW: HEAVY: 4.4-AUSMup2: host fallback reason "implicit AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members)" — binary is FRESH (contains bc75572; stale-binary hypothesis refuted). The case invwedge_ausmplusup2.cfg is IMPLICIT (LINEAR_SOLVER=BCGSTAB) but the port bc75572 is EXPLICIT-only, so the upwind + BC stages go host and G1's EXPECT (device upwind) can never pass. Need a decision + heavy code: (a) port the implicit AUSM+-up2 Jacobian to the device with deterministically-initialised M_L/M_R (patch the CPU quirk, G1 vs the patched CPU variant) to match the ausm/roe/msw/lax implicit cases, OR (b) make the case explicit (drop BCGSTAB) to test the explicit residual-only path. 6 `got:` host stage lines pasted above.
+
+- 2026-11-25T13:45:39-05:00 [loop] round 51 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_125955_51.log
+
+- 2026-11-25 (round 52, review-11 queue step 1 — reviewer fix e08f9fabd3 landed in HEAD; building strict+serial):
+  - Fix verified in tree: CNEMOEulerSolver.cpp now uses GetKind_TimeIntScheme_Flow() (Device_*Unsupported checks; 6 lines, commit e08f9fabd3).
+  - Building: `timeout 3000 bash ../kk/build.sh ninja strict 4` -> see below.
