@@ -421,3 +421,14 @@ READY FOR REVIEW: MERGE: 4.4-Roe-BC (+LAX resident) — G1 strict: invwedge_lax 
 - 2026-11-25 (round 28, review 7 queue — device MSW (cce61ae) landed; agent tests):
   - Queue: (1) build strict+serial; (2) G1 strict invwedge_msw bitwise + stage lines; (3) FAIL->svrun debug; (4) regression 8-case list (invwedge_ausm thermalbath super_cat axi_visccone invwedge_lax invwedge_roe invwedge_am partial_cat); (5) A/B svrun invwedge_msw non-bitwise=0; (6) PERF wall NO/YES + Upwind s/call (expect > Roe: two P/invP pairs/edge); (7) tick 4.4 MSW + coverage matrix, then READY FOR REVIEW: MERGE: 4.4-MSW; (8) optional noisefloor invwedge_msw.
   - Status: starting (1) builds.
+
+- 2026-11-25T05:57:26-05:00 [loop] round 29 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_054808_29.log
+
+- 2026-11-25 (round 29, review-7 queue — device MSW testing, continued from round 28):
+  - (1) BUILD OK: strict 11/11 rc=0 (ninja-strict-r28.log); serial `no work to do` rc=0 (ninja-serial-r28.log); binaries 05:50/05:51 current.
+  - (2) G1 strict invwedge_msw: **PASS bitwise** (max|dres|=0.00e+00, max field diff=0.00e+00, tol 0), OVERALL PASS (g1-msw-r28.log).
+    - Stage lines (YES): Cons2Prim/gradient WLS/limiter VENK/time step/upwind(MSW+MUSCL)/source/update EULER_IMPLICIT all device; **all 5 BC stages device** (FAR_FIELD Inlet, OUTLET_FLOW Exit, FAR_FIELD Farfield, EULER_WALL x2); "max eigenvalue (centered only): not used"; **device-resident state (Step 6): ON**.
+    - (6) PERF (strict serial, 100 iter): Upwind 3.452e+00 s / 11 = **3.138e-01 s/call** (> Roe 2.237e-01 as expected: two P/invP pairs per edge); Source 4.117e-01/call (dominant); SetPrimVar 6.663e-02/call; BC 3.549e-04/call; preconditioner builds=11 0.737 s.
+    - Wall NO 19.83s / YES 15.96s (YES 1.24x faster, strict serial).
+  - (5) A/B stage-verify invwedge_msw: **PASS** (sv-msw-r28.log, done round 28): residual bit-identical (max|dres|=0.00e+00), OVERALL PASS.
+  - (4) REGRESSION 8-case (invwedge_ausm thermalbath super_cat axi_visccone invwedge_lax invwedge_roe invwedge_am partial_cat): running in background (g1-regress-r28.log). NEXT: check regression PASS, then (7) tick 4.4 MSW + coverage matrix, READY FOR REVIEW: MERGE: 4.4-MSW. (8) optional noisefloor invwedge_msw if time.
