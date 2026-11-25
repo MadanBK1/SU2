@@ -335,3 +335,16 @@ LOOP HINT: 2026-11-24T23:40:39-05:00 no progress for 3 rounds on the current ite
 
 - 2026-11-25T01:25:00-05:00 [agent] review-3 item 1: serial build of reviewer LAX dispatch (e69cbbb) is current: `ninja -C build-kokkos-serial -j4 SU2_CFD/src/SU2_CFD` → "no work to do"; binary 2026-11-25 00:54; CNEMOKokkosCentered.cpp.o present. No compile/link fixes needed.
 - 2026-11-25T01:26:00-05:00 [agent] running review-3 item 2: `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 TestCases/kokkos_nemo/check.sh invwedge_lax` (BIN default = build-kokkos-serial). Next: expect `[KOKKOS_NEMO] stage centered residual (LAX-FRIEDRICH): device`; then default case list.
+
+- 2026-11-25T01:18:35-05:00 [loop] round 19 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_011027_19.log
+
+LOOP HINT: 2026-11-25T01:18:35-05:00 no progress for 3 rounds on the current item. No code changed (only the progress log). Stop planning: in THIS session write code immediately - the smallest compilable piece (e.g. one device function + its call site), build it, commit it. If you cannot, mark the item BLOCKED and move to the next unchecked item.
+
+- 2026-11-25 (round 20, item 4.4-LAX — review-3 item 2+3):
+  - ROOT CAUSE of the earlier invwedge_lax FAILs: prior sessions ran check.sh with the DEFAULT BIN = build-kokkos-**serial** (fast-math). With RES_TOL=0/FIELD_TOL=0 that build cannot be bitwise (host lax.cpp gets FMA/fast-math; 1-ulp diffs). G1 per the gates table requires BIN=$STRICT.
+  - This round: strict build regen needed (meson.build changed by reviewer fix e69cbbb); meson not on PATH → `PYTHONPATH=/home/mpr7366/SU2/externals/meson ninja -C build-kokkos-strict -j4 SU2_CFD/src/SU2_CFD` → rc=0 (ninja-strict-r20.log).
+  - **G1 invwedge_lax (BIN=strict, REF_MODE=HOST, RES_TOL=0, FIELD_TOL=0): PASS — max|dres|=0, max field diff=0 (bitwise)** (g1lax-strict.log).
+  - Also ran with SU2_KOKKOS_STAGE_VERIFY=1 on the SERIAL build: all [KOKKOS_NEMO_VERIFY] diffs are 1–2 ulp (≤~1e-16 rel on meaningful entries) or relative-to-~1e-43..1e-47 near-underflow entries (abs diff negligible) — consistent with fast-math noise, not a port bug. Strict build is the exactness reference.
+  - Command note: the sandbox rejects compound `export ...; cmd` lines ("A variable in this command can't be checked"); use single inline `VAR=path cmd` lines or write a driver script.
+  - Running now (bg b61w28z85): G1 default case list (invwedge_ausm thermalbath super_cat axi_visccone) with BIN=strict, RES_TOL=0 FIELD_TOL=0 → g1-default-strict.log.
+  - NEXT: if default list OVERALL PASS → write `READY FOR REVIEW: 4.4-LAX` (both results) as last line + tick progress; commit locally. If any case fails: paste StageCompare/verify lines (max 20), then per review 3 item 3 mark `BLOCKED 4.4-LAX` after 3 failed sessions (this would be session 4) and move to 4.5.
