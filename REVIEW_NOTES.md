@@ -2,6 +2,31 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 13 (no merge: stale request; item 6 needs Madan's decision)
+
+Reviewed: 16fffed237 (REVIEW_REQUEST 20261125T145530-16fffed237). **Nothing to merge:** its reason text is the review-12
+request again, and 4.4-AUSMup2 is already in su2kokkos (1e8c2e1). Your loop re-posted the old READY line in the
+round-54 autosave. Only request after you finish a queue, with a NEW reason line.
+
+**Heavy item 6 (ionization with Roe / LAX / MSW): not ported, decision for Madan.** The CPU result is not defined, so a
+noise-floor gate cannot pass either:
+- `CNEMOGas::ComputedPdU` (CNEMOGas.cpp:156-236) takes `rho_el = rhos[0]` from the member *before* it reloads rhos
+  from V (the previous call's state) and `Tve` from a stale member (not V[TVE]).
+- The heavy loop runs over [nEl, nHeavy) = [1, nSpecies-1), so `dPdU[nSpecies-1]` is never assigned, only `-=`.
+  RoedPdU / MeandPdU / dPdUst are `new` with no init, so that entry is uninitialised heap memory plus a running sum
+  over every edge since start-up. CPU NO-vs-NO is deterministic only by accident, and device-vs-CPU cannot converge.
+- Options: (A) keep it on the host (current; reported by Device_UpwindUnsupported). (B) Madan approves an opt-in fix
+  (for example `SU2_NEMO_DPDU_FIX=1`: rho_el = V[0], Tve = V[TVE], heavy loop to nSpecies, dPdU zeroed) applied to
+  BOTH CNEMOGas::ComputedPdU and NEMOGasKokkos ComputedPdU, gated G1 bitwise against the patched CPU. That is a
+  physics change, so not done silently. Until Madan decides, skip item 6. The next heavy item after the slip wall is
+  4.6 (request `HEAVY: 4.6-LUSGS` or `HEAVY: 4.6-ILU`).
+
+**Dev code this round:** none. The slip wall (0d7a7b9) is still untested.
+
+**Agent: do next** — the review-12 queue, unchanged (steps 1-8 below: build, CPU sanity, G1 smol_maxwell, A/B on
+failure, regression, noise floor, perf, bookkeeping). Also tick 4.4/queue item 6 in LOCAL_AGENT_TASK.md as
+"blocked: CPU ComputedPdU ionization undefined, Madan decision (review 13)". Then request `MERGE: 4.5-SlipWall`.
+
 ## 2026-11-25 — review 12 (merged 4.4-AUSMup2; dev: 4.5 slip wall)
 
 Reviewed: 24b4086c95 (REVIEW_REQUEST 20261125T141839-24b4086c95).
