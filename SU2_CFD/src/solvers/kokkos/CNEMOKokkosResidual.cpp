@@ -43,6 +43,8 @@
 #include "../../../include/variables/CNEMONSVariable.hpp"
 
 #include "CNEMOKokkosAUSM.hpp"
+#include "CNEMOKokkosLAX.hpp"
+#include "CNEMOKokkosRoe.hpp"
 #include "CNEMOKokkosViscous.hpp"
 
 namespace {
@@ -647,7 +649,14 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
         const double *V_j = Vb, *eve_j = eveb, *dPdU_j = dPdUb;
         double Gamma_j = Gammab;
 
+        /*--- Conservative states (Roe boundary numerics only): SetConservative(Solution(iPoint), U_boundary). ---*/
+        const bool roe = (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::ROE));
+        const double* U_i = roe ? &r.U(iPoint, 0) : zero;
+        const double* U_j = (roe && r.bstate.size()) ? &r.bstate(nPrimVar + nSpecies + nVar + 1) : zero;
+        double U_outlet[MAXNV];
+
         if (kind == static_cast<int>(K::SUPERSONIC_OUTLET)) {
+          U_j = U_i;
           V_j = V_i;
           eve_j = eve_i;
           dPdU_j = dPdU_i;
@@ -657,7 +666,7 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
           double* V_outlet = &r.charac(k, 0);
           const double* U_domain = &r.U(iPoint, 0);
           const double* V_domain = V_i;
-          double U_outlet[MAXNV], rhos[MAXNS], Ys[MAXNS];
+          double rhos[MAXNS], Ys[MAXNS];
 
           double sq = 0.0;
           for (int iDim = 0; iDim < nDim; ++iDim) sq += Normal[iDim] * Normal[iDim];
@@ -736,6 +745,7 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
           /*--- Setting Last remaining variables ---*/
           V_outlet[idx.H()] = (U_outlet[nVar - 2] + Pressure) / Density;
           V_j = V_outlet;
+          U_j = U_outlet;
         }
 
         /*--- Batch A: BC_Supersonic_Inlet sets neither Gamma nor Sensor of the boundary numerics, BC_Supersonic_Outlet
@@ -749,8 +759,12 @@ void KernelBoundaryFlux(const ResArgs& r, int kind, unsigned long v0, unsigned l
         }
         const double Sensor_j = Sensor_i; /*--- SetSensor(Sensor(iPoint), Sensor(iPoint)) on the CPU ---*/
         double Flux[MAXNV], Jacobian_i[MAXNV * MAXNV], Jacobian_j[MAXNV * MAXNV];
-        AUSMResidual<ND>(a, Normal, V_i, V_j, eve_i, eve_j, dPdU_i, dPdU_j, Gamma_i, Gamma_j, Sensor_i, Sensor_j, Flux,
-                         Jacobian_i, Jacobian_j);
+        if (roe)
+          RoeResidual<ND>(g, nSpecies, nVar, nPrimVar, a.implicit, Normal, U_i, U_j, V_i, V_j, dPdU_i, dPdU_j, Flux,
+                          Jacobian_i, Jacobian_j);
+        else
+          AUSMResidual<ND>(a, Normal, V_i, V_j, eve_i, eve_j, dPdU_i, dPdU_j, Gamma_i, Gamma_j, Sensor_i, Sensor_j,
+                           Flux, Jacobian_i, Jacobian_j);
 
         AddRow(a.res, iPoint, nVar, Flux, 1.0);
         if (a.implicit) AddDiag(a, iPoint, Jacobian_i, 1.0);
@@ -968,9 +982,11 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   const bool wall = (p.kind == BCKind::ISOTHERMAL || p.kind == BCKind::HEAT_FLUX);
   const bool flux = (p.kind != BCKind::SYMMETRY) && !wall;
   const bool ausmPlusM = flux && (p.upw.scheme == UpwindScheme::AUSMPLUSM);
+  /*--- Roe boundary numerics (CUpwRoe_NEMO: LAX or ROE convection) read the conservative states. ---*/
+  const bool roe = flux && (p.upw.scheme == UpwindScheme::ROE);
   const bool needState = (p.kind == BCKind::FAR_FIELD || p.kind == BCKind::OUTLET || p.kind == BCKind::SUPERSONIC_INLET);
   const bool viscFar = (p.kind == BCKind::FAR_FIELD) && p.viscous;
-  EnsureInputsOnDevice(uploadInputs, p.kind == BCKind::SYMMETRY || p.kind == BCKind::OUTLET, ausmPlusM);
+  EnsureInputsOnDevice(uploadInputs, p.kind == BCKind::SYMMETRY || p.kind == BCKind::OUTLET || roe, ausmPlusM);
 
   /*--- Step 8: NS inputs (gradient, transport), host-authoritative mode only (resident: always on the device). ---*/
   if (wall || viscFar) {
@@ -1016,13 +1032,19 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   }
 
   if (needState) {
-    /*--- V | eve | dPdU | Gamma, uploaded only when it differs from the cached copy (constant in practice). ---*/
-    const size_t n = size_t(nPrimVar) + nSpecies + nVar + 1;
+    /*--- V | eve | dPdU | Gamma (| U for Roe), uploaded only when it differs from the cached copy (constant in
+     *    practice). ---*/
+    const size_t n0 = size_t(nPrimVar) + nSpecies + nVar + 1;
+    const size_t n = n0 + (roe ? size_t(nVar) : 0);
     std::vector<double> h(n, 0.0);
     std::copy(bs.V, bs.V + nPrimVar, h.begin());
     std::copy(bs.eve, bs.eve + nSpecies, h.begin() + nPrimVar);
     if (p.upw.implicit && bs.dPdU) std::copy(bs.dPdU, bs.dPdU + nVar, h.begin() + nPrimVar + nSpecies);
-    h[n - 1] = bs.Gamma;
+    h[n0 - 1] = bs.Gamma;
+    if (roe) {
+      if (!bs.U) SU2_MPI::Error("CNEMOKokkosData: Roe boundary numerics without the boundary Solution.", CURRENT_FUNCTION);
+      std::copy(bs.U, bs.U + nVar, h.begin() + n0);
+    }
     if (st.BState.size() != n) st.BState = View1D<double>("NEMO::BoundaryState", n);
     if (uploadInputs || bstateCache.size() != n || std::memcmp(h.data(), bstateCache.data(), n * sizeof(double)) != 0) {
       Kokkos::deep_copy(st.BState, Kokkos::View<const double*, HostSpace, Unmanaged>(h.data(), n));

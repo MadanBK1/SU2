@@ -2,6 +2,42 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 6 (MERGE 4.4-Roe interior + HEAVY: Roe boundary numerics, LAX residency)
+Reviewed: 0f654bab4db3b04de41e850ddaee3f1844396fb2 (REVIEW_REQUEST 20261125T041000-0f654bab4d)
+
+**Merged into su2kokkos (d63a151):** interior device Roe (code of e744eb0: CNEMOKokkosRoe.hpp, CNEMOKokkosUpwind.cpp,
+CNEMOKokkosAUSM.hpp, CNEMOKokkosData.hpp, CNEMOEulerSolver.cpp, check.sh). Your G1 / regression / A/B evidence accepted.
+
+**Dev code this round (g++ -std=c++20 -fsyntax-only -ffp-contract=off vs Kokkos 4.6 Serial headers; NOT validated):**
+- Device BCs with **Roe boundary numerics** (CDriver: LAX and ROE use CUpwRoe_NEMO at FAR_FIELD / OUTLET /
+  SUPERSONIC_INLET / SUPERSONIC_OUTLET): `KernelBoundaryFlux` (CNEMOKokkosResidual.cpp) calls `RoeResidual` with
+  U_i = Solution(iPoint), U_j = node_infty / node_inlet Solution (appended to BState), U_outlet (OUTLET), U_i (SUP_OUTLET).
+  `ComputeBCResidual` uploads Solution when Roe. Host: `BoundaryState::U`, `p.upw.scheme = ROE` when centered or ROE,
+  `Device_BCUnsupported` now allows Roe boundary numerics (host only with ionization / gas-table mismatch).
+- **LAX residency:** `Device_ResidentUnsupported` accepts the centered scheme when `Device_CenteredUnsupported` is empty
+  and there are no halo points (single rank; Lambda halo rows still come from the host comms).
+- check.sh: `EXPECT` accepts several lines separated by `|`; invwedge_lax / invwedge_roe now also require the device
+  BC lines (FAR_FIELD (Inlet), OUTLET_FLOW (Exit), EULER_WALL (Wall)).
+
+**Agent: do next** (strict binary for gates; fix compile errors yourself with the smallest change):
+1. Build: `ninja -C build-kokkos-strict` and the serial build; paste any error (first 10 lines) + your fix in PROGRESS.
+2. G1 strict: `bash .g1run.sh ../kk/logs/g1-bcroe-r26.log invwedge_lax invwedge_roe` → both PASS bitwise, no
+   "expected stage line missing". Paste the YES stage lines (grep '^\[KOKKOS_NEMO\] stage\|device-resident' log.txt)
+   for both cases. Expected: all BCs device; LAX: "device-resident state (Step 6): ON" (if OFF, paste the reason).
+3. On FAIL: make .svrun.sh take the case as $2 (small edit: `bash ... check.sh ${2:-invwedge_roe}`), run
+   `bash .svrun.sh ../kk/logs/sv-bcroe-r26.log invwedge_lax` (and invwedge_roe); paste <= 20 StageCompare lines
+   (stage BC first). Also try LAX with `SU2_KOKKOS_NEMO_RESIDENT=0` to separate a BC bug from a residency bug.
+4. Regression: `bash .g1run.sh ../kk/logs/g1-regress-r26.log invwedge_ausm thermalbath super_cat axi_visccone invwedge_am partial_cat`
+   → all PASS bitwise (AUSM BC path changed only by refactoring U_outlet / U_j pointers).
+5. A/B even on PASS: `bash .svrun.sh ../kk/logs/sv-bcroe-r26.log invwedge_lax` → BC non-bitwise=0.
+6. PERF: from the LAX + Roe YES logs paste the per-stage PERF lines (BC, CenteredLAX, Upwind, Source, ResidualSync,
+   update) and the YES/NO wall times; note any remaining h2d/d2h per iteration.
+7. Then `READY FOR REVIEW: MERGE: 4.4-Roe-BC (+LAX resident)` with the numbers, or `HEAVY:` only if a failure is not
+   localized after 3 sessions. Next heavy item after this merge: MSW.
+
+**Madan (V100, optional after step 2 passes):** CUDA timings G7 for invwedge_lax / invwedge_roe with the CUDA build,
+with your usual G7 command (CUDA build, noise-floor tolerances, cases invwedge_lax invwedge_roe), and report the YES/NO wall times.
+
 ## 2026-11-25 — review 5 (HEAVY: 4.4-Roe)
 Reviewed: 883d4141ad27b62c5623c48cd2f00aa355f3e56e (REVIEW_REQUEST 20261125T032955-883d4141ad)
 

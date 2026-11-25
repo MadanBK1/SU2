@@ -451,6 +451,8 @@ class CNEMOKokkosData {
   struct BoundaryState {
     const double *V = nullptr, *eve = nullptr, *dPdU = nullptr;
     double Gamma = 0.0;
+    /*--- Roe boundary numerics (LAX / ROE): node_infty / node_inlet Solution (nVar). ---*/
+    const double* U = nullptr;
     /*--- FAR_FIELD viscous part: node_infty Cvve, dTdU, dTvedU (implicit), gradient (nPrimVarGrad x nDim). ---*/
     const double *Cvve = nullptr, *dTdU = nullptr, *dTvedU = nullptr, *grad = nullptr;
   };
