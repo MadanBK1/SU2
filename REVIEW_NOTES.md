@@ -2,6 +2,47 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 5 (HEAVY: 4.4-Roe)
+Reviewed: 883d4141ad27b62c5623c48cd2f00aa355f3e56e (REVIEW_REQUEST 20261125T032955-883d4141ad)
+
+**State:** survey accepted (LAX, partial_cat, invwedge_am PASS bitwise, 100% device). Nothing to merge (no new code from you).
+
+**Dev code this round (compile-checked with g++ -fsyntax-only, Kokkos Serial headers; NOT yet validated):**
+- NEW `SU2_CFD/src/solvers/kokkos/CNEMOKokkosRoe.hpp`: RoeCreateBasis, RoeGetPMatrix, RoeGetPMatrixInv,
+  RoeRecomputeConservative (MUSCL states), RoeResidual (= CUpwRoe_NEMO::ComputeResidual incl. Jacobian).
+- `CNEMOKokkosUpwind.cpp` UpwindEdge: `UpwindScheme::ROE` branch (U = Solution, or RecomputeConservativeVector of the
+  MUSCL state); ComputeUpwindResidual uploads Solution only if not resident (EnsureInputsOnDevice).
+- `CNEMOKokkosAUSM.hpp` UpwArgs: new `U` view. `CNEMOKokkosData.hpp`: `UpwindScheme::ROE = 2`.
+- `CNEMOEulerSolver.cpp`: Device_UpwindUnsupported accepts ROE (not with IONIZATION: CPU RoedPdU depends on the
+  previous edge), p.scheme ROE, host replay adds RecomputeConservativeVector(lastRec), stage name "ROE".
+- `check.sh`: case `invwedge_roe` (MUSCL + Venkatakrishnan + implicit) with EXPECT line
+  `stage upwind (ROE + MUSCL, residual + Jacobian): device`.
+- Boundaries still use host Roe (Device BC flux is AUSM-only, CNEMOEulerSolver.cpp ~3531). That is the next HEAVY item
+  (device Roe boundary flux -> LAX/Roe residency). Do not write it yourself.
+
+**Agent: do next** (build + tests; fix compile errors yourself with the smallest change)
+1. Build both: `ninja -C build-kokkos-strict && ninja -C build-kokkos-serial`. Compile errors: fix minimally, note them in KOKKOS_PROGRESS.md.
+2. G1 strict on the new case:
+   `BIN=<strict SU2_CFD> REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 TestCases/kokkos_nemo/check.sh invwedge_roe`
+   - Report PASS/FAIL, max|dres|, max field diff; confirm no `expected stage line missing`.
+   - Paste the `[KOKKOS_NEMO] stage ...` and `[KOKKOS_NEMO_PERF]` lines of the YES run (≤ 30 lines).
+3. If FAIL: rerun the YES config with `SU2_KOKKOS_STAGE_VERIFY=1` (same binary, `ITER= 3`) and paste ≤ 20 `StageCompare`
+   lines (ST_UPWIND LinSysRes / Jacobian first). Then first-order isolation:
+   `EXTRA_CFG="MUSCL_FLOW= NO" BIN=... REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_fo check.sh invwedge_roe`
+   (EXPECT line then needs no "+ MUSCL": a missing-line failure there is expected; judge by the residual/field diffs),
+   and explicit: `EXTRA_CFG="TIME_DISCRE_FLOW= EULER_EXPLICIT;CFL_NUMBER= 0.1" RUN_TAG=_ex ...`.
+   Report which of {MUSCL, first order, explicit} differ -> tells me flux vs Jacobian vs reconstruction.
+4. Regression: default list on the strict binary (`... check.sh` with no args) + `invwedge_lax invwedge_am` -> must stay OVERALL PASS.
+5. Perf: from the YES log of step 2, the upwind per-call kernel time vs the host-ref time (STAGE_VERIFY run), one line.
+6. If 2 and 4 pass: write `MERGE: 4.4-Roe (interior device Roe; G1 strict invwedge_roe PASS, default list PASS)`.
+   If it fails and you cannot localize it in 3 sessions: `HEAVY: 4.4-Roe: <StageCompare lines + step-3 matrix>`.
+   Keep file reads ≤ 80 lines.
+
+**Madan (optional, V100):** after the merge, G7 timing:
+`BIN=<cuda SU2_CFD> REF_MODE=HOST RES_TOL=2e-6 FIELD_TOL=1e-9 TestCases/kokkos_nemo/check.sh invwedge_roe` and send the
+`[KOKKOS_NEMO_PERF]` upwind lines. The Roe kernel holds P, invP and 2 Jacobians (4·MAXNVAR² doubles): if it spills,
+I will fuse P·|Λ| row-wise next.
+
 ## 2026-11-25 — review 4
 Reviewed: f5fd2a403c35df7f86cfb547fba4376de12400d0 (REVIEW_REQUEST 20261125T020812-f5fd2a403c)
 

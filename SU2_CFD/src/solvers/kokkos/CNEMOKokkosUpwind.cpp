@@ -51,6 +51,8 @@
 #include "../../../include/variables/CNEMOEulerVariable.hpp"
 
 #include "CNEMOKokkosAUSM.hpp"
+#include "CNEMOKokkosLAX.hpp"
+#include "CNEMOKokkosRoe.hpp"
 
 namespace {
 
@@ -116,6 +118,11 @@ KOKKOS_INLINE_FUNCTION void UpwindEdge(const UpwArgs& a, const unsigned long iEd
 
   double Primitive_i[MAXNP], Primitive_j[MAXNP];
   double Eve_i[MAXNS], Eve_j[MAXNS];
+  const bool roe = (a.scheme == static_cast<int>(CNEMOKokkosData::UpwindScheme::ROE));
+  /*--- Roe: conservative cell values, or RecomputeConservativeVector of the MUSCL state. ---*/
+  const double* U_i = roe ? &a.U(iPoint, 0) : zero;
+  const double* U_j = roe ? &a.U(jPoint, 0) : zero;
+  double Conserved_i[MAXNV], Conserved_j[MAXNV];
 
   if (a.muscl) {
     Reconstruct<ND>(a, iPoint, jPoint, Primitive_i, Primitive_j);
@@ -124,8 +131,13 @@ KOKKOS_INLINE_FUNCTION void UpwindEdge(const UpwArgs& a, const unsigned long iEd
     /*--- ComputeConsistentExtrapolation: Eve at Tve and Gamma of the reconstructed state only
      *    (dPdU/dTdU/dTvedU/Cvve are not computed: the zero-initialised CPU arrays are used). ---*/
     if (!chk_err_i) {
-      ComputeSpeciesEve(a.gas, Primitive_i[ns + 1], Eve_i);
-      Gamma_i = ComputeGamma(a.gas, Primitive_i);
+      if (!roe) { /*--- Eve / Gamma are not read by the Roe flux (no side effect on the device) ---*/
+        ComputeSpeciesEve(a.gas, Primitive_i[ns + 1], Eve_i);
+        Gamma_i = ComputeGamma(a.gas, Primitive_i);
+      } else {
+        RoeRecomputeConservative<ND>(a.gas, ns, Conserved_i, Primitive_i);
+        U_i = Conserved_i;
+      }
       V_i = Primitive_i;
       eve_i = Eve_i;
       dPdU_i = zero;
@@ -133,8 +145,13 @@ KOKKOS_INLINE_FUNCTION void UpwindEdge(const UpwArgs& a, const unsigned long iEd
         for (int v = 0; v < a.nPrimVar; ++v) a.lastRec(v) = Primitive_i[v];
     }
     if (!chk_err_j) {
-      ComputeSpeciesEve(a.gas, Primitive_j[ns + 1], Eve_j);
-      Gamma_j = ComputeGamma(a.gas, Primitive_j);
+      if (!roe) {
+        ComputeSpeciesEve(a.gas, Primitive_j[ns + 1], Eve_j);
+        Gamma_j = ComputeGamma(a.gas, Primitive_j);
+      } else {
+        RoeRecomputeConservative<ND>(a.gas, ns, Conserved_j, Primitive_j);
+        U_j = Conserved_j;
+      }
       V_j = Primitive_j;
       eve_j = Eve_j;
       dPdU_j = zero;
@@ -147,8 +164,12 @@ KOKKOS_INLINE_FUNCTION void UpwindEdge(const UpwArgs& a, const unsigned long iEd
 
   double Flux[MAXNV];
   double Jacobian_i[MAXNV * MAXNV], Jacobian_j[MAXNV * MAXNV];
-  AUSMResidual<ND>(a, Normal, V_i, V_j, eve_i, eve_j, dPdU_i, dPdU_j, Gamma_i, Gamma_j, Sensor_i, Sensor_j, Flux,
-                   Jacobian_i, Jacobian_j);
+  if (roe)
+    RoeResidual<ND>(a.gas, ns, nVar, a.nPrimVar, a.implicit, Normal, U_i, U_j, V_i, V_j, dPdU_i, dPdU_j, Flux,
+                    Jacobian_i, Jacobian_j);
+  else
+    AUSMResidual<ND>(a, Normal, V_i, V_j, eve_i, eve_j, dPdU_i, dPdU_j, Gamma_i, Gamma_j, Sensor_i, Sensor_j, Flux,
+                     Jacobian_i, Jacobian_j);
 
   /*--- CNumerics::CheckResidualNaNs ---*/
   bool err = false;
@@ -308,6 +329,10 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
       sensorValid = true;
     }
   }
+  if (p.scheme == UpwindScheme::ROE) { /*--- Solution: resident from SetPrimVar / the implicit update ---*/
+    if (uploadAll || !consDeviceValid) P.bytes_h2d += double(nPoint) * nVar * sizeof(double);
+    EnsureInputsOnDevice(uploadAll, true, false);
+  }
   Kokkos::fence();
   P.h2d += timer.seconds();
   timer.reset();
@@ -319,6 +344,7 @@ CNEMOKokkosData::UpwindResult CNEMOKokkosData::ComputeUpwindResidual(const Upwin
   a.dia_ptr = geo.dia_ptr;
   a.edge_nnz = geo.edge_nnz;
   a.V = st.Primitive;
+  a.U = (p.scheme == UpwindScheme::ROE) ? st.Solution : View2D<double>();
   a.dPdU = st.dPdU;
   a.eves = st.eves;
   a.Gamma = st.Gamma;

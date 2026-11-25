@@ -46,6 +46,7 @@ struct UpwArgs {
   View2D<unsigned long> edge_nnz;
   /*--- state ---*/
   View2D<double> V, dPdU, eves;
+  View2D<double> U; /*!< Solution (Roe only) */
   View1D<double> Gamma, Sensor;
   View3D<double> grad;
   View2D<double> lim;

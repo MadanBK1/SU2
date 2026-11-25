@@ -2953,7 +2953,7 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
   if (!center) {
     const auto up = config->GetKind_Upwind_Flow();
     const char* uname = up == UPWIND::AUSM ? "AUSM" : up == UPWIND::AUSMPLUSM ? "AUSM+M"
-                      : up == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2" : "other";
+                      : up == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2" : up == UPWIND::ROE ? "ROE" : "other";
     cout << "[KOKKOS_NEMO] stage upwind (" << uname << (muscl ? " + MUSCL" : "") << ", residual"
          << (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT ? " + Jacobian" : "") << "): "
          << where(Device_UpwindUnsupported(config, MESH_0)) << endl;
@@ -3242,9 +3242,12 @@ std::string CNEMOEulerSolver::Device_UpwindUnsupported(const CConfig *config, un
   if (ReducerStrategy) return "reducer strategy";
   if (ForcedHost("upwind")) return "SU2_KOKKOS_NEMO_HOST";
   const auto kind = config->GetKind_Upwind_Flow();
-  if (kind != UPWIND::AUSM && kind != UPWIND::AUSMPLUSM)
+  if (kind != UPWIND::AUSM && kind != UPWIND::AUSMPLUSM && kind != UPWIND::ROE)
     return kind == UPWIND::AUSMPLUSUP2 ? "AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members)"
                                        : "upwind scheme not ported";
+  /*--- CPU RoedPdU is a persistent member: ComputedPdU with ionization reads the previous edge's state. ---*/
+  if (kind == UPWIND::ROE && config->GetIonization()) return "ROE + ionization (CPU RoedPdU depends on the previous edge)";
+  if (kind == UPWIND::ROE && kokkosData->gas.nSpecies != nSpecies) return "gas tables";
   if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   const bool muscl = config->GetMUSCL_Flow() && (iMesh == MESH_0);
   if (muscl && nodes->GetGradient_Reconstruction().size() == 0) return "gradient not allocated";
@@ -3262,7 +3265,9 @@ bool CNEMOEulerSolver::Device_UpwindResidual(CGeometry *geometry, CSolver **solv
 
   using K = CNEMOKokkosData;
   K::UpwindParams p;
-  p.scheme = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM : K::UpwindScheme::AUSM;
+  p.scheme = (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM) ? K::UpwindScheme::AUSMPLUSM
+             : (config->GetKind_Upwind_Flow() == UPWIND::ROE)     ? K::UpwindScheme::ROE
+                                                                  : K::UpwindScheme::AUSM;
   p.implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
   p.muscl = (config->GetMUSCL_Flow() && (iMesh == MESH_0));
   p.limiter = (config->GetKind_SlopeLimit_Flow() != LIMITER::NONE);
@@ -3304,6 +3309,8 @@ bool CNEMOEulerSolver::Device_UpwindResidual(CGeometry *geometry, CSolver **solv
     su2double scratch[4][MAXNVAR] = {{0.0}}, eve[MAXNVAR] = {0.0};
     ComputeConsistentExtrapolation(GetFluidModel(), nSpecies, r.lastRec.data(), scratch[0], scratch[1], scratch[2],
                                    eve, scratch[3]);
+    /*--- Roe / MSW: the CPU loop ends with RecomputeConservativeVector of the same state (FluidModel). ---*/
+    if (p.scheme == K::UpwindScheme::ROE) RecomputeConservativeVector(scratch[0], r.lastRec.data());
   }
   ErrorCounter = 0;
   if ((iMesh == MESH_0) && (config->GetComm_Level() == COMM_FULL)) {
