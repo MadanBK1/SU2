@@ -170,6 +170,7 @@ class CNEMOKokkosData {
 
     /*--- Step 7 (allocated on first use). Res / JacVal above are the device residual accumulator. ---*/
     View2D<double> Charac;                 /*!< (nVertexTotal, nPrimVar) CharacPrimVar written by the device BC_Outlet */
+    View2D<double> SlipVel;                /*!< (nVertexTotal, nDim) BC_Smoluchowski_Maxwell slip velocity (host mode) */
     View1D<double> BState;                 /*!< far-field / supersonic-inlet state: V | eve | dPdU | Gamma */
 
     /*--- Step 6 (device-resident mode). Res / JacVal alias LinSysRes / Jacobian device storage, Sol LinSysSol. ---*/
@@ -428,7 +429,8 @@ class CNEMOKokkosData {
    */
   SourceResult ComputeSourceResidual(const SourceParams& p, bool uploadInputs);
 
-  enum class BCKind { SYMMETRY = 0, FAR_FIELD, OUTLET, SUPERSONIC_INLET, SUPERSONIC_OUTLET, ISOTHERMAL, HEAT_FLUX };
+  enum class BCKind { SYMMETRY = 0, FAR_FIELD, OUTLET, SUPERSONIC_INLET, SUPERSONIC_OUTLET, ISOTHERMAL, HEAT_FLUX,
+                      SMOLUCHOWSKI_MAXWELL };
   struct BCParams {
     BCKind kind = BCKind::SYMMETRY;
     int marker = 0;
@@ -442,6 +444,10 @@ class CNEMOKokkosData {
     double Yst[su2kokkos::nemo::MAXNS] = {0.0}; /*!< ISOTHERMAL supercatalytic: wall composition */
     double catEff = 0.0;     /*!< ISOTHERMAL partially catalytic: CATALYTIC_EFFICIENCY */
     double heatFlux = 0.0;   /*!< HEAT_FLUX: non-dimensional (integrated: per area) wall heat flux */
+    /*--- 4.5 SMOLUCHOWSKI_MAXWELL (Twall = Isothermal_Temperature): FluidModel->ComputeGasConstant() and Prandtl_Lam,
+     *    evaluated on the host (the gas model's state does not change inside the CPU marker loop). ---*/
+    double gasConstant = 0.0, prandtlLam = 0.0;
+    bool downloadSlip = false; /*!< SMOLUCHOWSKI_MAXWELL, host-authoritative: copy the slip velocities to the host */
     /*--- Batch A: SUPERSONIC_INLET / SUPERSONIC_OUTLET with AUSM+M read the Gamma / Sensor the shared boundary
      *    numerics kept from the last BC that set them (CPU semantics): SUPERSONIC_INLET Gamma_i, Gamma_j and Sensor,
      *    SUPERSONIC_OUTLET Sensor only (it sets Gamma itself). ---*/
@@ -461,6 +467,7 @@ class CNEMOKokkosData {
     long lastSubsonic = -1;          /*!< OUTLET: last domain vertex (CPU order) on the subsonic branch, -1 if none */
     std::vector<double> lastVOutlet; /*!< OUTLET: its V_outlet (host gas-state replay) */
     std::vector<double> charac;      /*!< OUTLET with downloadCharac: (nVertex, nPrimVar) */
+    std::vector<double> slipVel;     /*!< SMOLUCHOWSKI_MAXWELL with downloadSlip: (nVertex, nDim) relaxed slip velocity */
   };
   /*!
    * \brief Device boundary conditions of one marker (vertex kernel over the flattened vertex arrays, domain vertices

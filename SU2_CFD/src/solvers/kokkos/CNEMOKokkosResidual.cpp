@@ -70,6 +70,9 @@ struct ResArgs {
   bool viscous = false, catalytic = false, supercat = false, writeWallState = false;
   double Twall = 0.0, catEff = 0.0, heatFlux = 0.0, RuSI = 0.0;
   double Yst[MAXNS] = {0.0};
+  /*--- 4.5 BC_Smoluchowski_Maxwell. ---*/
+  double gasConstant = 0.0, prandtlLam = 0.0;
+  View2D<double> slip;
   /*--- Batch A: axisymmetric source, stale boundary-numerics state (AUSM+M supersonic BCs). ---*/
   View3D<double> auxGrad;
   bool axisym = false, axiViscous = false;
@@ -331,6 +334,174 @@ void KernelHeatFlux(const ResArgs& r, unsigned long v0, unsigned long v1) {
       });
 }
 
+
+/*!
+ * \brief CNEMONSSolver::BC_Smoluchowski_Maxwell (no ionization: the CPU aborts there). No Jacobian contribution
+ *        (as the CPU). GasConstant = FluidModel->ComputeGasConstant() of the host gas-model state (constant over the
+ *        CPU loop), passed in. SetVelocity_Old(iPoint, Vector) is written to Solution_Old (resident) or to the
+ *        per-vertex slip buffer (host-authoritative: the host applies it).
+ */
+template <int ND>
+void KernelSmoluchowski(const ResArgs& r, unsigned long v0, unsigned long v1) {
+  Kokkos::parallel_for(
+      "NEMO::BC_Smoluchowski_Maxwell", Kokkos::RangePolicy<exec_space>(v0, v1), KOKKOS_LAMBDA(const unsigned long kv) {
+        const UpwArgs& a = r.a;
+        const int nSpecies = a.ns, nVar = a.nVar, nDim = ND;
+        const NEMOPrimIndices idx(nSpecies, ND);
+        const auto iPoint = r.vtxNode(kv);
+        if (iPoint >= r.nPointDomain) return;
+
+        /*--- Define 'proportional control' constant ---*/
+        const double C = 1;
+
+        /*---Define under-relaxation factors --- */
+        const double alpha_V = 0.1;
+        const double alpha_T = 1.0;
+
+        const double Twall = r.Twall;
+        const double TMAC = 1.0;
+        const double TAC = 1.0;
+        const double Prandtl_Lam = r.prandtlLam;
+        const double PI_NUMBER = a.pi;
+
+        const int T_INDEX = idx.T(), VEL_INDEX = idx.VEL(), TVE_INDEX = idx.TVE();
+
+        /*--- Compute dual-grid area and boundary normal ---*/
+        double Normal[ND];
+        for (int iDim = 0; iDim < nDim; iDim++) Normal[iDim] = r.vtxNormal(kv, iDim);
+        double sq = 0.0;
+        for (int iDim = 0; iDim < nDim; ++iDim) sq += Normal[iDim] * Normal[iDim];
+        const double Area = Kokkos::sqrt(sq);
+
+        double UnitNormal[ND];
+        for (int iDim = 0; iDim < nDim; iDim++) UnitNormal[iDim] = Normal[iDim] / Area;
+
+        /*--- Compute closest normal neighbor ---*/
+        const auto jPoint = static_cast<unsigned long>(r.vtxNormalNeighbor(kv));
+
+        /*--- Compute distance between wall & normal neighbor ---*/
+        double d2 = 0.0;
+        for (int iDim = 0; iDim < nDim; iDim++) {
+          const double dd = r.coord(iPoint, iDim) - r.coord(jPoint, iDim);
+          d2 += dd * dd;
+        }
+        const double dij = Kokkos::sqrt(d2);
+
+        /*--- Calculate Pressure ---*/
+        const double Pi = a.V(iPoint, idx.P());
+
+        /*--- Calculate the gradient of temperature ---*/
+        const double Ti = a.V(iPoint, T_INDEX);
+        const double Tj = a.V(jPoint, T_INDEX);
+        const double Tvei = a.V(iPoint, TVE_INDEX);
+        const double Tvej = a.V(jPoint, TVE_INDEX);
+
+        /*--- Rename variables for convenience ---*/
+        const double ktr = r.k(iPoint);
+        const double kve = r.kve(iPoint);
+
+        /*--- Retrieve Cv*density ---*/
+        const double rhoCvtr = a.V(iPoint, idx.RHOCVTR());
+        const double rhoCvve = a.V(iPoint, idx.RHOCVVE());
+
+        /*--- Retrieve Flow Data ---*/
+        const double Viscosity = r.mu(iPoint);
+        const double Density = a.V(iPoint, idx.RHO());
+        const double Gamma = a.Gamma(iPoint);
+
+        /*--- Calculate specific gas constant --- */
+        const double GasConstant = r.gasConstant;
+
+        /*--- Calculate temperature gradients normal to surface---*/
+        double dTn = 0.0, dTven = 0.0;
+        for (int iDim = 0; iDim < nDim; iDim++) dTn += r.grad(iPoint, T_INDEX, iDim) * UnitNormal[iDim];
+        for (int iDim = 0; iDim < nDim; iDim++) dTven += r.grad(iPoint, TVE_INDEX, iDim) * UnitNormal[iDim];
+
+        /*--- Calculate molecular mean free path ---*/
+        const double Lambda = Viscosity / Density * Kokkos::sqrt(PI_NUMBER / (2.0 * GasConstant * Ti));
+
+        /*--- Calculate Temperature Slip ---*/
+        double Tslip = ((2.0 - TAC) / TAC) * 2.0 * Gamma / (Gamma + 1.0) / Prandtl_Lam * Lambda * dTn + Twall;
+
+        double Tslip_ve = Twall;
+        if (dTven != 0) Tslip_ve = (Tslip - Twall) * (kve * rhoCvtr / dTn) / (ktr * rhoCvve / dTven) + Twall;
+
+        /*--- Calculate temperature gradients tangent to surface ---*/
+        double Vector_Tangent_dT[ND], Vector_Tangent_dTve[ND];
+        for (int iDim = 0; iDim < nDim; iDim++) {
+          Vector_Tangent_dT[iDim] = r.grad(iPoint, T_INDEX, iDim) - dTn * UnitNormal[iDim];
+          Vector_Tangent_dTve[iDim] = r.grad(iPoint, TVE_INDEX, iDim) - dTven * UnitNormal[iDim];
+        }
+
+        /*--- Calculate Heatflux tangent to surface ---*/
+        double Vector_Tangent_HF[ND];
+        for (int iDim = 0; iDim < nDim; iDim++)
+          Vector_Tangent_HF[iDim] = -ktr * Vector_Tangent_dT[iDim] - kve * Vector_Tangent_dTve[iDim];
+
+        /*--- Initialize viscous residual to zero ---*/
+        double Res_Visc[MAXNV];
+        for (int iVar = 0; iVar < nVar; iVar++) Res_Visc[iVar] = 0.0;
+
+        /*--- Compute wall shear stress (CNumerics::ComputeStressTensor, density = turb_ke = 0) ---*/
+        double Tau[ND][ND];
+        {
+          double divVel = 0.0;
+          for (int iDim = 0; iDim < nDim; iDim++) divVel += r.grad(iPoint, VEL_INDEX + iDim, iDim);
+          const double density = 0.0, turb_ke = 0.0;
+          const double pTerm = 2. / 3. * (divVel * Viscosity + density * turb_ke);
+          for (int iDim = 0; iDim < nDim; iDim++) {
+            for (int jDim = 0; jDim < nDim; jDim++)
+              Tau[iDim][jDim] =
+                  Viscosity * (r.grad(iPoint, VEL_INDEX + iDim, jDim) + r.grad(iPoint, VEL_INDEX + jDim, iDim));
+            Tau[iDim][iDim] -= pTerm;
+          }
+        }
+
+        /*--- GeometryToolbox::TangentProjection ---*/
+        double TauTangent[ND];
+        for (int iDim = 0; iDim < nDim; iDim++) {
+          double dot = 0.0;
+          for (int jDim = 0; jDim < nDim; jDim++) dot += Tau[iDim][jDim] * UnitNormal[jDim];
+          TauTangent[iDim] = dot;
+        }
+        double normalProj = 0.0;
+        for (int iDim = 0; iDim < nDim; iDim++) normalProj += TauTangent[iDim] * UnitNormal[iDim];
+        for (int iDim = 0; iDim < nDim; iDim++) TauTangent[iDim] -= normalProj * UnitNormal[iDim];
+
+        /*--- Store the Slip Velocity at the wall */
+        double Vector[ND];
+        for (int iDim = 0; iDim < nDim; iDim++)
+          Vector[iDim] = Lambda / Viscosity * (2.0 - TMAC) / TMAC * (TauTangent[iDim]) -
+                         3.0 / 4.0 * (Gamma - 1.0) / Gamma * Prandtl_Lam / Pi * Vector_Tangent_HF[iDim];
+
+        /*--- Apply under-relaxation ---*/
+        Tslip = (1.0 - alpha_T) * Ti + (alpha_T)*Tslip;
+        Tslip_ve = (1.0 - alpha_T) * Tvei + (alpha_T)*Tslip_ve;
+
+        for (int iDim = 0; iDim < nDim; iDim++) {
+          Vector[iDim] = (1.0 - alpha_V) * a.V(iPoint, VEL_INDEX + iDim) + (alpha_V)*Vector[iDim];
+        }
+
+        /*--- nodes->SetVelocity_Old(iPoint, Vector) ---*/
+        if (r.writeWallState) {
+          for (int iDim = 0; iDim < nDim; iDim++) r.Uold(iPoint, nSpecies + iDim) = Vector[iDim] * a.V(iPoint, idx.RHO());
+        } else {
+          for (int iDim = 0; iDim < nDim; iDim++) r.slip(kv, iDim) = Vector[iDim];
+        }
+
+        for (int iDim = 0; iDim < nDim; iDim++) {
+          a.res(iPoint, nSpecies + iDim) = 0.0;
+          if (r.writeWallState) r.trunc(iPoint, nSpecies + iDim) = 0.0;
+        }
+
+        /*--- Apply to the linear system ---*/
+        Res_Visc[nSpecies + nDim] =
+            ((ktr * (Ti - Tj) + kve * (Tvei - Tvej)) + (ktr * (Tslip - Ti) + kve * (Tslip_ve - Tvei)) * C) * Area / dij;
+        Res_Visc[nSpecies + nDim + 1] = (kve * (Tvei - Tvej) + kve * (Tslip_ve - Tvei) * C) * Area / dij;
+
+        AddRow(a.res, iPoint, nVar, Res_Visc, -1.0);
+      });
+}
 
 /*!
  * \brief Source kernel: CNEMOEulerSolver::Source_Residual loop body (monoatomic / frozen / implicit options,
@@ -984,7 +1155,8 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   BCResult out;
   if (!accOnDevice) SU2_MPI::Error("CNEMOKokkosData: BC stage without a device accumulator.", CURRENT_FUNCTION);
 
-  const bool wall = (p.kind == BCKind::ISOTHERMAL || p.kind == BCKind::HEAT_FLUX);
+  const bool smol = (p.kind == BCKind::SMOLUCHOWSKI_MAXWELL);
+  const bool wall = (p.kind == BCKind::ISOTHERMAL || p.kind == BCKind::HEAT_FLUX || smol);
   const bool flux = (p.kind != BCKind::SYMMETRY) && !wall;
   const bool ausmPlusM = flux && (p.upw.scheme == UpwindScheme::AUSMPLUSM);
   /*--- Roe boundary numerics (CUpwRoe_NEMO: LAX or ROE convection) read the conservative states. ---*/
@@ -996,7 +1168,7 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   /*--- Step 8: NS inputs (gradient, transport), host-authoritative mode only (resident: always on the device). ---*/
   if (wall || viscFar) {
     if (!viscousVars) SU2_MPI::Error("CNEMOKokkosData: viscous BC without NS variables.", CURRENT_FUNCTION);
-    const bool needGrad = viscFar || p.kind == BCKind::HEAT_FLUX;
+    const bool needGrad = viscFar || p.kind == BCKind::HEAT_FLUX || smol;
     if (needGrad && (uploadInputs || !gradPrimValid)) {
       if (ResidentActive()) SU2_MPI::Error("CNEMOKokkosData: device-resident gradient not valid.", CURRENT_FUNCTION);
       AllocateGradients();
@@ -1056,6 +1228,10 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
       bstateCache = h;
       P.bytes_h2d += double(n) * sizeof(double);
     }
+  }
+  if (smol && !ResidentActive() && st.SlipVel.size() == 0) {
+    const auto nv = Kokkos::create_mirror_view_and_copy(HostSpace(), geo.marker_ptr)(geo.nMarker);
+    st.SlipVel = View2D<double>("NEMO::SlipVelocity", nv, nDim);
   }
   if (p.kind == BCKind::OUTLET && st.Charac.size() == 0) {
     const auto nv = Kokkos::create_mirror_view_and_copy(HostSpace(), geo.marker_ptr)(geo.nMarker);
@@ -1128,6 +1304,9 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
     r.Twall = p.Twall;
     r.catEff = p.catEff;
     r.heatFlux = p.heatFlux;
+    r.gasConstant = p.gasConstant;
+    r.prandtlLam = p.prandtlLam;
+    r.slip = st.SlipVel;
     r.RuSI = UNIVERSAL_GAS_CONSTANT;
     r.writeWallState = wall && ResidentActive();
     if (r.writeWallState) {
@@ -1144,7 +1323,10 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
   const unsigned long v0 = h_markerPtr[p.marker], v1 = h_markerPtr[p.marker + 1];
 
   long lastSub = -1;
-  if (p.kind == BCKind::ISOTHERMAL) {
+  if (smol) {
+    if (nDim == 2) KernelSmoluchowski<2>(r, v0, v1);
+    else KernelSmoluchowski<3>(r, v0, v1);
+  } else if (p.kind == BCKind::ISOTHERMAL) {
     if (nDim == 2) KernelIsothermal<2>(r, v0, v1);
     else KernelIsothermal<3>(r, v0, v1);
   } else if (p.kind == BCKind::HEAT_FLUX) {
@@ -1182,6 +1364,12 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
                         Kokkos::subview(st.Charac, std::make_pair(v0, v1), Kokkos::ALL()));
       P.bytes_d2h += double(out.charac.size()) * sizeof(double);
     }
+  }
+  if (smol && p.downloadSlip && !ResidentActive() && v1 > v0) {
+    out.slipVel.resize((v1 - v0) * nDim);
+    Kokkos::deep_copy(Kokkos::View<double**, Kokkos::LayoutRight, HostSpace, Unmanaged>(out.slipVel.data(), v1 - v0, nDim),
+                      Kokkos::subview(st.SlipVel, std::make_pair(v0, v1), Kokkos::ALL()));
+    P.bytes_d2h += double(out.slipVel.size()) * sizeof(double);
   }
   P.d2h += timer.seconds();
   P.calls++;
