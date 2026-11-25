@@ -330,3 +330,8 @@ LOOP HINT: 2026-11-24T23:40:39-05:00 no progress for 3 rounds on the current ite
   - This session: build serial (ninja -C build-kokkos-serial), run `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 check.sh invwedge_lax`, then default case list; fix compile errors only if any.
 
 - 2026-11-25T00:58:38-05:00 [loop] round 17 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_004950_17.log
+
+- 2026-11-25T01:10:07-05:00 [loop] round 18 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_005858_18.log
+
+- 2026-11-25T01:25:00-05:00 [agent] review-3 item 1: serial build of reviewer LAX dispatch (e69cbbb) is current: `ninja -C build-kokkos-serial -j4 SU2_CFD/src/SU2_CFD` → "no work to do"; binary 2026-11-25 00:54; CNEMOKokkosCentered.cpp.o present. No compile/link fixes needed.
+- 2026-11-25T01:26:00-05:00 [agent] running review-3 item 2: `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 TestCases/kokkos_nemo/check.sh invwedge_lax` (BIN default = build-kokkos-serial). Next: expect `[KOKKOS_NEMO] stage centered residual (LAX-FRIEDRICH): device`; then default case list.
