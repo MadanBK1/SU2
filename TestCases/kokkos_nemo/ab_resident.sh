@@ -7,13 +7,16 @@
 # Usage: ab_resident.sh [name ...]
 # Step 10: NP=<n> runs both modes under `mpirun --allow-run-as-root --oversubscribe -np <n>` (MPI build, e.g.
 #   BIN=.../build-kokkos-strict-mpi/...), run directories /home/claude/runs/abres_np<n>/.
-BIN=${BIN:-/home/claude/su2/build-kokkos-strict/SU2_CFD/src/SU2_CFD}
+SU2=${SU2_ROOT:-/home/claude/su2}
+M=${MESH_DIR:-/home/claude/meshes}
+RUN=${RUN_DIR:-/home/claude/runs}
+BIN=${BIN:-$SU2/build-kokkos-strict/SU2_CFD/src/SU2_CFD}
 NP=${NP:-}
 MPI_OPTS=${MPI_OPTS---mca osc ^rdma}  # see check.sh
 MPIRUN=""; [ -n "$NP" ] && MPIRUN="mpirun --allow-run-as-root --oversubscribe $MPI_OPTS -np $NP"
-R=/home/claude/runs/abres${NP:+_np$NP}
+R=$RUN/abres${NP:+_np$NP}
 POISON=${POISON:-1}
-TC=/home/claude/su2/TestCases/nonequilibrium
+TC=$SU2/TestCases/nonequilibrium
 declare -A BASE MOD
 W=$TC/invwedge/invwedge_ausm.cfg; TB=$TC/thermalbath/finitechemistry/thermalbath.cfg
 BASE[ausm]=$W;            MOD[ausm]=""
@@ -81,7 +84,7 @@ names=("$@"); [ ${#names[@]} -eq 0 ] && names=(ausm jacobi fgmres ilu1 vanalbada
 st=0
 for n in "${names[@]}"; do
   for mode in ON OFF; do
-    d=$R/${n}_$mode; rm -rf $d; mkdir -p $d; cd $d; ln -sf /home/claude/meshes/*.su2 .
+    d=$R/${n}_$mode; rm -rf $d; mkdir -p $d; cd $d; ln -sf $M/*.su2 .
     cp "${BASE[$n]}" run.cfg; printf "\n" >> run.cfg
     sed -i '/^ENABLE_KOKKOS/d; /^OUTPUT_FILES/d; /^SCREEN_OUTPUT/d' run.cfg
     printf "ENABLE_KOKKOS= YES\nOUTPUT_FILES= (RESTART_ASCII)\n" >> run.cfg

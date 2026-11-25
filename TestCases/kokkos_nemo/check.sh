@@ -23,7 +23,7 @@
 # EXTRA_CFG="KEY= VALUE;KEY2= VALUE2": options appended to both configs (e.g. KOKKOS_GPU_AWARE_MPI= YES).
 # Extra environment (e.g. SU2_KOKKOS_NEMO_POISON=1) is inherited by both runs.
 set -u
-SU2=/home/claude/su2
+SU2=${SU2_ROOT:-/home/claude/su2}
 BIN=${BIN:-$SU2/build-kokkos-serial/SU2_CFD/src/SU2_CFD}
 RES_TOL=${RES_TOL:-2e-6}
 FIELD_TOL=${FIELD_TOL:-1e-9}
@@ -37,7 +37,8 @@ RUN_TAG=${RUN_TAG-${NP:+_np$NP}}
 MPI_OPTS=${MPI_OPTS---mca osc ^rdma}  # OpenMPI 4.1 in this container: the rdma one-sided component fails MPI_Win_create at -np 1
 mpiprefix() { [ -n "$1" ] && [ "$1" != 0 ] && echo "mpirun --allow-run-as-root --oversubscribe $MPI_OPTS -np $1"; }
 TC=$SU2/TestCases/nonequilibrium
-M=/home/claude/meshes
+M=${MESH_DIR:-/home/claude/meshes}
+RUN=${RUN_DIR:-/home/claude/runs}
 declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [thermalbath]=$TC/thermalbath/finitechemistry/thermalbath.cfg
                  [super_cat]=$TC/visc_wedge/super_cat.cfg
@@ -49,7 +50,7 @@ cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_c
 status=0
 for c in "${cases[@]}"; do
   for mode in NO YES; do
-    d=/home/claude/runs/chk_${c}${RUN_TAG}_$mode; rm -rf "$d"; mkdir -p "$d"; cd "$d"
+    d=$RUN/chk_${c}${RUN_TAG}_$mode; rm -rf "$d"; mkdir -p "$d"; cd "$d"
     cp "${CFG[$c]}" run.cfg; ln -sf $M/*.su2 .
     kmode=$mode; hostenv=""; bin=$BIN; np=$NP
     if [ "$mode" = NO ]; then bin=$REF_BIN; np=$REF_NP; fi
@@ -63,16 +64,17 @@ for c in "${cases[@]}"; do
     [ $rc -ne 0 ] && { status=1; tail -5 log.txt; }
   done
   python3 - "$c$RUN_TAG" "$RES_TOL" "$FIELD_TOL" "${REF[$c]:-}" "$PHYS_SCALE" "${RES_NOISE_ORDERS:-inf}" <<'EOF' || status=1
-import sys, re, glob, numpy as np
+import os, sys, re, glob, numpy as np
+RUN = os.environ.get('RUN_DIR', '/home/claude/runs')
 c, rtol, ftol, ref = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
 phys, noise = sys.argv[5] == '1', float(sys.argv[6])
 def lastrow(mode):
-    rows = [l for l in open(f'/home/claude/runs/chk_{c}_{mode}/log.txt') if re.match(r'^\|\s+\d+\|', l)]
+    rows = [l for l in open(f'{RUN}/chk_{c}_{mode}/log.txt') if re.match(r'^\|\s+\d+\|', l)]
     return np.array([float(x) for x in rows[-1].strip().strip('|').split('|')[1:]]) if rows else None
 a, b = lastrow('NO'), lastrow('YES')
 ok = a is not None and b is not None and a.shape == b.shape
 if ok:
-    hl = [l for l in open(f'/home/claude/runs/chk_{c}_NO/log.txt') if re.match(r'^\|\s*(Time_Iter|Inner_Iter|Outer_Iter|Iter)\|', l) and 'rms[' in l]
+    hl = [l for l in open(f'{RUN}/chk_{c}_NO/log.txt') if re.match(r'^\|\s*(Time_Iter|Inner_Iter|Outer_Iter|Iter)\|', l) and 'rms[' in l]
     names = [x.strip() for x in hl[-1].strip().strip('|').split('|')][1:] if hl else []
     isres = np.array([n.startswith('rms[') for n in names]) if len(names) == len(a) else np.ones(len(a), bool)
     mx = lambda r: r[isres].max()
@@ -83,7 +85,7 @@ if ok:
     if ref:
         r = np.array([float(x) for x in ref.split()]); print(f'  NO vs reference max |d| = {np.abs(a[:len(r)]-r).max():.2e}')
 try:
-    pick = lambda m: sorted(glob.glob(f'/home/claude/runs/chk_{c}_{m}/restart_flow*.csv'))[-1]
+    pick = lambda m: sorted(glob.glob(f'{RUN}/chk_{c}_{m}/restart_flow*.csv'))[-1]
     fa = np.genfromtxt(pick('NO'), delimiter=',', skip_header=1)[:, 3:]
     fb = np.genfromtxt(pick('YES'), delimiter=',', skip_header=1)[:, 3:]
     scale = np.abs(fa).max(0)
