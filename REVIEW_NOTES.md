@@ -1,6 +1,31 @@
 # Review notes for the local agent (written by the Claude reviewer; agent: read, never edit)
 
-Newest section first. Do the **ROLE CHANGE (Madan, 2026-11-25):** the reviewer now writes the solver code; you build, run, analyze and report. See ROLE at the top of LOCAL_AGENT_TASK.md. **Do NOT write the Roe code**: the reviewer writes it next round.
+Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
+
+## 2026-11-25 — review 4
+Reviewed: f5fd2a403c35df7f86cfb547fba4376de12400d0 (REVIEW_REQUEST 20261125T020812-f5fd2a403c)
+
+**State:**
+- Review-3 items 1+2 DONE. No new solver code from the agent: the reviewer LAX code (e69cbbb + CNEMOKokkosLAX.hpp) built unchanged, and the agent ran the gates.
+- Claimed G1 (strict binary, REF_MODE=HOST, RES_TOL=0, FIELD_TOL=0): invwedge_lax PASS bitwise, default 4-case list OVERALL PASS bitwise. Plausible: the agent also saw [KOKKOS_NEMO_VERIFY] CenteredLAX lines (only printed by Device_CenteredResidual), so the device path really ran.
+- Good catch by the agent: the fast-math serial build cannot be bitwise; use BIN=strict for G1. Keep doing that.
+- Not re-run here (container has 2 cores and no meson; a full build would not finish in time).
+- **MERGED into su2kokkos (20eabd2):** 4.4-LAX = CNEMOKokkosLAX.hpp, CNEMOKokkosCentered.cpp, the dispatch in CNEMOEulerSolver, geo.nneighbor, ST_CENTERED, lambdaValid, meson entry, invwedge_lax in check.sh. local_agent_loop.sh was NOT merged (agent infrastructure).
+- 4.4 LAX: tick it in LOCAL_AGENT_TASK.md as "LAX done (G1 strict)". Roe, MSW and AUSM+-up2 remain.
+
+**Reviewer fix (this commit):** check.sh now has `EXPECT[invwedge_lax]`: the YES run must print `stage centered residual (LAX-FRIEDRICH): device`, else the case fails. This stops a silent host fallback from passing G1 trivially. Add an EXPECT entry for every new device scheme you gate.
+
+**Findings:**
+- CNEMOKokkosCentered.cpp:~185: `create_mirror_view_and_copy` allocates a host view every call (nPrimVar doubles). Harmless; later reuse a persistent host mirror.
+- CNEMOEulerSolver.cpp Device_CenteredResidual: the host gas replay (ComputeSpeciesEve + ComputedPdU at the last edge's mean state) is needed for bitwise while the BCs run on the host with Roe. Keep it.
+- LAX still runs with resident mode off, because the boundary flux numerics for centered schemes are CUpwRoe_NEMO (host). So a device Roe fixes two things at once: Roe interior cases, and full residency for LAX.
+
+**Speedup/accuracy suggestions:**
+- Next big step is the device Roe (CUpwRoe_NEMO). It reuses LaxInviscidProjFlux/LaxInviscidProjJac from CNEMOKokkosLAX.hpp; only GetPMatrix / GetPMatrix_inv (CNEMONumerics.cpp:355-~550) are new.
+- The Roe kernel has 3 MAXNV² matrices (P, invP, Jacobian work). That is heavier than LAX, so watch registers on the V100; colored accumulation as in UpwindEdge.
+- G7 on the V100 for invwedge_lax (Madan): see the commands at the end.
+
+**ROLE CHANGE (Madan, 2026-11-25):** the reviewer now writes the solver code; you build, run, analyze and report. See ROLE at the top of LOCAL_AGENT_TASK.md. **Do NOT write the Roe code**: the reviewer writes it next round.
 
 **Agent: do next** (tests/analysis only)
 1. Pull the check.sh guard (already on this branch). Rerun G1 for LAX on the strict binary:
