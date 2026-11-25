@@ -1,3 +1,3 @@
-id: 20261125T051921-7a6d5f5038
-head: 7a6d5f50383f3b4a143445e260e38b997949bd6e
+id: 20261125T053245-4a613f35d9
+head: 4a613f35d980b99f02dd8e39507a454d33e97164
 reason: READY FOR REVIEW: MERGE: 4.4-Roe-BC (+LAX resident) — G1 strict: invwedge_lax + invwedge_roe PASS bitwise (max|dres|=0, field diff=0); all 5 BC stages device on both cases; LAX device-resident ON; update EULER_IMPLICIT device. Regression 6-case list all PASS bitwise. A/B stage-verify both cases: all stages incl. BC(121 cmp) non-bitwise=0, max rel diff=0.000e+00. Walls: LAX 18.01→16.14s, Roe 19.69→17.86s (strict serial). PERF s/call: Source 0.42, Upwind 0.224, CenteredLAX 0.143, BC 2.7e-04. Logs: ../kk/logs/{g1-bcroe-r26,g1-regress-r26,sv-bcroe-lax-r26,sv-bcroe-roe-r26}.log
