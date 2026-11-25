@@ -1,3 +1,3 @@
-id: 20261125T105059-1b09c67452
-head: 1b09c6745258679fbe6d5e84ffe329210479456a
-reason: 
+id: 20261125T132536-2505fadae8
+head: 2505fadae84475b3c51ef5bb25109d7f066e9747
+reason: READY FOR REVIEW: HEAVY: 4.4-AUSMup2: host fallback reason "implicit AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members)" — binary is FRESH (contains bc75572; stale-binary hypothesis refuted). The case invwedge_ausmplusup2.cfg is IMPLICIT (LINEAR_SOLVER=BCGSTAB) but the port bc75572 is EXPLICIT-only, so the upwind + BC stages go host and G1's EXPECT (device upwind) can never pass. Need a decision + heavy code: (a) port the implicit AUSM+-up2 Jacobian to the device with deterministically-initialised M_L/M_R (patch the CPU quirk, G1 vs the patched CPU variant) to match the ausm/roe/msw/lax implicit cases, OR (b) make the case explicit (drop BCGSTAB) to test the explicit residual-only path. 6 `got:` host stage lines pasted above.
