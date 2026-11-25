@@ -2,6 +2,43 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 14 (merged 4.5-SlipWall; dev: viscous SUPERSONIC_INLET)
+
+**Reviewed:** 59fb0105e2. Strict-gate claims checked (REF_MODE=HOST RES_TOL=0 FIELD_TOL=0, OVERALL PASS, code
+unchanged since 0d7a7b9). **Merged into su2kokkos (33bd882):** the 0d7a7b9 code files (CNEMOKokkosData.hpp,
+CNEMOEulerSolver.cpp, CNEMONSSolver.cpp, CNEMOKokkosResidual.cpp, check.sh, check_noisefloor.sh, smol_maxwell.cfg).
+
+**Dev code this round (g++ -std=c++20 -fsyntax-only -ffp-contract=off vs bundled Kokkos 5.2.2 Serial headers on
+CNEMOEulerSolver.cpp and CNEMOKokkosResidual.cpp; NOT validated):**
+- Viscous part of `BC_Supersonic_Inlet` on the device. It reuses the viscous FAR_FIELD code in `KernelBoundaryFlux`
+  (CAvgGrad_NEMO, reflected normal neighbour, iPoint transport on both sides). The j state is `node_inlet` (V, eve,
+  Cvve, dTdU, dTvedU, gradient), so it matches the CPU call exactly.
+- `Device_BCUnsupported`: the "viscous contribution" fallback for SUPERSONIC_INLET is removed. Without NS variables it
+  still falls back (same rule as FAR_FIELD).
+- New gate case `supin_visc` (visc_wedge, `Inlet` = SUPERSONIC_INLET, non-catalytic isothermal wall, AUSM implicit),
+  with `EXPECT` lines for SUPERSONIC_INLET / FAR_FIELD / ISOTHERMAL and a noise-floor case.
+- Perf note (do not fix now): BState / BStateVisc are one shared buffer. With FAR_FIELD + SUPERSONIC_INLET in one case
+  they are re-uploaded on every BC call (~100 doubles, 2x per iteration). If G7 shows it, the fix is one buffer per marker.
+
+**Agent: do next**
+1. Build strict + serial (ninja, as before). Fix compile errors yourself with the smallest change.
+2. CPU sanity: run `supin_visc` NO side only. If the CPU itself diverges or errors (inlet values: 288.15 K, 10 Pa,
+   1700 m/s), lower the velocity to 1600.0 in supin_visc.cfg and note it. That is a cfg edit, not code.
+3. G1 strict: `timeout 1500 bash .g1run.sh ../kk/logs/g1-supin-r59.log supin_visc` -> needs OVERALL: PASS bitwise and
+   all 3 EXPECT stage lines device, `device-resident state: ON`.
+4. If it fails: `timeout 1500 bash .svrun.sh ../kk/logs/sv-supin-r59.log supin_visc`, paste ≤ 20 StageCompare lines.
+   Try 3 sessions to localize the problem (bc:SUPERSONIC_INLET stage? viscous term only? implicit Jacobian only?)
+   before requesting `HEAVY: 4.5-SupInVisc: <finding>`.
+5. Regression: default list + invall (`... g1-regress-r59.log` with no args; `... g1-invall-r59.log invwedge_am
+   invwedge_lax invwedge_roe invwedge_msw invwedge_ausmplusup2 super_cat smol_maxwell`), all PASS bitwise.
+6. A/B on supin_visc (svrun) and noise floor: `CASE=supin_visc bash TestCases/kokkos_nemo/check_noisefloor.sh`
+   (ratio ≤ 10).
+7. PERF lines (BC s/call, wall NO/YES) from the YES log into KOKKOS_PROGRESS.md.
+8. Bookkeeping: plan matrix row "SUPERSONIC_INLET viscous" -> device-resident (validated); LOCAL_AGENT_TASK 4.5 note.
+   Then request `MERGE: 4.5-SupInVisc`.
+Next heavy after that: 4.6 (LU-SGS) — request `HEAVY: 4.6-LUSGS` only after the merge. Item 6 (ionization) is still
+waiting for Madan's decision.
+
 ## 2026-11-25 — review 13 (no merge: stale request; item 6 needs Madan's decision)
 
 Reviewed: 16fffed237 (REVIEW_REQUEST 20261125T145530-16fffed237). **Nothing to merge:** its reason text is the review-12
