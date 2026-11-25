@@ -47,6 +47,8 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [invwedge_am]=$TC/invwedge/invwedge_am.cfg
                  [invwedge_lax]=$TC/invwedge/invwedge_lax.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
+# Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
+declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): device" )
 cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat axi_visccone)
 status=0
 for c in "${cases[@]}"; do
@@ -63,6 +65,8 @@ for c in "${cases[@]}"; do
     t0=$(date +%s.%N); SU2_KOKKOS_NEMO_HOST=$hostenv $(mpiprefix "$np") "$bin" run.cfg > log.txt 2>&1; rc=$?
     echo "$c $mode${hostenv:+ (REF_MODE=HOST: YES, all NEMO stages host)}${np:+ np=$np} exit=$rc wall=$(printf '%.2f' "$(echo "$(date +%s.%N)-$t0" | bc)")s"
     [ $rc -ne 0 ] && { status=1; tail -5 log.txt; }
+    if [ "$mode" = YES ] && [ -n "${EXPECT[$c]:-}" ] && ! grep -qF "${EXPECT[$c]}" log.txt; then
+      echo "  expected stage line missing: ${EXPECT[$c]}"; status=1; fi
   done
   python3 - "$c$RUN_TAG" "$RES_TOL" "$FIELD_TOL" "${REF[$c]:-}" "$PHYS_SCALE" "${RES_NOISE_ORDERS:-inf}" <<'EOF' || status=1
 import os, sys, re, glob, numpy as np
