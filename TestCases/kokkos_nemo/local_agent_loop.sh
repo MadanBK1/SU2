@@ -53,7 +53,7 @@ KOKKOS_PROGRESS.md as BLOCKED <item>: <reason> (retry later), and move on to the
 Retry BLOCKED items only after all other items are done or blocked.
 If KOKKOS_PROGRESS.md contains a line starting with LOOP HINT:, obey the most recent one.
 REVIEW_NOTES.md (written by the Claude reviewer every ~2 h; never edit it yourself) has priority over your own plan:
-read its newest section first and do its "Agent: do next" items before continuing the task list.
+read its newest section first and do its Agent-do-next items before continuing the task list.
 When you finish a work item or a meaningful compiled+tested chunk, write the line READY FOR REVIEW: <what> as the
 last line of KOKKOS_PROGRESS.md and end the session; the loop then pushes and waits for the Claude reviewer.
 Standing goals: improve GPU speedup AND keep numerical accuracy (strict gate G1 bitwise, noise floor <= 10);
