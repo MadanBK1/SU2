@@ -389,3 +389,8 @@ READY FOR REVIEW: HEAVY: 4.4-Roe: device Roe needed (CUpwRoe_NEMO; reuses LaxInv
     - PERF (strict serial, 2 cores, 100 iter): Upwind kernel 2.629s/11 (0.239s/call); Source 4.837s/11 (0.440s/call); SetPrimVar 1.572s/22; ResidualSync d2h 0.107s/11.
   - (4) REGRESSION (same strict binary): invwedge_ausm, thermalbath, super_cat, axi_visccone, invwedge_lax, invwedge_am all PASS bitwise, OVERALL: PASS (log ../kk/logs/g1-regress-r25.log).
   - (5) STAGE_VERIFY run pending (.svrun.sh driver, ITER=3, RUN_TAG=_sv).
+  - (5) PERF (strict SERIAL backend, 100 iter): Upwind (ROE+MUSCL residual+Jacobian) kernel 2.25e-01 s/call vs host reference (A/B rerun) 1.74e-01 s/call → host 1.30x faster on Serial (expected; CUDA speedup = G7 in user shell).
+  - (extra) STAGE_VERIFY A/B on strict binary: ALL stages non-bitwise=0, max rel diff=0.000e+00 (Upwind 55 compares / 1.17e8 entries, Source 1.17e8, BC 2.34e8, Gradient/Limiter/TimeStep 0) — device Roe is bitwise-identical to host Roe on strict build. OVERALL PASS (log ../kk/logs/g1roe-sv-r25.log).
+  - 4.4 status: LAX done+merged; **Roe interior DONE (awaiting merge)**; remaining: MSW, AUSM+-up2 quirk doc.
+  - Review-5 queue complete (items 1,2,4,5; 3 not needed, 6 below).
+READY FOR REVIEW: MERGE: 4.4-Roe (interior device Roe; G1 strict invwedge_roe PASS bitwise max|dres|=0/max field diff=0 + stage-line guard OK; regression 6-case default list incl. invwedge_lax/invwedge_am PASS bitwise; STAGE_VERIFY A/B all non-bitwise=0)
