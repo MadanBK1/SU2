@@ -469,3 +469,12 @@ LOOP HINT: 2026-11-25T07:49:51-05:00 no progress for 3 rounds on the current ite
 - 2026-11-25T08:49:06-05:00 [loop] round 39 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_084338_39.log
 
 - 2026-11-25T09:02:32-05:00 [loop] round 40 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_084926_40.log
+
+- 2026-11-25T09:21:42-05:00 [loop] round 41 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_090252_41.log
+
+LOOP HINT: 2026-11-25T09:21:42-05:00 no progress for 3 rounds on the current item. No code changed (only the progress log). Stop planning: in THIS session write code immediately - the smallest compilable piece (e.g. one device function + its call site), build it, commit it. If you cannot, mark the item BLOCKED and move to the next unchecked item.
+
+- 2026-11-25 (round 42, review-9 queue step 1 — device AUSM+-up2 (bc75572) gate, foreground per reviewer):
+  - `timeout 1500 bash .g1run.sh ../kk/logs/g1-up2-r39.log invwedge_ausmplusup2`: **rc=1, NO hang** (NO exit=0 wall=3.59s; YES exit=0 wall=2.94s).
+  - **max|dres|=0.00e+00, max field diff=0.00e+00 (bitwise) BUT OVERALL: FAIL** — 4 EXPECT stage lines missing ("stage upwind (AUSM+-up2, residual): device" + 3 device bc lines): the YES run fell back to the HOST (silent fallback; the EXPECT guard did its job). Residuals match trivially because the host did the work.
+  - NEXT: grep the YES log (../kk/runs/chk_invwedge_ausmplusup2_YES/log.txt) for `[KOKKOS_NEMO]` stage/reason lines to find the fallback reason; then review-9 step 2 variants (SU2_KOKKOS_NEMO_HOST=upwind / =bc), each one line in PROGRESS.
