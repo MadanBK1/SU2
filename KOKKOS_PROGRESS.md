@@ -532,3 +532,5 @@ READY FOR REVIEW: HEAVY: 4.4-AUSMup2: host fallback reason "implicit AUSM+-up2 (
   - Step 4 regression default list (invwedge_ausm thermalbath super_cat axi_visccone): rc=0, all PASS, OVERALL: PASS (g1-regress-r52.log).
   - All invwedge cases: invwedge_am/lax/roe/msw PASS (g1-invall-r52.log); invwedge_ausm, invwedge_ausmplusup2, thermalbath, super_cat, axi_visccone PASS. Stage lines unchanged (EXPECT guards active for lax/roe/msw/ausmplusup2, all device).
   - NEXT: review-8 steps 4-8 (A/B, noise floor, PERF, bookkeeping) -> READY FOR REVIEW: MERGE: 4.4-AUSMup2.
+
+- 2026-11-25T13:55:15-05:00 [loop] round 52 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_134559_52.log
