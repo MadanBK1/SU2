@@ -2,6 +2,47 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-25 — review 7 (MERGE 4.4-Roe-BC + LAX resident; HEAVY: device MSW)
+Reviewed: 4a613f35d980b99f02dd8e39507a454d33e97164 (REVIEW_REQUEST 20261125T053245-4a613f35d9)
+
+**Merged into su2kokkos (d761e92):** Roe boundary numerics + LAX residency (CNEMOKokkosData.hpp, CNEMOEulerSolver.cpp,
+CNEMOKokkosResidual.cpp, check.sh). Your G1 / regression / A/B / perf evidence accepted. G5 (cuda build) PASS noted.
+
+**Dev code this round (cce61ae; g++ -std=c++20 -fsyntax-only -ffp-contract=off vs bundled Kokkos Serial headers on
+CNEMOKokkosUpwind.cpp, CNEMOKokkosResidual.cpp, CNEMOEulerSolver.cpp; NOT validated):**
+- New `CNEMOKokkosMSW.hpp`: `MSWResidual<ND>` = verbatim CUpwMSW_NEMO::ComputeResidual (flux + implicit Jacobian;
+  dPdU at the weighted states; reuses RoeCreateBasis / RoeGetPMatrix / RoeGetPMatrixInv).
+- `UpwindScheme::MSW` (=3), `UpwindParams::mswAlpha` (config MSW_ALPHA) -> `UpwArgs::mswAlpha`.
+- Interior: `UpwindEdge` uses the Roe conservative-state path (Solution / RecomputeConservativeVector of the MUSCL
+  state) for MSW and calls `MSWResidual`. Boundary: `KernelBoundaryFlux` same (CDriver: MSW boundary numerics = MSW).
+- Host: `Device_UpwindUnsupported` / `Device_BCUnsupported` accept MSW (host only with ionization / gas-table
+  mismatch); host replay of the last reconstructed state also does RecomputeConservativeVector for MSW; stage name "MSW".
+- check.sh: new case `invwedge_msw` (TestCases/nonequilibrium/invwedge/invwedge_msw.cfg, MUSCL + EULER_IMPLICIT) with
+  EXPECT = upwind (MSW + MUSCL, residual + Jacobian) device + the 3 device BC lines.
+
+**Agent: do next** (strict binary for gates; fix compile errors yourself with the smallest change):
+1. Build: `bash ../kk/build.sh ninja strict 4` and the serial build (same script, `serial`); paste any error (first
+   10 lines) + your fix in PROGRESS.
+2. G1 strict: `bash .g1run.sh ../kk/logs/g1-msw-r28.log invwedge_msw` -> PASS bitwise (max|dres|=0, field diff=0), no
+   "expected stage line missing". Paste the YES stage lines (`grep '^\[KOKKOS_NEMO\] stage\|device-resident' log.txt`).
+   Residency for MSW should be ON (same rules as Roe); if OFF paste the reason line.
+3. On FAIL: `bash .svrun.sh ../kk/logs/sv-msw-r28.log invwedge_msw`; paste <= 20 StageCompare lines (Upwind and BC
+   first). If only BC differs, rerun with `SU2_KOKKOS_NEMO_HOST=bc` to isolate (interior-only device). Look first at:
+   pow(alpha*dp,2.0) (should be bitwise on Serial), kmin argument order, Jacobian zeroing.
+4. Regression: `bash .g1run.sh ../kk/logs/g1-regress-r28.log invwedge_ausm thermalbath super_cat axi_visccone invwedge_lax invwedge_roe invwedge_am partial_cat`
+   -> all PASS bitwise (shared kernels changed: UpwindEdge, KernelBoundaryFlux).
+5. A/B even on PASS: `bash .svrun.sh ../kk/logs/sv-msw-r28.log invwedge_msw` -> all stages non-bitwise=0.
+6. PERF: wall NO/YES + `[KOKKOS_NEMO_PERF]` Upwind s/call for invwedge_msw (expect > Roe: two P/invP pairs per edge).
+7. Bookkeeping: tick MSW in LOCAL_AGENT_TASK.md section 4 / 4.4 and the coverage matrix only after 2+4 pass. Then
+   `READY FOR REVIEW: MERGE: 4.4-MSW`.
+8. If time remains (no new code needed): noise-floor gate on invwedge_msw (`bash TestCases/kokkos_nemo/check_noisefloor.sh invwedge_msw`)
+   and record the ratio. Next heavy item after MSW: AUSM+-up2 (queue item 4); LAX multi-rank Lambda halo (item 2)
+   only if you can give an np=2 case + failure log.
+
+**Madan (V100, optional):** G7 timings with the cuda build once 4.4-MSW passes:
+`bash ../kk/build.sh ninja cuda 4 && bash TestCases/kokkos_nemo/check.sh invwedge_roe invwedge_msw invwedge_lax`
+(binary build-kokkos-cuda; record wall NO/YES and PERF lines in KOKKOS_PROGRESS.md).
+
 ## 2026-11-25 — review 6 (MERGE 4.4-Roe interior + HEAVY: Roe boundary numerics, LAX residency)
 Reviewed: 0f654bab4db3b04de41e850ddaee3f1844396fb2 (REVIEW_REQUEST 20261125T041000-0f654bab4d)
 
