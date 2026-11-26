@@ -1,0 +1,2 @@
+invwedge_dyn ITER 16: field |YES-NO| = 1.379e-10, CPU strict-vs-prod |NO-NO| = 7.375e-10 (ratio 0.19, K 10); history 0.00e+00 vs 0.00e+00: PASS
+NOISEFLOOR OVERALL: PASS

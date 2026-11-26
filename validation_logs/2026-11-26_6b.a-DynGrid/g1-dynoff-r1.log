@@ -1,0 +1,21 @@
+invwedge_dyn NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=22.14s
+invwedge_dyn YES exit=0 wall=22.16s
+  expected stage line missing: stage dynamic grid (grid-velocity dt/eigenvalue terms + GCL, metric re-upload per time step): device
+  expected stage line missing: stage time step (spectral radii + local dt + min/max reduce): device
+  expected stage line missing: stage dual-time source (2nd order): device
+  expected stage line missing: device-resident state (Step 6): ON
+    got: [KOKKOS_NEMO] stage upwind (AUSM + MUSCL, residual + Jacobian): host (dynamic grid (SU2_KOKKOS_NEMO_DYNGRID=0))
+    got: [KOKKOS_NEMO] stage bc:FAR_FIELD (Inlet): host (dynamic grid (SU2_KOKKOS_NEMO_DYNGRID=0))
+    got: [KOKKOS_NEMO] stage bc:OUTLET_FLOW (Exit): host (dynamic grid (SU2_KOKKOS_NEMO_DYNGRID=0))
+    got: [KOKKOS_NEMO] stage bc:FAR_FIELD (Farfield): host (dynamic grid (SU2_KOKKOS_NEMO_DYNGRID=0))
+    got: [KOKKOS_NEMO] stage bc:EULER_WALL (Wall): host (dynamic grid (SU2_KOKKOS_NEMO_DYNGRID=0))
+    got: [KOKKOS_NEMO] stage bc:EULER_WALL (Euler): host (dynamic grid (SU2_KOKKOS_NEMO_DYNGRID=0))
+    got: [KOKKOS_NEMO] device-resident state (Step 6): OFF (dynamic grid (SU2_KOKKOS_NEMO_DYNGRID=0))
+  residual row NO : [  3.        -2.053991  -2.578753 -32.       -32.       -26.59865
+   1.271622   0.856185   4.309325  -0.138994]
+  residual row YES: [  3.        -2.053991  -2.578753 -32.       -32.       -26.59865
+   1.271622   0.856185   4.309325  -0.138994]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_dyn_dynoff: PASS
+OVERALL: FAIL

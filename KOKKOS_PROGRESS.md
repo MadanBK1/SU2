@@ -784,3 +784,5 @@ LOOP HINT: 2026-11-26T07:49:57-05:00 no progress for 3 rounds on the current ite
   - RUNNING: step 1 build strict+serial (`.builddyn.sh` -> build-dyn-r2.log / build-dyn-serial-r2.log). Next: step 2 G1 dynvisc (`.g1dynvisc.sh` -> g1-dynvisc-r2.log, expect PASS bitwise), step 3 inviscid regression g1-dyn-r2.log. Then 4-8 next sessions.
 
 - 2026-11-26T11:06:39-05:00 [loop] round 101 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_105404_101.log
+
+- 2026-11-26T11:15:53-05:00 [loop] round 102 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_110659_102.log

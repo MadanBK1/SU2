@@ -1,0 +1,19 @@
+invwedge_mg NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=62.95s
+invwedge_mg YES exit=0 wall=52.67s
+  residual row NO : [-1.057766 -1.580043 -6.777495 -5.355051 -2.500215  2.272437  1.854181
+  5.322666  4.216248]
+  residual row YES: [-1.057766 -1.580043 -6.777495 -5.355051 -2.500215  2.272437  1.854181
+  5.322666  4.216248]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_mg: PASS
+invwedge_lusgs NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=21.25s
+invwedge_lusgs YES exit=0 wall=20.01s
+  residual row NO : [ -1.075552  -1.600315 -18.300602 -18.627996 -18.574034   2.239923
+   1.866429   5.284126   0.8419  ]
+  residual row YES: [ -1.075552  -1.600315 -18.300602 -18.627996 -18.574034   2.239923
+   1.866429   5.284126   0.8419  ]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_lusgs: PASS
+OVERALL: PASS

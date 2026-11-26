@@ -1,0 +1,19 @@
+invwedge_dyn NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=22.19s
+invwedge_dyn YES exit=0 wall=50.88s
+  expected stage line missing: device-resident state (Step 6): ON
+    got: [KOKKOS_NEMO] stage upwind (AUSM + MUSCL, residual + Jacobian): device
+    got: [KOKKOS_NEMO] stage bc:FAR_FIELD (Inlet): device (eager download after the stage)
+    got: [KOKKOS_NEMO] stage bc:OUTLET_FLOW (Exit): device (eager download after the stage)
+    got: [KOKKOS_NEMO] stage bc:FAR_FIELD (Farfield): device (eager download after the stage)
+    got: [KOKKOS_NEMO] stage bc:EULER_WALL (Wall): device (eager download after the stage)
+    got: [KOKKOS_NEMO] stage bc:EULER_WALL (Euler): device (eager download after the stage)
+    got: [KOKKOS_NEMO] device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+    got: [KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=48 mismatching entries=0
+  residual row NO : [  3.        -2.053991  -2.578753 -32.       -32.       -26.59865
+   1.271622   0.856185   4.309325  -0.138994]
+  residual row YES: [  3.        -2.053991  -2.578753 -32.       -32.       -26.59865
+   1.271622   0.856185   4.309325  -0.138994]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_dyn_sv: PASS
+OVERALL: FAIL
