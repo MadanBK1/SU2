@@ -26,6 +26,8 @@ case $CASE in
   supin_visc) CFG=$SU2/TestCases/nonequilibrium/visc_wedge/supin_visc.cfg; HREL=1 ;;
   invwedge_lusgs) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_lusgs.cfg; HREL=0 ;;
   invwedge_mg) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_mg.cfg; HREL=0 ;;
+  invwedge_dyn) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_dyn.cfg; HREL=0
+    ITERS=${ITERS_DYN:-16} ;; # dual-time case: fixed 4x4=16 history rows; compare the final state
   *) echo "unknown CASE $CASE"; exit 2 ;;
 esac
 st=0
