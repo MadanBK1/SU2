@@ -647,8 +647,10 @@ void CNEMONSSolver::BC_IsothermalNonCatalytic_Wall(CGeometry *geometry,
   /*--- Identify the boundary ---*/
   const auto Marker_Tag = config->GetMarker_All_TagBound(val_marker);
 
-  /*--- Retrieve the specified wall temperature ---*/
-  const su2double Twall = config->GetIsothermal_Temperature(Marker_Tag);
+  /*--- Retrieve the specified wall temperature (6b.b coupling: MARKER_PYTHON_CUSTOM gives a per-vertex value, set through
+   *    the python wrapper SetMarkerCustomTemperature; same units as MARKER_ISOTHERMAL, initialised by CGeometry to it) ---*/
+  const su2double Twall_marker = config->GetIsothermal_Temperature(Marker_Tag);
+  const bool py_custom = config->GetMarker_All_PyCustom(val_marker);
 
   su2double **Jacobian_i = nullptr;
   if (implicit) {
@@ -664,6 +666,8 @@ void CNEMONSSolver::BC_IsothermalNonCatalytic_Wall(CGeometry *geometry,
     const auto iPoint = geometry->vertex[val_marker][iVertex]->GetNode();
 
     if (!geometry->nodes->GetDomain(iPoint)) continue;
+
+    const su2double Twall = py_custom ? geometry->GetCustomBoundaryTemperature(val_marker, iVertex) : Twall_marker;
 
     /*--- Compute dual-grid area and boundary normal ---*/
     const auto Normal = geometry->vertex[val_marker][iVertex]->GetNormal();
@@ -908,7 +912,9 @@ void CNEMONSSolver::BC_IsothermalCatalytic_Wall(CGeometry *geometry,
         string Marker_Tag = config->GetMarker_All_TagBound(val_marker);
 
         /*--- Get isothermal wall temp ----*/
-        const su2double Tw = config->GetIsothermal_Temperature(Marker_Tag);
+        const su2double Tw = config->GetMarker_All_PyCustom(val_marker)
+                                 ? geometry->GetCustomBoundaryTemperature(val_marker, iVertex)
+                                 : config->GetIsothermal_Temperature(Marker_Tag);
 
         /*--- Get wall catalytic efficiency ----*/
         const su2double gam = config->GetCatalytic_Efficiency();

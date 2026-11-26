@@ -3090,7 +3090,8 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
                                ? std::string(config->GetCatalytic_Wall(iMarker)
                                                  ? (config->GetSupercatalytic_Wall() ? " [supercatalytic]" : " [catalytic]")
                                                  : " [non-catalytic]")
-                               : std::string(kb == FAR_FIELD && viscous ? " [+ viscous]" : "")),
+                               : std::string(kb == FAR_FIELD && viscous ? " [+ viscous]" : "")) +
+                       std::string(kb == ISOTHERMAL && config->GetMarker_All_PyCustom(iMarker) ? " [py-custom Twall]" : ""),
                    Device_BCUnsupported(config, k, iMarker));
       }
     }
@@ -3844,6 +3845,7 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
 
   /*--- Step 8: viscous far-field / supersonic-inlet part (node_infty / node_inlet secondaries + gradient), NS walls. ---*/
   std::vector<su2double> inftyGrad;
+  std::vector<double> customTwall; /*--- 6b.b, alive until ComputeBCResidual below ---*/
   if ((bk == K::BCKind::FAR_FIELD || bk == K::BCKind::SUPERSONIC_INLET) && config->GetViscous()) {
     CNEMOEulerVariable* nb = (bk == K::BCKind::FAR_FIELD) ? node_infty : node_inlet.get();
     p.viscous = true;
@@ -3861,6 +3863,13 @@ bool CNEMOEulerSolver::Device_BCResidual(CGeometry *geometry, CSolver **solver_c
     const string Marker_Tag = config->GetMarker_All_TagBound(val_marker);
     if (bk == K::BCKind::ISOTHERMAL) {
       p.Twall = config->GetIsothermal_Temperature(Marker_Tag);
+      /*--- 6b.b: MARKER_PYTHON_CUSTOM -> per-vertex wall temperature (as CNEMONSSolver::BC_Isothermal*_Wall). ---*/
+      if (config->GetMarker_All_PyCustom(val_marker)) {
+        customTwall.resize(geometry->GetnVertex(val_marker));
+        for (auto iVertex = 0ul; iVertex < geometry->GetnVertex(val_marker); iVertex++)
+          customTwall[iVertex] = SU2_TYPE::GetValue(geometry->GetCustomBoundaryTemperature(val_marker, iVertex));
+        p.customTwall = customTwall.data();
+      }
       p.catalytic = config->GetCatalytic_Wall(val_marker);
       p.supercatalytic = config->GetSupercatalytic_Wall();
       if (p.catalytic && p.supercatalytic) {
