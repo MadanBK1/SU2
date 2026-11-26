@@ -142,6 +142,7 @@ protected:
    */
   std::string Device_ResidentUnsupported(const CConfig *config) const;
   bool deviceResident = false;   /*!< \brief Device-resident mode (decided at construction). */
+  unsigned long mgHostTransfers = 0; /*!< \brief 4.6-MG step 1: fine-level MG transfer syncs (perf line). */
   bool hostAccNeedsZero = false; /*!< \brief Resident: host LinSysRes / Jacobian were not zeroed (stale). */
   bool Device_ResidentActive() const;
   /*! \brief Device-resident MPI comms: download the send rows of the group, host comms, upload the receive rows. */

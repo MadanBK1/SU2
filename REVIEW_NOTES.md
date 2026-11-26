@@ -2,6 +2,61 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 16 (merged 4.6-LUSGS; dev: 4.6-MG step 1, fine level device-resident with multigrid)
+
+**Reviewed:** 065f855fa2. Strict-gate claims checked in the archived logs (g1-lusgs-r64, g1-lusgs-visc-r64,
+g1-regress-r68, g1-invall-r68: tol 0.0, OVERALL PASS, no missing stage line; sv/nf r68 PASS). **Merged into su2kokkos
+(91f8df0 + VALIDATION_LOG row 0770d05):** the 02676f8 code files (CPreconditioner.hpp, CSysMatrix.hpp/.cpp,
+CSysMatrixKokkos.cpp, CNEMOEulerSolver.cpp, check.sh, check_noisefloor.sh, invwedge_lusgs.cfg); plan matrix updated.
+Side note: thermalbath in g1-regress-r68 shows wall=0.01s for NO and YES — check that the case really runs (mesh/cfg
+path); if it exits immediately the PASS is empty. Report what you find (item 9 below).
+
+**Dev code this round (g++ -std=c++20 -fsyntax-only -ffp-contract=off, with and without -DHAVE_KOKKOS, vs bundled Kokkos
+5.2.2 Serial headers, on CNEMOEulerSolver.cpp and CMultiGridIntegration.cpp; NOT validated):**
+- `CSolver::HostSyncScope::MG_TRANSFER` (CSolver.hpp) — new scope, no-op for every other solver.
+- `CMultiGridIntegration::MultiGrid_Cycle`: one `SyncHostData(MG_TRANSFER)` on the fine solver right after the fine
+  level's second Space_Integration (before SetResidual_Term). The host transfer operators (SetResidual_Term,
+  SetRestricted_Solution, SetForcing_Term, GetProlongated/SmoothProlongated/SetProlongated_Correction) then see current
+  host data. ENABLE_KOKKOS=NO: identical (virtual no-op).
+- `CNEMOEulerSolver::SyncHostData(MG_TRANSFER)`: EnsureHost(Solution, LinSysRes, Res_TruncError), then
+  MarkHostWritten(Solution, LinSysRes): Cons2Prim re-uploads Solution, the next residual zero-fills the device LinSysRes.
+  Counter -> destructor line `[KOKKOS_NEMO_PERF] MG fine-level host transfers=N`.
+- `Device_ResidentUnsupported`: MGLEVEL>0 no longer forces resident OFF. Still OFF for `MGCYCLE= FULLMG_CYCLE`
+  ("full multigrid cycle") and with `SU2_KOKKOS_NEMO_MG_RESIDENT=0` (old behaviour, for A/B). Coarse levels unchanged
+  (their own non-resident pipeline, "MG level").
+- Gate case `invwedge_mg` (= invwedge_ausm + MGLEVEL=2, V cycle, pre-smooth 1/2/3, damping 0.75); EXPECT: resident ON
+  + the MG transfer perf line. Noise-floor case added.
+- Cost: per MG cycle 3 downloads + 2 uploads of nPoint*nVar on the fine level (instead of a fully host run). Step 2
+  (later, HEAVY): coarse levels resident + device restriction/prolongation kernels (agglomeration CSR), no copies.
+
+**Agent: do next** (archive every log under `validation_logs/2026-11-26_4.6-MG/` + INDEX.md rows)
+1. Build strict + serial. Fix compile errors yourself (smallest change).
+2. CPU baseline first: ENABLE_KOKKOS=NO run of invwedge_mg.cfg (11 iters) -> exits 0, residuals finite. Log
+   `cpu-mg-r1.log`. If the CPU NEMO multigrid itself fails, stop and request `HEAVY: 4.6-MG: CPU MG fails: <error>`.
+3. G1 strict: `timeout 1500 bash .g1run.sh ../kk/logs/g1-mg-r1.log invwedge_mg` -> OVERALL PASS bitwise, both EXPECT
+   lines present. Also paste the YES startup line `device-resident state (Step 6): …` and the coarse-level lines.
+4. Same with the old behaviour as control: `EXTRA_CFG="" SU2_KOKKOS_NEMO_MG_RESIDENT=0 RUN_TAG=_mgoff timeout 1500 bash
+   .g1run.sh ../kk/logs/g1-mgoff-r1.log invwedge_mg` (EXPECT "ON" will be missing there — expected; report the
+   tolerances/diffs only). If 4 fails too, the problem is in the coarse-level (non-resident) pipeline, not this round.
+5. Variants (each PASS bitwise): `EXTRA_CFG="MG_POST_SMOOTH= ( 1, 1, 1 )" RUN_TAG=_mgpost` (fine-level post-smoothing
+   after the host transfer) -> g1-mgpost-r1.log; `EXTRA_CFG="MGCYCLE= W_CYCLE" RUN_TAG=_mgw` -> g1-mgw-r1.log;
+   `EXTRA_CFG="MG_CORRECTION_SMOOTH= ( 2, 2, 2 )" RUN_TAG=_mgcs` -> g1-mgcs-r1.log; viscous:
+   `EXTRA_CFG="MGLEVEL= 1" RUN_TAG=_mg super_cat` -> g1-mgvisc-r1.log.
+6. Host-read hook check: YES run of invwedge_mg with `SU2_KOKKOS_NEMO_POISON=1` -> results identical to step 3's YES
+   (restart diff 0). Log `poison-mg-r1.log`. A difference means a host read of a device group the MG code does that
+   MG_TRANSFER does not cover: find which (grep GetNodes in CMultiGridIntegration.cpp for the fine solver) and report.
+7. On a G1 failure: rerun YES with `SU2_KOKKOS_STAGE_VERIFY=1` (sv-mg-r1.log, ≤ 20 StageCompare lines) and compare the
+   first-iteration history line NO vs YES; 3 sessions, then `HEAVY: 4.6-MG: <finding>`.
+8. Regression (unchanged paths): default list + `invwedge_lusgs invwedge_roe` PASS bitwise -> g1-regress-r1.log;
+   noise floor `CASE=invwedge_mg bash TestCases/kokkos_nemo/check_noisefloor.sh` (ratio ≤ 10) -> nf-mg-r1.log.
+9. thermalbath wall=0.01s (see above): check log.txt of that case; note the finding in KOKKOS_PROGRESS.md.
+10. PERF: `MG fine-level host transfers=` line + wall NO/YES into KOKKOS_PROGRESS.md. Bookkeeping: plan matrix row
+   "multigrid (MGLEVEL>0)" -> "fine level device-resident, coarse host (step 1)"; LOCAL_AGENT_TASK 4.6 note. Then
+   request `MERGE: 4.6-MG1` (logs committed first). Next heavy after that: `HEAVY: 4.6-MG2` (coarse levels resident).
+
+**Madan (V100, optional):** `cd $RUN && BIN=<cuda SU2_CFD> bash TestCases/kokkos_nemo/check.sh invwedge_mg` and the
+same for invwedge_lusgs; archive the logs under `validation_logs/2026-11-26_gpu/`.
+
 ## 2026-11-25 — review 15 (merged 4.5-SupInVisc; dev: 4.6 device LU_SGS)
 
 **Reviewed:** 632c23260f. Strict-gate claims checked (G1 strict supin_visc + default list + invall 7/7 bitwise, no
