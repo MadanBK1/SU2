@@ -717,5 +717,11 @@ READY FOR REVIEW: MERGE: 4.6-MG1 — logs now committed: validation_logs/2026-11
 
 - 2026-11-26 (round 87, review-20 queue: 4.6-MG2 test — step 1 build):
   - ROOT CAUSE of rounds 83/85/86 build failures: `ninja: regenerate build.ninja` runs bare `python3 -m mesonbuild.mesonmain`, and the shell no longer exports `PYTHONPATH=/home/mpr7366/SU2/externals/meson` (old repo path). Fix: `.buildmg2.sh` now exports `PYTHONPATH="$PWD/externals/meson"` (in-repo vendored meson 1.8.2; verified importable).
-  - RUNNING: strict rebuild in background (35/90 at ~04:50), then serial. Logs -> ../kk/logs/build-mg2-r1.log, build-mg2-serial-r1.log.
-  - NEXT after rc=0: G1 strict `timeout 1500 bash .g1run.sh ../kk/logs/g1-mg2-r1.log invwedge_mg` (expect `MG level 1 device-resident state: ON` + `MG device transfers=`), control `SU2_KOKKOS_NEMO_MG_DEVICE=0` (g1-mg2off-r1.log), variants mgpost/mgw/mgcs, viscous super_cat MGLEVEL=1 coarse OFF bitwise (g1-mg2visc-r1.log), poison, noisefloor (nf-mg2-r1.log), regressions default + targeted (g1-mg2regress{,2}-r1.log); archive validation_logs/2026-11-26_4.6-MG2/ + INDEX rows + ls-tree count; `READY FOR REVIEW: MERGE: 4.6-MG2`.
+  - BUILD DONE: strict rc=0 (90/90, CNEMOKokkosMG.cpp.o compiled at [12/90]), serial rc=0; binaries Nov 26 04:46/04:48.
+  - (2) G1 strict invwedge_mg: **PASS bitwise** (g1-mg2-r1.log; max|dres|=0, field diff=0; wall NO 64.55s / YES 53.28s = 1.21x). YES log: `MG level 1 device-resident state: ON (device MG transfers)`, `MG level 2 ... ON`, `[KOKKOS_NEMO_PERF] MG device transfers=66 (level 0)` — all 4 check.sh EXPECT lines present.
+  - Control (MG_DEVICE=0): g1-mg2off-r1.log — invwedge_mg_mg2off **PASS bitwise** (dres=0, field diff=0); OVERALL:FAIL only = 3 EXPECT lines missing (expected: coarse OFF). YES log: `MG level 1|2 device-resident state: OFF (SU2_KOKKOS_NEMO_MG_DEVICE=0)`, fine Step-6 ON — step-1 path intact.
+  - Variants (all **PASS bitwise**, OVERALL PASS): mgpost (g1-mg2post-r1.log), W-cycle (g1-mg2w-r1.log), mgcs (g1-mg2cs-r1.log).
+  - Viscous: super_cat MGLEVEL=1 (g1-mg2visc-r1.log) **PASS bitwise**, OVERALL PASS; coarse `OFF (viscous ...)` as required.
+  - Poison (poison-mg2-r1.log) **PASS bitwise** (identical to unpoisoned YES; no stale host reads).
+  - RUNNING: noise floor (nf-mg2-r1.log, serial+strict).
+  - NEXT: noise floor result; regressions default (g1-mg2regress-r1.log) + targeted invwedge_lusgs/invwedge_roe (g1-mg2regress2-r1.log); archive validation_logs/2026-11-26_4.6-MG2/ + INDEX rows + ls-tree count; `READY FOR REVIEW: MERGE: 4.6-MG2`.
