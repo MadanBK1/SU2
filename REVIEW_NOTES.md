@@ -2,6 +2,42 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 21 (4.6-MG2 merged; new dev code 6b.a dynamic grid)
+
+**Reviewed:** 5c4dccefde (code validated at bbcbd98). 36 logs committed, 11 INDEX rows strict PASS, code diff as expected.
+**Merged** into su2kokkos as 85e6f71 (+ VALIDATION_LOG row f51a827, plan matrix 5e7c240): CMultiGridIntegration.hpp/.cpp,
+CNEMOEulerSolver.hpp/.cpp, CSolver.hpp, CNEMOKokkosData.hpp, CNEMOKokkosMG.cpp, meson.build, check.sh. 4.6-MG2 is DONE —
+never re-request it.
+
+**Dev code this round (5327da3; g++ -fsyntax-only with/without -DHAVE_KOKKOS; NOT built, NOT validated)** — queue item 6b.a:
+- `CNEMOKokkosData::RefreshDynamicGeometry` (CNEMOKokkosStages.cpp): re-uploads normals, coords, volumes, periodic volumes,
+  symmetry normals, grid velocity, Volume_nM1; called once per (TimeIter, OuterIter) from `CNEMOEulerSolver::Preprocessing`.
+- `KernelTimeStep` / `KernelMaxEigenvalue`: grid-velocity terms; `DualTimeResidual`: GCL branch (CNEMOKokkosResidual.cpp).
+- `Device_DynamicGridUnsupported` replaces the "dynamic grid" gates (MG / periodic / adjoint + dynamic grid stay host;
+  `SU2_KOKKOS_NEMO_DYNGRID=0` = old host path). New startup line `stage dynamic grid (...)`.
+- Gate case `invwedge_dyn` (TestCases/nonequilibrium/invwedge/invwedge_dyn.cfg: dual time 2nd order, rigid rotation +
+  translation, 4 time iters x 4 inner) + check.sh EXPECT. check_noisefloor.sh synced from su2kokkos.
+
+**Agent: do next** (archive every log under `validation_logs/2026-11-26_6b.a-DynGrid/` + one INDEX row each):
+1. Build strict + serial (your .buildmg2.sh pattern) -> `build-dyn-r1.log`, `build-dyn-serial-r1.log`. Fix compile errors
+   yourself (smallest change).
+2. CPU sanity first: `ENABLE_KOKKOS= NO` run of invwedge_dyn.cfg must run 4 time iterations without error
+   (`cpu-dyn-r1.log`). If the cfg itself fails on the CPU (option names, ITER), fix the cfg minimally and note it.
+3. G1 strict: `timeout 1500 bash .g1run.sh ../kk/logs/g1-dyn-r1.log invwedge_dyn` -> needs OVERALL PASS, bitwise, and all
+   4 EXPECT lines (dynamic grid: device, time step: device, dual-time 2nd: device, resident ON). Archive the NO/YES logs.
+4. Control: same with `SU2_KOKKOS_NEMO_DYNGRID=0` (expect bitwise, EXPECT lines missing = expected) -> `g1-dynoff-r1.log`.
+5. Variants (EXTRA_CFG, RUN_TAG): `TIME_MARCHING= DUAL_TIME_STEPPING-1ST_ORDER` -> `g1-dyn1st-r1.log`;
+   `ROTATION_RATE= 0.0 0.0 0.0` (translation only) -> `g1-dyntr-r1.log`; viscous: super_cat.cfg with
+   `EXTRA_CFG="TIME_DOMAIN= YES;TIME_MARCHING= DUAL_TIME_STEPPING-2ND_ORDER;TIME_STEP= 1e-7;TIME_ITER= 3;INNER_ITER= 3;GRID_MOVEMENT= RIGID_MOTION;TRANSLATION_RATE= 20.0 0.0 0.0;ITER= 0"`
+   (drop ITER if SU2 rejects it) -> `g1-dynvisc-r1.log`.
+6. On any FAIL: rerun with `SU2_KOKKOS_STAGE_VERIFY=1` and paste <= 20 StageCompare lines into KOKKOS_PROGRESS.md
+   (`sv-dyn-r1.log`); the first non-bitwise stage localizes it (dt, dual-time, or a stage reading stale geometry).
+7. Poison (`SU2_KOKKOS_NEMO_POISON=1`) on invwedge_dyn -> `poison-dyn-r1.log`; regressions: default list + invwedge_mg +
+   invwedge_lusgs -> `g1-dynregress-r1.log` (must stay bitwise: static grids take the old code paths).
+8. Perf: `[KOKKOS_NEMO_PERF]` lines + wall NO/YES of step 3 into KOKKOS_PROGRESS.md.
+Request `MERGE: 6b.a-DynGrid` only after 1-7 pass and the logs are committed; `HEAVY: ...` only for new code or a bug you
+cannot localize after 3 sessions. Next heavy item after this: 6b.b (pysu2 per-vertex T_wall in / heat flux out, resident).
+
 ## 2026-11-26 — review 20 (stale request again; nothing merged, no new dev code)
 
 **Reviewed:** c5fb22465b. Request repeats `MERGE: 4.6-MG1` — **already merged** (su2kokkos 800d75f, VALIDATION_LOG row
