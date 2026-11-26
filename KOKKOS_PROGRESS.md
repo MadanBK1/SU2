@@ -808,3 +808,10 @@ LOOP HINT: 2026-11-26T07:49:57-05:00 no progress for 3 rounds on the current ite
   - Step 3 (regressions default+supin_visc+smol_maxwell, strict bitwise): RUNNING via `.g1twregress.sh` -> ../kk/logs/g1-tw-regress-r1.log (cases: invwedge_ausm thermalbath super_cat axi_visccone supin_visc smol_maxwell; expect all PASS bitwise).
   - Step 4 (CPU no-op): RUNNING via `.cpunoop.sh` (new script) — plain super_cat, strict, REF_MODE=HOST, RUN_TAG=_noop -> chk_super_cat_noop_NO/_YES; will `cmp` restart_flow.csv vs chk_super_cat_pycustom_NO/restart_flow.csv (both host runs; custom-Twall code must be a no-op without PYDRIVER) -> cpu-noop-tw-r1.log.
   - Next (after 3+4 + archive/INDEX): step 5 pysu2 PYDRIVER run (needs strict build with -Denable-pywrapper=true; none of the current builds has it — build-kokkos-strict/bin absent; create build-kokkos-strict-py, log build-tw-py-r1.log), step 6 PYCUSTOM_DT=0 bitwise. Then MERGE: 6b.b-TwallIn after 1-6 + logs committed under validation_logs/2026-11-26_6b.b-TwallIn/.
+
+- 2026-11-26T12:28:44-05:00 [loop] round 106 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_121034_106.log
+
+- 2026-11-26 (round 107, review-23 queue 6b.b-TwallIn — steps 3+4 VERIFIED, step 5 starts):
+  - Step 3 (regressions default+supin_visc+smol_maxwell): **OVERALL PASS bitwise** (g1-tw-regress-r1.log, 6 cases, all max|dres|=0).
+  - Step 4 (CPU no-op): check.sh super_cat RUN_TAG=_noop PASS bitwise (cpu-noop-tw-r1.log) + cross-tag cmp: chk_super_cat_pycustom_NO/restart_flow.csv == chk_super_cat_noop_NO/restart_flow.csv **bitwise identical** (cmp rc=0, cpu-noop-tw-cmp-r1.log). Custom-Twall code is a no-op without PYDRIVER.
+  - NEXT (step 5): build strict dir with -Denable-pywrapper=true (build-kokkos-strict-py -> build-tw-py-r1.log), then PYDRIVER check.sh super_cat -> g1-tw-py-r1.log + wall_heatflux.csv diff; step 6 PYCUSTOM_DT=0 bitwise; archive validation_logs/2026-11-26_6b.b-TwallIn/ + INDEX; MERGE: 6b.b-TwallIn.
