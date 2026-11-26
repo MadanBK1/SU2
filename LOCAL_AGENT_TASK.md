@@ -133,6 +133,17 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
    Device_UpwindUnsupported / Device_CenteredUnsupported is the intended behaviour.
 7. 4.6 solver options: LU-SGS, ILU(n>0) / GPU preconditioners, multigrid coarse levels, periodic markers,
    dynamic / deforming grids.
+7b. **SHAPE OPTIMIZATION, stage 1 (REQUIRED, Madan 2026-11-26), next after LU-SGS:** finite-difference shape
+   optimization with every primal on the GPU. A `TestCases/kokkos_nemo/shapeopt/` FFD wedge (and sphere-cone) case:
+   DEFINITION_DV FFD_CONTROL_POINT_2D (≈4–8 DVs), OBJECTIVE_FUNCTION DRAG and TOTAL_HEATFLUX, `shape_optimization.py
+   -g FINDIFF`, ENABLE_KOKKOS= YES, warm start from the previous design's restart. Developer: config + any GPU-path fixes
+   for deformed meshes / objective outputs in resident mode. Agent: run it, gate each design's objective vs ENABLE_KOKKOS=NO
+   (strict: bitwise; production: noise floor), archive all logs.
+7c. **SHAPE OPTIMIZATION, stage 2 (REQUIRED): adjoint gradients.** This SU2 has no NEMO adjoint. Plan: enable SU2's
+   generic discrete adjoint (CDiscAdjSolver / CoDiPack) for NEMO_EULER / NEMO_NAVIER_STOKES on the CPU AD build
+   (SU2_CFD_AD; native SU2TCLib gas only, Mutation++ not differentiable), then run hybrid: converged GPU primal ->
+   restart -> CPU adjoint. Gate: adjoint gradient vs the stage-1 finite-difference gradient (agreement to FD accuracy).
+   A GPU adjoint is a later research item, not in this queue.
 8. Host-touch removal: device residual norms, output / restart every N iterations, CUDA-aware MPI halos.
 9. 4.7 turbulence coupling (SA / SST device kernels for NEMO).
 10. Then 4.8 performance.
