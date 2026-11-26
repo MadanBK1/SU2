@@ -45,7 +45,14 @@ RUN = os.environ.get('RUN_DIR', '/home/claude/runs')
 it, K, case, hrel = sys.argv[1], float(sys.argv[2]), sys.argv[3], sys.argv[4] == '1'
 d = lambda n: f'{RUN}/nf_{case}_{it}_{n}'
 def fld(n):
-    f = np.genfromtxt(d(n) + '/restart_flow.csv', delimiter=',', skip_header=1)[:, 3:]
+    p = d(n) + '/restart_flow.csv'
+    if not os.path.exists(p):
+        # unsteady (TIME_DOMAIN=YES) cases name the restart restart_flow_<iter>.csv; take the last
+        cands = sorted(f for f in os.listdir(d(n)) if re.match(r'restart_flow_\d+\.csv$', f))
+        if not cands:
+            raise FileNotFoundError(p)
+        p = d(n) + '/' + cands[-1]
+    f = np.genfromtxt(p, delimiter=',', skip_header=1)[:, 3:]
     return f
 def hist(n):
     # Convergence history = the fully-numeric `| n | ... |` rows that follow the LAST
