@@ -2,6 +2,42 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 25 (4.8-ILUTeam MERGED; new dev code 4.8 LU_SGS hybrid apply)
+
+Reviewed: 3468ddec5a. Merged into su2kokkos as 3897d1a (code c362c12d78: CSysMatrixKokkos.cpp KokkosILU0BuildTeam,
+check.sh EXPECT keys) + VALIDATION_LOG row + plan matrix. V100 G7 team-vs-row timing still OPEN (Madan).
+
+Dev code this round (g++ -std=c++20 -fsyntax-only -ffp-contract=off -Wall, Kokkos Serial headers: clean; NOT built,
+NOT validated) — 4.8 perf, G7 hot spot "LU_SGS device apply ~0.1 s/apply (level-scheduled single team)":
+- `Common/src/linear_algebra/CSysMatrixKokkos.cpp`: row bodies moved verbatim into `DeviceLUSGSForwardRow` /
+  `DeviceLUSGSBackwardRow` (same statements); `SegmentLevels` splits the levels: a level with >= W rows gets its own
+  RangePolicy launch over the whole device, runs of narrower levels stay in one single-team launch (old kernel, level
+  sub-range). Result is independent of segmentation (rows of a level independent, same per-row code) -> must be bitwise.
+  Env: `SU2_KOKKOS_LUSGS_APPLY=single` = old apply; `SU2_KOKKOS_LUSGS_WIDE=<rows>` (default 256). Startup line
+  `[KOKKOS] LU_SGS device apply: hybrid (wide >= W rows; fwd levels=.. wide=.. segments=..; bwd ...)` or `single-team`.
+- `CSysMatrix.hpp`: host vectors lusgs_fwd/bwd_ptr_h, lusgs_fwd/bwd_seg.
+- check.sh EXPECT keys `invwedge_lusgs_lusgshyb`, `invwedge_lusgs_lusgsw1`, `invwedge_lusgs_lusgssingle`.
+
+Agent: do next (archive under validation_logs/2026-11-26_4.8-LUSGSHyb/ + one INDEX row each):
+1. Build strict + serial -> build-lusgs-r1.log, build-lusgs-serial-r1.log. Fix compile errors yourself (smallest change).
+2. G1 default: `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_lusgshyb bash TestCases/kokkos_nemo/check.sh invwedge_lusgs` -> g1-lusgs-hyb-r1.log (PASS bitwise + hybrid line; paste the startup line in INDEX).
+3. All-wide path (forces per-level launches on every level, exercises the new kernels on Serial):
+   `SU2_KOKKOS_LUSGS_WIDE=1 REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_lusgsw1 bash TestCases/kokkos_nemo/check.sh invwedge_lusgs` -> g1-lusgs-w1-r1.log.
+4. Old path: `SU2_KOKKOS_LUSGS_APPLY=single REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_lusgssingle bash TestCases/kokkos_nemo/check.sh invwedge_lusgs` -> g1-lusgs-single-r1.log.
+5. A/B: step 3 again with `SU2_KOKKOS_PRECOND_VERIFY=1 RUN_TAG=_lusgsw1v` (EXPECT falls back to the plain key) -> grep `KOKKOS_NEMO_VERIFY` for the LU_SGS apply compares, must be non-bitwise=0 -> ab-lusgs-w1-r1.log.
+6. Viscous LU_SGS: repeat the super_cat LU_SGS run you used for the 2026-11-25 LU-SGS validation, with SU2_KOKKOS_LUSGS_WIDE=1 (strict) -> g1-lusgs-visc-w1-r1.log.
+7. Regressions strict: default list + invwedge_mg invwedge_dyn supin_visc -> g1-lusgs-regress-r1.log.
+8. Noise floor serial+strict, invwedge_lusgs K=10 -> nf-lusgs-r1.log (ratio <= 10).
+9. Record `[KOKKOS_NEMO_PERF] device LU_SGS applies=` lines for steps 2/3/4 in INDEX (Serial timing informational).
+On failure: rerun the failing step with SU2_KOKKOS_STAGE_VERIFY=1 and SU2_KOKKOS_PRECOND_VERIFY=1, paste <= 20 StageCompare/VERIFY lines in KOKKOS_PROGRESS.md.
+Request `MERGE: 4.8-LUSGSHyb` only after 1-8 pass and the logs are committed; `HEAVY: ...` only for new code or a bug you
+cannot localize after 3 sessions.
+
+Madan (V100, after the agent builds the CUDA binary): G7 timings, archive under validation_logs/2026-11-26_4.8-GPU/:
+  `RUN_TAG=_g7iluteam bash TestCases/kokkos_nemo/check.sh super_cat` vs `SU2_KOKKOS_ILU_BUILD=row RUN_TAG=_g7ilurow ...` (grep `device preconditioner builds=`),
+  `RUN_TAG=_g7lusgshyb bash TestCases/kokkos_nemo/check.sh invwedge_lusgs` vs `SU2_KOKKOS_LUSGS_APPLY=single RUN_TAG=_g7lusgssingle ...`,
+  and `SU2_KOKKOS_LUSGS_WIDE=64` / `=1024` variants (grep `device LU_SGS applies=` and the hybrid startup line).
+
 ## 2026-11-26 — review 24 (6b.b-TwallIn PARTIAL merge; new dev code 4.8 ILU(0) build perf)
 
 Reviewed: d02d49356a. Merged into su2kokkos as eafe69f (code 89112d6457: CNEMOKokkosData.hpp, CNEMOEulerSolver.cpp,
