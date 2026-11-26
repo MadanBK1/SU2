@@ -90,6 +90,12 @@ CSysMatrix<ScalarType>::~CSysMatrix() {
   GPUMemoryAllocation::gpu_free(d_col_ind_ilu);
   GPUMemoryAllocation::gpu_free(d_ilu_level_ptr);
   GPUMemoryAllocation::gpu_free(d_ilu_level_rows);
+  GPUMemoryAllocation::gpu_free(d_lusgs_fwd_ptr);
+  GPUMemoryAllocation::gpu_free(d_lusgs_fwd_rows);
+  GPUMemoryAllocation::gpu_free(d_lusgs_bwd_ptr);
+  GPUMemoryAllocation::gpu_free(d_lusgs_bwd_rows);
+  GPUMemoryAllocation::gpu_free(d_lusgs_lb);
+  GPUMemoryAllocation::gpu_free(d_lusgs_ub);
 #endif
 
 #ifdef USE_MKL

@@ -235,6 +235,17 @@ class CLU_SGSPreconditioner final : public CPreconditioner<ScalarType> {
   inline void operator()(const CSysVector<ScalarType>& u, CSysVector<ScalarType>& v) const override {
     sparse_matrix.ComputeLU_SGSPreconditioner(u, v, geometry, config);
   }
+
+#ifdef HAVE_KOKKOS
+  /*--- 4.6: device LU_SGS only when the device values are authoritative (device-resident owner, e.g. NEMO); otherwise
+   *    the host apply (host values) is kept, so the REF_MODE=HOST reference still runs the CPU algorithm. ---*/
+  inline bool SupportsKokkosDeviceResident() const override {
+    return config->GetKokkos() && sparse_matrix.GetKokkosValuesOnDevice();
+  }
+  inline void KokkosDeviceResident(const CSysVector<ScalarType>& u, CSysVector<ScalarType>& v) const override {
+    sparse_matrix.KokkosComputeLU_SGSPreconditioner(u, v, geometry, config);
+  }
+#endif
 };
 
 /*!

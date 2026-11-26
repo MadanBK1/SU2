@@ -21,6 +21,7 @@ case $CASE in
   super_cat) CFG=$SU2/TestCases/nonequilibrium/visc_wedge/super_cat.cfg; HREL=1 ;;
   smol_maxwell) CFG=$SU2/TestCases/nonequilibrium/visc_wedge/smol_maxwell.cfg; HREL=1 ;;
   supin_visc) CFG=$SU2/TestCases/nonequilibrium/visc_wedge/supin_visc.cfg; HREL=1 ;;
+  invwedge_lusgs) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_lusgs.cfg; HREL=0 ;;
   *) echo "unknown CASE $CASE"; exit 2 ;;
 esac
 st=0
