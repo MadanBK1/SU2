@@ -2,6 +2,32 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 23 (6b.a-DynGrid MERGED; new dev code 6b.b wall-temperature coupling IN)
+
+Reviewed: 4e49fe63ae (empty `reason:` again — treated as MERGE: 6b.a-DynGrid; ALWAYS fill `reason:`).
+Merged into su2kokkos as 8af70e6 (code bf2ff4ad8f: CNEMOEulerSolver.hpp/.cpp, CNEMOKokkosData.hpp/.cpp, CNEMOKokkosResidual.cpp,
+CNEMOKokkosStages.cpp, check.sh, check_noisefloor.sh, invwedge_dyn.cfg) + VALIDATION_LOG row + plan matrix. 6b.a is DONE — never re-request.
+
+Dev code this round (89112d6; g++ -fsyntax-only with/without -DHAVE_KOKKOS; NOT built, NOT validated) — queue item 6b.b (IN part):
+- `CNEMONSSolver::BC_IsothermalNonCatalytic_Wall` / partially-catalytic part of `BC_IsothermalCatalytic_Wall`: with
+  MARKER_PYTHON_CUSTOM the wall T is `geometry->GetCustomBoundaryTemperature(marker, iVertex)` (default = MARKER_ISOTHERMAL value).
+- Device: `BCParams::customTwall`, `CNEMOKokkosData::customTwall_` (only the marker's nVertex doubles copied per BC call),
+  `KernelIsothermal` reads `r.twallVtx(kv)`. Stage line gets ` [py-custom Twall]`.
+- check.sh: env `PYDRIVER=<script>` runs both runs through pysu2; EXPECT key `super_cat_pycustom`.
+- New `TestCases/kokkos_nemo/pycustom_twall.py`: sets T(x)=T0+DT*ramp each iteration, writes wall_heatflux.csv (heat flux OUT).
+
+Agent: do next (archive every log under validation_logs/2026-11-26_6b.b-TwallIn/ + one INDEX row each):
+1. Build strict + serial (your build scripts) -> build-tw-r1.log, build-tw-serial-r1.log. Fix compile errors yourself (smallest change).
+2. Identity, SU2_CFD binary: `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_pycustom EXTRA_CFG="MARKER_PYTHON_CUSTOM= ( Wall )" bash TestCases/kokkos_nemo/check.sh super_cat` -> g1-tw-ident-r1.log, PASS bitwise + `[py-custom Twall]: device` line.
+3. Regression: default list + supin_visc smol_maxwell (strict) -> g1-tw-regress-r1.log, all PASS bitwise.
+4. CPU no-op check: compare the step-2 NO run restart with a plain super_cat NO run (strict binary, both host) -> must be bitwise identical; note in INDEX (cpu-noop-tw-r1.log).
+5. pysu2 (only if your build has the python wrapper, meson `-Denable-pywrapper=true`; if not, rebuild a separate strict build dir with it, log build-tw-py-r1.log):
+   `PYTHONPATH=<build>/bin REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_pycustom EXTRA_CFG="MARKER_PYTHON_CUSTOM= ( Wall )" PYDRIVER=$PWD/TestCases/kokkos_nemo/pycustom_twall.py bash TestCases/kokkos_nemo/check.sh super_cat` -> g1-tw-py-r1.log (PASS bitwise expected).
+   Then `diff` the two wall_heatflux.csv files (chk_super_cat_pycustom_NO / _YES) -> tw-heatflux-diff-r1.log. Identical = heat flux OUT already correct in resident mode; if they differ, paste the first 10 differing rows and request `HEAVY: 6b.b: heat flux OUT in resident mode`.
+6. Also run step 5 with PYCUSTOM_DT=0 (uniform) and compare its NO restart to step 2 NO -> should be bitwise (g1-tw-py-dt0-r1.log).
+On any G1 FAIL: rerun with SU2_KOKKOS_STAGE_VERIFY=1, paste <= 20 StageCompare lines. Request `MERGE: 6b.b-TwallIn` after 1-5 pass and logs are committed.
+`HEAVY: …` only for new code or a bug you cannot localize after 3 sessions. Always fill `reason:`.
+
 ## 2026-11-26 — review 22 (6b.a dynvisc bug fixed; nothing merged)
 
 Reviewed: 7aa0372c39 (request had an empty `reason:`; treated as HEAVY 6b.a-DynGrid dynvisc). Nothing merged (dynvisc open).
