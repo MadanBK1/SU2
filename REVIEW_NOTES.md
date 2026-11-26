@@ -2,6 +2,45 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 27 (4.8-LUSGSHyb MERGED; new dev code 4.6-Linelet)
+
+Reviewed: ca9282c995. Merged into su2kokkos as f2a9c23 (code 7932194a9a: CSysMatrix.hpp, CSysMatrixKokkos.cpp, check.sh)
++ VALIDATION_LOG row + plan matrix. Do not re-request 4.8-LUSGSHyb. V100 G7 (LU_SGS hybrid vs single) still OPEN (Madan).
+
+Dev code this round (bb0ab70; g++ -fsyntax-only -ffp-contract=off -Wall, Kokkos Serial headers, with/without -DHAVE_KOKKOS:
+clean; NOT built, NOT validated) — queue item 7, LINELET preconditioner on the device:
+- CSysMatrixKokkos.cpp: `EnsureKokkosLineletStructure` (pattern-only, once: Jacobi points, linelet CSR, d_matrix offsets of
+  the lower/upper blocks, flattened working memory; prints `[KOKKOS] LINELET device apply: linelets=...`) and
+  `KokkosComputeLineletPreconditioner` (Jacobi kernel on NO_LINELET points with d_invM + one thread per linelet, block
+  Thomas exactly as ComputeLineletPreconditioner; halo exchange; A/B with SU2_KOKKOS_PRECOND_VERIFY=1).
+- CPreconditioner.hpp: CLineletPreconditioner device branch (only when matrix values are device-authoritative, like LU_SGS).
+- CSysMatrix.hpp/.cpp: device members + getters + frees. CNEMOEulerSolver.cpp: resident gate accepts LINELET; startup
+  line `stage linear preconditioner (LINELET apply): device`; perf/verify lines `device LINELET applies=` /
+  `LINELET device apply vs host apply: compares=N non-bitwise=M`.
+- check.sh EXPECT keys: `super_cat_linelet`, `invwedge_lusgs_linelet` (use RUN_TAG=_linelet).
+
+Agent: do next (archive every log under validation_logs/2026-11-26_4.6-Linelet/ + one INDEX row each)
+1. Build strict + serial (ninja SU2_CFD in build-kokkos-strict and build-kokkos-serial) -> build-linelet-r1.log,
+   build-linelet-serial-r1.log. Fix compile errors yourself (smallest change, note it in KOKKOS_PROGRESS.md).
+2. G1 viscous: `EXTRA_CFG="LINEAR_SOLVER_PREC= LINELET" RUN_TAG=_linelet REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 timeout 1500
+   bash TestCases/kokkos_nemo/.g1run.sh ../kk/logs/g1-linelet-visc-r1.log super_cat` -> OVERALL PASS bitwise, EXPECT lines found.
+3. G1 inviscid: same with `invwedge_lusgs` -> g1-linelet-inv-r1.log.
+4. A/B: step 2 with `SU2_KOKKOS_PRECOND_VERIFY=1 RUN_TAG=_linelet` -> ab-linelet-r1.log; need `compares>0 non-bitwise=0`
+   for both the LINELET line and the preconditioner build line.
+5. Regressions (default list + invwedge_lusgs invwedge_mg invwedge_dyn supin_visc), strict -> g1-linelet-regress-r1.log.
+6. Noise floor: `CASE=super_cat EXTRA_CFG="LINEAR_SOLVER_PREC= LINELET" K=10 check_noisefloor.sh` -> nf-linelet-r1.log (<= 10).
+7. Perf lines (informational): grep `device LINELET applies=` and `LINELET device apply: linelets=` from steps 2-3 into
+   perf-linelet-r1.log.
+On a G1 FAIL: rerun with SU2_KOKKOS_STAGE_VERIFY=1 (+ SU2_KOKKOS_PRECOND_VERIFY=1), paste <= 20 StageCompare/VERIFY lines.
+If EXTRA_CFG does not override LINEAR_SOLVER_PREC in invwedge_lusgs.cfg, make a copy invwedge_linelet.cfg (small edit) and
+add a check.sh case + EXPECT key `invwedge_linelet` with the same stage lines.
+Request `MERGE: 4.6-Linelet` only after 1-6 pass and the logs are committed; `HEAVY: ...` only for new code or a bug you
+cannot localize after 3 sessions.
+
+Madan: V100 G7 (when convenient) — LINELET apply on GPU: build-kokkos-cuda, then
+`EXTRA_CFG="LINEAR_SOLVER_PREC= LINELET" RUN_TAG=_linelet bash TestCases/kokkos_nemo/check.sh super_cat` and grep
+`device LINELET applies=` vs `device LU_SGS applies=` / ILU; archive under validation_logs/2026-11-26_4.6-Linelet/gpu/.
+
 ## 2026-11-26 — review 26 (stale request; nothing merged; no new dev code)
 
 Reviewed: 5ca315fe41. The request repeated the review-24/25 line `READY FOR REVIEW: MERGE: 4.8-ILUTeam`, but 4.8-ILUTeam
