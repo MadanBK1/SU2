@@ -66,6 +66,8 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invwedge_lusgs]="stage linear preconditioner (LU_SGS apply): device|device-resident state (Step 6): ON"
                     [invwedge_mg]="device-resident state (Step 6): ON|MG level 1 device-resident state: ON|MG level 2 device-resident state: ON|MG device transfers="
                     [invwedge_dyn]="stage dynamic grid (grid-velocity dt/eigenvalue terms + GCL, metric re-upload per time step): device|stage time step (spectral radii + local dt + min/max reduce): device|stage dual-time source (2nd order): device|device-resident state (Step 6): ON"
+                    [super_cat_iluteam]="ILU(0) device build: team-per-row|device-resident state (Step 6): ON"
+                    [super_cat_ilurow]="ILU(0) device build: row-per-thread|device-resident state (Step 6): ON"
                     [super_cat_pycustom]="stage bc:ISOTHERMAL (Wall) [non-catalytic] [py-custom Twall]: device|device-resident state (Step 6): ON"
                     [invwedge_dyn_dyn1st]="stage dynamic grid (grid-velocity dt/eigenvalue terms + GCL, metric re-upload per time step): device|stage time step (spectral radii + local dt + min/max reduce): device|stage dual-time source (1st order): device|device-resident state (Step 6): ON" )
 cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat axi_visccone)

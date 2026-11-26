@@ -284,7 +284,7 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | BC | SMOLUCHOWSKI_MAXWELL (slip wall) | device-resident | `ComputeGasConstant` evaluated on the host once per call (gas-state dependent) and passed as a scalar; no Jacobian term, as on the CPU; ionization -> host |
 | BC | INLET_FLOW (BC_Inlet) | unsupported | not operational on the CPU (SU2_MPI::Error at entry) |
 | BC | periodic, turbomachinery / Giles, actuator disk, other kinds | host fallback | eager sync / not hooked |
-| Time | EULER_IMPLICIT (BCGSTAB, FGMRES, RESTARTED_FGMRES, CG; ILU(0), JACOBI) | device-resident | |
+| Time | EULER_IMPLICIT (BCGSTAB, FGMRES, RESTARTED_FGMRES, CG; ILU(0), JACOBI) | device-resident | ILU(0) build: team-per-row kernel `KokkosILU0BuildTeam` default (4.8, merged 2026-11-26, strict bitwise + A/B 0 non-bitwise on Serial); `SU2_KOKKOS_ILU_BUILD=row` = old row-per-thread kernel; V100 team-vs-row timing pending (G7) |
 | Time | ILU(n>0) | device-resident | host ILU build from downloaded values |
 | Time | LU_SGS (preconditioner apply) | device-resident (validated 2026-11-25: G1 strict invwedge_lusgs bitwise + viscous super_cat LU_SGS bitwise + regressions + A/B non-bitwise=0 + noise floor) | level-scheduled sweeps (ILU pattern), one persistent team per sweep, same accumulation order as gemv; gate cases invwedge_lusgs / super_cat+LU_SGS |
 | Time | other linear solvers / preconditioners (LINELET), nested solver | host fallback | |

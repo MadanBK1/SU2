@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <Kokkos_Core.hpp>
 #include <vector>
 
@@ -899,9 +900,113 @@ void CSysMatrix<ScalarType>::KokkosBuildILUPreconditioner() {
   const auto level_rows = d_ilu_level_rows;
   const unsigned long nv = nVar, bs = nVar * nVar, end = nPointDomain;
 
+  /*--- 4.8 perf: one team per row, block entries / (k-block, entry) pairs spread over the team's threads.
+   *    Every block entry is computed by exactly the same statement sequence as the per-row kernel below
+   *    (sum initialised to 0.0, k ascending, then Block_ik - sum), so on Serial the factors are bitwise equal.
+   *    Within one (iPoint, jPoint) step the updated Block_ik are distinct blocks (distinct kPoint), the steps
+   *    themselves stay sequential (team barriers). SU2_KOKKOS_ILU_BUILD=row selects the per-row kernel. ---*/
+  static const bool teamBuild = [] {
+    const char* env = std::getenv("SU2_KOKKOS_ILU_BUILD");
+    return !(env && std::string(env) == "row");
+  }();
+  static bool reported = false;
+  if (!reported && SU2_MPI::GetRank() == MASTER_NODE) {
+    reported = true;
+    std::cout << "[KOKKOS] ILU(0) device build: " << (teamBuild ? "team-per-row" : "row-per-thread") << std::endl;
+  }
+  if (teamBuild) {
+    using execution_space = Kokkos::DefaultExecutionSpace;
+    using team_policy = Kokkos::TeamPolicy<execution_space>;
+    using member_type = typename team_policy::member_type;
+    using scratch_view = Kokkos::View<ScalarType*, typename execution_space::scratch_memory_space, Kokkos::MemoryUnmanaged>;
+    execution_space exec;
+    const int team_size = static_cast<int>(std::min<long>(64, static_cast<long>(exec.concurrency())));
+    const size_t scratch_bytes = 2 * scratch_view::shmem_size(bs);
+    const auto lrows = levels_ilu.outerPtr();
+
+    for (auto level = 0ul; level < levels_ilu.getOuterSize(); ++level) {
+      const auto first = lrows[level];
+      const auto last = lrows[level + 1];
+      if (last <= first) continue;
+      const bool firstLevel = (level == 0);
+      Kokkos::parallel_for(
+          "SU2::KokkosILU0BuildTeam",
+          team_policy(exec, static_cast<int>(last - first), team_size)
+              .set_scratch_size(0, Kokkos::PerTeam(scratch_bytes)),
+          KOKKOS_LAMBDA(const member_type& team) {
+            const auto iPoint = level_rows[first + team.league_rank()];
+            scratch_view Lij(team.team_scratch(0), bs);
+            scratch_view block(team.team_scratch(0), bs);
+            const auto rowBeg = rows[iPoint] * bs, rowEnd = rows[iPoint + 1] * bs;
+
+            /*--- InitIluRow (ILU0: direct copy of the row's blocks). ---*/
+            Kokkos::parallel_for(Kokkos::TeamThreadRange(team, rowBeg, rowEnd),
+                                 [&](const unsigned long idx) { ilu[idx] = values[idx]; });
+            team.team_barrier();
+
+            if (!firstLevel) {
+              /*--- BuildIluRow(iPoint, 0, nPointDomain). ---*/
+              for (auto index = rows[iPoint]; index < diagonal[iPoint]; ++index) {
+                const auto jPoint = columns[index];
+                auto* Block_ij = ilu + index * bs;
+                const auto* invUjj = ilu + diagonal[jPoint] * bs;
+
+                /*--- Lij = Block_ij * invUjj (gemm_impl, one entry per thread). ---*/
+                Kokkos::parallel_for(Kokkos::TeamThreadRange(team, bs), [&](const unsigned long v) {
+                  const auto i = v / nv, j = v % nv;
+                  ScalarType c = 0.0;
+                  for (unsigned long kk = 0; kk < nv; kk++) c += Block_ij[i * nv + kk] * invUjj[kk * nv + j];
+                  Lij(v) = c;
+                });
+                team.team_barrier();
+
+                /*--- Range of index_ before the CPU's "if (kPoint >= end) break;". ---*/
+                const auto kBeg = diagonal[jPoint] + 1;
+                auto kEnd = kBeg;
+                while (kEnd < rows[jPoint + 1] && columns[kEnd] < end) ++kEnd;
+
+                Kokkos::parallel_for(Kokkos::TeamThreadRange(team, (kEnd - kBeg) * bs), [&](const unsigned long t) {
+                  const auto index_ = kBeg + t / bs;
+                  const auto v = t % bs;
+                  const auto kPoint = columns[index_];
+
+                  /*--- GetBlock_ILUMatrix(iPoint, kPoint). ---*/
+                  ScalarType* Block_ik = nullptr;
+                  const auto searchEnd = (kPoint < iPoint) ? diagonal[iPoint] : rows[iPoint + 1];
+                  for (auto s = (kPoint < iPoint) ? rows[iPoint] : diagonal[iPoint]; s < searchEnd; ++s) {
+                    if (columns[s] == kPoint) {
+                      Block_ik = ilu + s * bs;
+                      break;
+                    }
+                  }
+                  if (Block_ik == nullptr) return;
+
+                  const auto* Ujk = ilu + index_ * bs;
+                  const auto i = v / nv, j = v % nv;
+                  ScalarType c = 0.0;
+                  for (unsigned long kk = 0; kk < nv; kk++) c += Lij(i * nv + kk) * Ujk[kk * nv + j];
+                  Block_ik[v] = Block_ik[v] - c;
+                });
+                team.team_barrier();
+
+                Kokkos::parallel_for(Kokkos::TeamThreadRange(team, bs),
+                                     [&](const unsigned long v) { Block_ij[v] = Lij(v); });
+                team.team_barrier();
+              }
+            }
+
+            /*--- InvertDiagonalBlockILUMatrix(iPoint). ---*/
+            auto* Uii = ilu + diagonal[iPoint] * bs;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange(team, bs), [&](const unsigned long v) { block(v) = Uii[v]; });
+            team.team_barrier();
+            Kokkos::single(Kokkos::PerTeam(team), [&]() { DeviceMatrixInverse(nv, block.data(), Uii); });
+          });
+    }
+  }
+
   /*--- Same per-row operations as BuildILUPreconditioner (level-scheduled branch). Rows of one level only read
    *    rows of earlier levels and write their own blocks, so the row order within a level does not matter. ---*/
-  for (auto level = 0ul; level < levels_ilu.getOuterSize(); ++level) {
+  for (auto level = 0ul; level < (teamBuild ? 0ul : levels_ilu.getOuterSize()); ++level) {
     const auto first = levels_ilu.outerPtr()[level];
     const auto last = levels_ilu.outerPtr()[level + 1];
     const bool firstLevel = (level == 0);
