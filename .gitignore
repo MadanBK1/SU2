@@ -110,3 +110,7 @@ ninja-win.zip
 ninja.exe
 .gitignore
 Docs/html
+
+# Validation record (Madan 2026-11-26): logs under validation_logs/ must be committed despite *.log above
+!validation_logs/**/*.log
+!validation_logs/**/*.log.gz

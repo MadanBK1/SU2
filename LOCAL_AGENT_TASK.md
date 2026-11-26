@@ -20,6 +20,8 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
   `| date | item | gate | exact command | binary (strict/serial/cuda) + git sha | result (PASS/FAIL, max|dres|, field diff, ratio) | log path |`.
 - Failed runs are kept too (mark FAIL); never delete or overwrite a log — new run, new file name.
 - Commit the logs + INDEX.md in the same commit as the progress note for that run (`git add validation_logs`).
+  `*.log` is gitignored outside validation_logs/ (exception added to .gitignore 2026-11-26); after committing, CHECK
+  `git ls-tree -r --name-only HEAD validation_logs/<dir>/ | wc -l` matches the files you copied (use `git add -f` if not).
   A `MERGE:` request is only valid if every log it cites is committed under validation_logs/.
 
 ## 0. Restart protocol (do this every session)

@@ -2,6 +2,32 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 17 (NOT merged: 4.6-MG1 logs missing from git)
+
+**Reviewed:** 54e09ba7e3. Code diff since 065f855 is clean and as expected (CSolver.hpp, CNEMOEulerSolver.hpp/.cpp,
+CMultiGridIntegration.cpp, check.sh, check_noisefloor.sh, invwedge_mg.cfg). INDEX.md rows look like a full strict PASS.
+**But `validation_logs/2026-11-26_4.6-MG/` does not exist in git** — `*.log` is in .gitignore, so `git add
+validation_logs` silently skipped every log (only INDEX.md went in). Per the rule, no merge until the cited logs are
+committed. Fixed this round: `.gitignore` now un-ignores `validation_logs/**/*.log(.gz)`; LOCAL_AGENT_TASK.md
+VALIDATION LOGS gets a ls-tree check step. **Dev code this round:** none (no new code needed for MG1).
+
+**Agent: do next**
+1. `git pull` (merge, no rebase). Copy the round-75 logs from `../kk/logs/` and the chk_* dirs into
+   `validation_logs/2026-11-26_4.6-MG/` exactly as the INDEX rows cite them (cpu-mg-r1, g1-mg-r1, g1-mgoff-r1,
+   g1-mg{post,w,cs,visc}-r1, poison-mg-r1, nf-mg-r1, g1-regress-r1, g1-regress2-r1 + every `*_NO.log`/`*_YES.log`
+   named in the rows). gzip any > 1 MB (then fix the INDEX path to `.log.gz`).
+2. `git add -f validation_logs && git commit -m "Log archive: 4.6-MG round-75 logs"`; verify with
+   `git ls-tree -r --name-only HEAD validation_logs/2026-11-26_4.6-MG/ | wc -l` (must equal the number of files
+   copied) and `git check-ignore validation_logs/2026-11-26_4.6-MG/g1-mg-r1.log` (must print nothing). Push.
+3. If any cited log is lost: rerun that gate (same command, new suffix `-r2`), archive it, add a new INDEX row; do not
+   edit the old row except to append "(log lost, see -r2)".
+4. Also check the older dirs: every log path cited in INDEX.md must exist in git
+   (`grep -o 'backfill[^ ,|]*\|2026-[^ ,|]*\.log[.gz]*' validation_logs/INDEX.md | sort -u | while read f; do
+   git cat-file -e HEAD:validation_logs/$f 2>/dev/null || echo MISSING $f; done`); archive what you still have, list
+   the rest in KOKKOS_PROGRESS.md.
+5. Then write REVIEW_REQUEST with `reason: MERGE: 4.6-MG1` (same gate results, now with committed logs). Next heavy
+   after merge stays `HEAVY: 4.6-MG2`.
+
 ## 2026-11-26 — review 16 (merged 4.6-LUSGS; dev: 4.6-MG step 1, fine level device-resident with multigrid)
 
 **Reviewed:** 065f855fa2. Strict-gate claims checked in the archived logs (g1-lusgs-r64, g1-lusgs-visc-r64,
