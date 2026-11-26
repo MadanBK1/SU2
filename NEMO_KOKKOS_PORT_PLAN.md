@@ -285,7 +285,8 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | BC | periodic, turbomachinery / Giles, actuator disk, other kinds | host fallback | eager sync / not hooked |
 | Time | EULER_IMPLICIT (BCGSTAB, FGMRES, RESTARTED_FGMRES, CG; ILU(0), JACOBI) | device-resident | |
 | Time | ILU(n>0) | device-resident | host ILU build from downloaded values |
-| Time | other linear solvers / preconditioners (LU-SGS, LINELET), nested solver | host fallback | |
+| Time | LU_SGS (preconditioner apply) | device-resident (validated 2026-11-25: G1 strict invwedge_lusgs bitwise + viscous super_cat LU_SGS bitwise + regressions + A/B non-bitwise=0 + noise floor) | level-scheduled sweeps (ILU pattern), one persistent team per sweep, same accumulation order as gemv; gate cases invwedge_lusgs / super_cat+LU_SGS |
+| Time | other linear solvers / preconditioners (LINELET), nested solver | host fallback | |
 | Time | EULER_EXPLICIT, RUNGE-KUTTA_EXPLICIT, CLASSICAL_RK4_EXPLICIT | device-resident | batch A (RK) |
 | Time | STEADY, TIME_STEPPING, DUAL_TIME_STEPPING-1ST/2ND (static mesh) | device-resident | batch A (dual time) |
 | Time | CFL_ADAPT | device-resident | batch A (no species solver) |
