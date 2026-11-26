@@ -101,10 +101,13 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
   fi
   # ---- review handshake: push, then wait for the reviewer's answer (REVIEW_DONE == REVIEW_REQUEST id) ----
   rounds_since_review=$((rounds_since_review+1))
-  if tail -3 "$REPO/KOKKOS_PROGRESS.md" 2>/dev/null | grep -q '^READY FOR REVIEW' || [ $rounds_since_review -ge "$REVIEW_EVERY_ROUNDS" ]; then
+  # a READY line counts only once: skip it if it is the same line as the last request's reason (stale tail)
+  ready_line="$(tail -3 "$REPO/KOKKOS_PROGRESS.md" 2>/dev/null | grep '^READY FOR REVIEW' | tail -1)"
+  if [ -n "$ready_line" ] && grep -qxF "reason: $ready_line" "$REPO/REVIEW_REQUEST" 2>/dev/null; then ready_line=""; fi
+  if [ -n "$ready_line" ] || [ $rounds_since_review -ge "$REVIEW_EVERY_ROUNDS" ]; then
     rid="$(date +%Y%m%dT%H%M%S)-$(git -C "$REPO" rev-parse --short HEAD)"
     printf 'id: %s\nhead: %s\nreason: %s\n' "$rid" "$(git -C "$REPO" rev-parse HEAD)" \
-      "$(tail -3 "$REPO/KOKKOS_PROGRESS.md" | grep '^READY FOR REVIEW' | tail -1 || echo "periodic ($rounds_since_review rounds)")" > "$REPO/REVIEW_REQUEST"
+      "${ready_line:-periodic ($rounds_since_review rounds)}" > "$REPO/REVIEW_REQUEST"
     git -C "$REPO" add REVIEW_REQUEST && git -C "$REPO" commit -q -m "REVIEW REQUEST $rid"
     if timeout 180 git -C "$REPO" push -q "$PUSH_URL" "$BRANCH" </dev/null >/dev/null 2>&1; then
       echo "    review requested ($rid); waiting for Claude (poll ${REVIEW_POLL}s, max ${REVIEW_MAX_WAIT}s)"

@@ -2,6 +2,26 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 26 (stale request; nothing merged; no new dev code)
+
+Reviewed: 5ca315fe41. The request repeated the review-24/25 line `READY FOR REVIEW: MERGE: 4.8-ILUTeam`, but 4.8-ILUTeam
+is ALREADY merged (su2kokkos 3897d1a). The only new work since 3468ddec5a is the 4.8-LUSGSHyb step-1 build; steps 2-9
+have not run, so there is nothing to merge. Cause: the loop re-requested because the old READY line was still in the last
+3 lines of KOKKOS_PROGRESS.md. Fixed in `TestCases/kokkos_nemo/local_agent_loop.sh` (a READY line equal to the previous
+REVIEW_REQUEST `reason:` is ignored; periodic requests unchanged) — takes effect when the loop script is restarted.
+
+Agent: do next
+0. Append a dated progress entry for round 113 now (so the old READY line leaves the tail), then restart the loop
+   script when convenient so the fix is active.
+1. Continue review 25 "Agent: do next" steps 2-9 for 4.8-LUSGSHyb (G1 hybrid, WIDE=1, single, A/B, viscous WIDE=1,
+   regressions, noise floor, perf lines) with the log names given there, archived under
+   validation_logs/2026-11-26_4.8-LUSGSHyb/ + INDEX rows; also archive the step-1 build logs (build-lusgs-r1.log,
+   build-lusgs-serial-r1.log) if not yet committed.
+2. Request `MERGE: 4.8-LUSGSHyb` only after steps 1-8 pass and the logs are committed. Never re-request an item that a
+   review note says is merged.
+
+Madan: V100 G7 commands unchanged from review 25 (ILU team vs row; LU_SGS hybrid vs single, WIDE=64/1024).
+
 ## 2026-11-26 — review 25 (4.8-ILUTeam MERGED; new dev code 4.8 LU_SGS hybrid apply)
 
 Reviewed: 3468ddec5a. Merged into su2kokkos as 3897d1a (code c362c12d78: CSysMatrixKokkos.cpp KokkosILU0BuildTeam,
