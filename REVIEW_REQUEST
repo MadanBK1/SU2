@@ -1,3 +1,3 @@
-id: 20261126T170126-ca9282c995
-head: ca9282c9957661bf7a73f9372feb972095dddcc7
+id: 20261126T181634-42ae7b9275
+head: 42ae7b9275b28d72a66c24cb6edd564affbbcc08
 reason: READY FOR REVIEW: MERGE: 4.8-LUSGSHyb — steps 1-9 all PASS: build strict+serial rc=0; G1 invwedge_lusgs hybrid-default/WIDE=1/single-team all bitwise (strict); A/B PRECOND_VERIFY compares=106 non-bitwise=0; viscous super_cat LU_SGS WIDE=1 bitwise; 7-case regressions bitwise; noise floor K=10 ratios 0.78/0.86 <= 10; serial applies=106 hyb 3.61801s / w1 3.73177s / single 3.62565s (informational); 36 logs committed under validation_logs/2026-11-26_4.8-LUSGSHyb/ + 9 INDEX rows; V100 G7 timing still OPEN for Madan
