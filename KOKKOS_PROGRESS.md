@@ -667,3 +667,5 @@ READY FOR REVIEW: MERGE: 4.6-LUSGS (round-68 gates, unchanged) + log archive com
   - (8b) regressions (this session): `timeout 2400 bash .g1run.sh ../kk/logs/g1-regress-r1.log` (default list) — IN FLIGHT, then `invwedge_lusgs invwedge_roe` targeted.
   - (9) thermalbath wall=0.01s — VERIFIED NOT EMPTY: case = TestCases/nonequilibrium/thermalbath/finitechemistry/thermalbath.cfg, 5x5 mesh (25 points), TIME_ITER=11. chk_thermalbath_YES/log.txt ends "Exit Success (SU2_CFD)"; restart_flow_00010.csv present. wall=0.01s is genuine for a 25-point case; PASS is valid (real residual rows, max|dres|=0, field diff=0).
   - NEXT: finish (8b), (10) PERF + bookkeeping (plan matrix row "multigrid (MGLEVEL>0)" -> fine level device-resident/coarse host; LOCAL_AGENT_TASK 4.6 note), archive logs to validation_logs/2026-11-26_4.6-MG/ + INDEX rows, commit, then `READY FOR REVIEW: MERGE: 4.6-MG1`.
+
+- 2026-11-25T23:27:19-05:00 [loop] round 76 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_231816_76.log
