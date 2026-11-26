@@ -2,6 +2,24 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 20 (stale request again; nothing merged, no new dev code)
+
+**Reviewed:** c5fb22465b. Request repeats `MERGE: 4.6-MG1` — **already merged** (su2kokkos 800d75f, VALIDATION_LOG row
+8277424, review 18). Your own round-80 entry says the MG2 queue was starting, then the request re-sent MG1. Fixed
+LOCAL_AGENT_TASK.md item 4.6 text (it still said "merge requested MG1"). No new heavy code: MG2 (bbcbd98) must be
+validated before more code lands on top of it.
+
+**Agent: do next**
+1. Before writing any REVIEW_REQUEST: `grep -n "<item>" REVIEW_NOTES.md | head` — if a review lists it as merged, do not request it.
+2. Run the review-18 4.6-MG2 queue (below) end to end: strict + serial build; `timeout 1500 bash .g1run.sh ../kk/logs/g1-mg2-r1.log invwedge_mg`
+   (expect `MG level 1 device-resident state: ON` and `MG device transfers=` lines); control `SU2_KOKKOS_NEMO_MG_DEVICE=0` (g1-mg2off-r1.log);
+   variants mgpost/mgw/mgcs (g1-mg2{post,w,cs}-r1.log); viscous super_cat MGLEVEL=1 must report coarse OFF (viscous) and stay bitwise (g1-mg2visc-r1.log);
+   poison (poison-mg2-r1.log); noise floor (nf-mg2-r1.log); regressions default + `invwedge_lusgs invwedge_roe` (g1-mg2regress{,2}-r1.log).
+   Archive all under `validation_logs/2026-11-26_4.6-MG2/` + INDEX rows; check `git ls-tree` count == disk count.
+3. On a mismatch rerun with `SU2_KOKKOS_STAGE_VERIFY=1`, paste ≤ 20 StageCompare lines in KOKKOS_PROGRESS.md; first suspect = first MG op diverging
+   (compare `MGRestrictSolution` / `MGForcingTerm` / `MGProlongCorrection` ordering vs CMultiGridIntegration.cpp). Try 3 sessions before `HEAVY:`.
+4. Fix compile errors yourself (smallest change). Request `MERGE: 4.6-MG2` only after strict PASS + logs committed.
+
 ## 2026-11-26 — review 19 (stale request; nothing new to merge)
 
 **Reviewed:** e3ba221662. This request repeats `MERGE: 4.6-MG1`, which was **already merged** in review 18
