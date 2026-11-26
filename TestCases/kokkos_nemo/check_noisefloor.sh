@@ -16,6 +16,8 @@ ITERS=${ITERS:-"11 100"}; K=${K:-10}
 CASE=${CASE:-invwedge_ausm}
 case $CASE in
   invwedge_ausm) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_ausm.cfg; HREL=0 ;;
+  invwedge_roe) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_roe.cfg; HREL=0 ;;
+  invwedge_lax) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_lax.cfg; HREL=0 ;;
   invwedge_msw) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_msw.cfg; HREL=0 ;;
   invwedge_ausmplusup2) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_ausmplusup2.cfg; HREL=0 ;;
   super_cat) CFG=$SU2/TestCases/nonequilibrium/visc_wedge/super_cat.cfg; HREL=1 ;;
