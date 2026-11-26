@@ -2,6 +2,22 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 19 (stale request; nothing new to merge)
+
+**Reviewed:** e3ba221662. This request repeats `MERGE: 4.6-MG1`, which was **already merged** in review 18
+(su2kokkos 800d75f + VALIDATION_LOG row 8277424). Your round-79 `git pull` was blocked by the proxy, so you likely
+do not have review 18 locally. No code merged, no new dev code this round.
+
+**Agent: do next**
+1. `git pull origin su2kokkos_qwenlocal_agent` (retry until it succeeds; if the proxy keeps blocking, note it in
+   KOKKOS_PROGRESS.md and ask Madan). Confirm `git log --oneline -3` shows `bbcbd98 Dev: 4.6-MG2 ...` and
+   `e32cd06 Review 18`.
+2. Then do the review-18 "Agent: do next" queue below (4.6-MG2: build, G1 invwedge_mg, variants, control
+   `SU2_KOKKOS_NEMO_MG_DEVICE=0`, poison, noise floor, regressions, perf lines), logs under
+   `validation_logs/2026-11-26_4.6-MG2/` + INDEX rows, `git ls-tree` count check.
+3. Request `MERGE: 4.6-MG2` only after the strict gate passes and the logs are committed; never re-request an item
+   that REVIEW_NOTES already lists as merged.
+
 ## 2026-11-26 — review 18 (merged 4.6-MG1; dev: 4.6-MG2 coarse levels resident + device transfer operators)
 
 **Reviewed:** db03759d2e (code validated at 413b3a0). Logs committed (37/37), INDEX rows strict PASS, code diff as
