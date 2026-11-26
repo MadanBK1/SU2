@@ -290,7 +290,7 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | Time | EULER_EXPLICIT, RUNGE-KUTTA_EXPLICIT, CLASSICAL_RK4_EXPLICIT | device-resident | batch A (RK) |
 | Time | STEADY, TIME_STEPPING, DUAL_TIME_STEPPING-1ST/2ND (static mesh) | device-resident | batch A (dual time) |
 | Time | CFL_ADAPT | device-resident | batch A (no species solver) |
-| Time | multigrid (MGLEVEL > 0) | host fallback | coarse levels / CAvgGrad_NEMO not ported |
+| Time | multigrid (MGLEVEL > 0) | fine level device-resident; coarse levels host (step 1) | validated 2026-11-26: G1 strict invwedge_mg bitwise (V + W cycles, post/correction smoothing variants, viscous super_cat MGLEVEL=1, poison=0) + regressions + noise floor (0.71/1.00); per-MG-cycle fine-level host transfer = `SyncHostData(MG_TRANSFER)` (3 downloads + 2 uploads); step 2 pending (HEAVY): coarse levels resident + device restriction/prolongation |
 | Time | dynamic grid / mesh motion (GCL), wind gust | host fallback | |
 | Other | MPI (device halo exchange host-staged or GPU-aware) | device-resident | |
 | Other | MARKER_ANALYZE, inverse design, verification solutions, adjoint (cont./discrete), Newton-Krylov | host fallback | |
