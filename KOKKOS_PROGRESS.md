@@ -732,3 +732,5 @@ READY FOR REVIEW: MERGE: 4.6-MG2 — coarse MG levels device-resident + device t
 - 2026-11-26T05:56:32-05:00 [loop] round 87 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_044022_87.log
 
 - 2026-11-26 (round 88, session start): 4.6-MG2 confirmed merged (su2kokkos 85e6f71, review 21). NEW QUEUE = review 21 **6b.a dynamic grid** (dev 5327da3794, untested): RefreshDynamicGeometry re-upload + grid-velocity kernels + GCL branch + Device_DynamicGridUnsupported gate; case `invwedge_dyn`. Plan this session: (1) build strict+serial (`.builddyn.sh` -> build-dyn-r1.log / build-dyn-serial-r1.log), (2) CPU sanity invwedge_dyn ENABLE_KOKKOS=NO (cpu-dyn-r1.log), (3) G1 strict invwedge_dyn (g1-dyn-r1.log, expect 4 EXPECT lines), (4) control SU2_KOKKOS_NEMO_DYNGRID=0 (g1-dynoff-r1.log), then variants/poison/regressions next session if turns remain.
+
+- 2026-11-26T06:24:45-05:00 [loop] round 88 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_055653_88.log
