@@ -2,6 +2,30 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 22 (6b.a dynvisc bug fixed; nothing merged)
+
+Reviewed: 7aa0372c39 (request had an empty `reason:`; treated as HEAVY 6b.a-DynGrid dynvisc). Nothing merged (dynvisc open).
+
+Diagnosis: `CNEMONSSolver::Preprocessing` calls `CommonPreprocessing` directly, never `CNEMOEulerSolver::Preprocessing`,
+so `Device_RefreshDynamicGeometry` (placed in the Euler Preprocessing) never ran for viscous cases -> device grid velocity /
+coords / normals / Volume_nM1 stayed at the constructor upload (grid velocity 0). Inviscid cases were fine. With
+SU2_KOKKOS_STAGE_VERIFY=1 resident mode is off and the host results are used, which hid it.
+
+Dev code this round: `CNEMOEulerSolver.cpp` — refresh call moved from `Preprocessing` to the top of `CommonPreprocessing`
+(same guard `dynamic_grid && iMesh == MESH_0`; once per (time, outer) iter as before). No other change. Not built.
+
+Agent: do next (archive every log under validation_logs/2026-11-26_6b.a-DynGrid/ + INDEX rows; then `MERGE: 6b.a-DynGrid`):
+1. Build strict + serial: `bash .builddyn.sh` -> build-dyn-r2.log, build-dyn-serial-r2.log. Fix compile errors yourself (smallest change).
+2. G1 dynvisc: `bash .g1dynvisc.sh` (edit its log name to g1-dynvisc-r2.log) -> expect PASS bitwise (max|dres|=0, field diff 0) and stage lines device, resident ON.
+   If FAIL: rerun with SU2_KOKKOS_STAGE_VERIFY=1 AND SU2_KOKKOS_NEMO_DYNGRID=0 separately (sv-dynvisc-r2.log, dynoff-visc-r2.log), paste <= 20 StageCompare lines + max|dres| per run, then `HEAVY: 6b.a-DynGrid: dynvisc r2`.
+3. Re-run inviscid gate (regression of the move): `timeout 1500 bash .g1run.sh ../kk/logs/g1-dyn-r2.log invwedge_dyn` -> OVERALL PASS bitwise.
+4. Poison viscous: copy .g1dynpoison.sh with RUN_TAG/EXTRA_CFG of .g1dynvisc.sh on super_cat -> poison-dynvisc-r2.log, PASS bitwise.
+5. Regressions: `timeout 2400 bash .g1run.sh ../kk/logs/g1-dynregress-r2.log` (default list) and `... g1-dynregress2-r2.log invwedge_mg invwedge_lusgs` -> all PASS bitwise.
+6. Noise floor dyn (K=10): `CASE=invwedge_dyn bash .nfsmg.sh ../kk/logs/nf-dyn-r1.log` (serial+strict) -> ratio <= 10.
+7. Archive all r1 logs already listed in KOKKOS_PROGRESS (g1-dyn, dynoff, dyn1st, dyntr, poison-dyn, dynvisc r1 FAIL, sv-dynvisc r1) + the r2 logs; one INDEX row each; commit.
+8. Small edit: check.sh EXPECT for dyn1st hardcodes "(2nd order)" — add a separate EXPECT entry for the dyn1st variant if check.sh supports per-RUN_TAG keys, else note it as a known artifact in INDEX.
+Request `MERGE: 6b.a-DynGrid` only after 1-7 pass and logs are committed; always fill the `reason:` line.
+
 ## 2026-11-26 — review 21 (4.6-MG2 merged; new dev code 6b.a dynamic grid)
 
 **Reviewed:** 5c4dccefde (code validated at bbcbd98). 36 logs committed, 11 INDEX rows strict PASS, code diff as expected.

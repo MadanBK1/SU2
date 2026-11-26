@@ -374,6 +374,13 @@ void CNEMOEulerSolver::CommonPreprocessing(CGeometry *geometry, CSolver **solver
   const bool center_jst = (config->GetKind_Centered_Flow() == CENTERED::JST) && (iMesh == MESH_0);
   const bool center_jst_ke = (config->GetKind_Centered_Flow() == CENTERED::JST_KE) && (iMesh == MESH_0);
 
+#ifdef HAVE_KOKKOS
+  /*--- 6b.a: the host grid movement / deformation ran before this call: refresh the device metric arrays.
+   *    Here (not in Preprocessing) so that CNEMONSSolver::Preprocessing, which calls CommonPreprocessing
+   *    directly, refreshes too (dynvisc FAIL in resident mode: stale grid velocity / metrics). ---*/
+  if (dynamic_grid && iMesh == MESH_0) Device_RefreshDynamicGeometry(geometry, config);
+#endif
+
   /*--- Set the primitive variables ---*/
   ompMasterAssignBarrier(ErrorCounter,0);
   SU2_OMP_ATOMIC
@@ -440,11 +447,6 @@ void CNEMOEulerSolver::Preprocessing(CGeometry *geometry, CSolver **solver_conta
   const bool limiter     = (config->GetKind_SlopeLimit_Flow() != LIMITER::NONE) && (InnerIter <= config->GetLimiterIter());
   const bool center      = config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED;
   const bool van_albada  = config->GetKind_SlopeLimit_Flow() == LIMITER::VAN_ALBADA_EDGE;
-
-#ifdef HAVE_KOKKOS
-  /*--- 6b.a: the host grid movement / deformation ran before this call: refresh the device metric arrays. ---*/
-  if (dynamic_grid && iMesh == MESH_0) Device_RefreshDynamicGeometry(geometry, config);
-#endif
 
   /*--- Common preprocessing steps ---*/
   CommonPreprocessing(geometry, solver_container, config, iMesh, iRKStep, RunTime_EqSystem, Output);
