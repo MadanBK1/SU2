@@ -2,6 +2,39 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 24 (6b.b-TwallIn PARTIAL merge; new dev code 4.8 ILU(0) build perf)
+
+Reviewed: d02d49356a. Merged into su2kokkos as eafe69f (code 89112d6457: CNEMOKokkosData.hpp, CNEMOEulerSolver.cpp,
+CNEMONSSolver.cpp, CNEMOKokkosResidual.cpp, check.sh, pycustom_twall.py) + VALIDATION_LOG row + plan matrix, as PARTIAL:
+steps 1-4 bitwise; steps 5-6 (pysu2) still OPEN until swig is installed (Madan). Do not re-request 6b.b until 5-6 have run.
+Heat flux OUT needs no new code: Friction_Forces runs after SyncHostData(BOUNDARY) (marker data only) — step 5's
+wall_heatflux.csv diff checks it.
+
+Dev code this round (g++ -fsyntax-only Serial headers; NOT built, NOT validated) — 4.8 perf, G7 hot spot "ILU build 0.29 s/build"
+(super_cat V100: 3.19 s of 6.49 s wall are the 11 ILU builds):
+- `Common/src/linear_algebra/CSysMatrixKokkos.cpp` `KokkosBuildILUPreconditioner`: new kernel `SU2::KokkosILU0BuildTeam`,
+  one team per row of a level, block entries spread over the team (gemm entry-wise, same statement order -> bitwise on Serial),
+  diagonal inverse in `Kokkos::single`. Default ON; `SU2_KOKKOS_ILU_BUILD=row` = old per-row kernel. Startup line
+  `[KOKKOS] ILU(0) device build: team-per-row|row-per-thread`.
+- check.sh EXPECT keys `super_cat_iluteam`, `super_cat_ilurow`.
+
+Agent: do next (archive under validation_logs/2026-11-26_4.8-ILUTeam/ + one INDEX row each):
+1. Build strict + serial -> build-ilu-r1.log, build-ilu-serial-r1.log. Fix compile errors yourself (smallest change).
+2. G1: `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_iluteam bash TestCases/kokkos_nemo/check.sh super_cat` -> g1-ilu-team-r1.log (PASS bitwise + team-per-row line).
+3. A/B: same with `SU2_KOKKOS_PRECOND_VERIFY=1 RUN_TAG=_iluteamv` -> must report `compares=11 ... non-bitwise=0` (grep KOKKOS_NEMO_VERIFY) -> ab-ilu-team-r1.log.
+4. Old path still works: `SU2_KOKKOS_ILU_BUILD=row REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_ilurow bash TestCases/kokkos_nemo/check.sh super_cat` -> g1-ilu-row-r1.log.
+5. Regressions strict: default list + invwedge_mg invwedge_dyn supin_visc -> g1-ilu-regress-r1.log (all PASS bitwise).
+6. Noise floor serial+strict on super_cat (your nf script, K=10) -> nf-ilu-r1.log.
+7. Record the `[KOKKOS_NEMO_PERF] device preconditioner builds=` line of steps 2 and 4 (serial timing, informational) in INDEX.
+On FAIL: rerun step 3 and paste <= 20 verify/StageCompare lines. Then request `MERGE: 4.8-ILUTeam`.
+Still pending (6b.b steps 5-6, after Madan installs swig): run them exactly as in review 23, archive under 2026-11-26_6b.b-TwallIn/, then `MERGE: 6b.b-TwallIn-py`.
+`HEAVY: …` only for new code or a bug you cannot localize after 3 sessions. Always fill `reason:`.
+
+Madan (V100, after the agent's step 2 passes): G7 timing of super_cat, team vs row build:
+  `SU2_KOKKOS_ILU_BUILD=row bash TestCases/kokkos_nemo/check.sh super_cat` and plain `bash TestCases/kokkos_nemo/check.sh super_cat` with the cuda binary;
+  copy both chk_super_cat_*YES.log to validation_logs/2026-11-26_G7-V100-ILUTeam/ (compare `device preconditioner builds=` seconds).
+  swig for 6b.b: `sudo apt-get install swig` (or `pip install --user swig`), rebuild with `-Denable-pywrapper=true`.
+
 ## 2026-11-26 — review 23 (6b.a-DynGrid MERGED; new dev code 6b.b wall-temperature coupling IN)
 
 Reviewed: 4e49fe63ae (empty `reason:` again — treated as MERGE: 6b.a-DynGrid; ALWAYS fill `reason:`).
