@@ -600,3 +600,5 @@ READY FOR REVIEW: MERGE: 4.5-SupInVisc — viscous BC_Supersonic_Inlet (d2fee8f4
   - Reviewer merged 4.5-SupInVisc into su2kokkos (986dc2b) and landed 4.6 device LU_SGS code (commit 02676f862e: CSysMatrixKokkos.cpp +226 — KokkosComputeLU_SGSPreconditioner / EnsureKokkosLU_SGSStructure / DeviceGaussElimination; CLU_SGSPreconditioner device apply; NEMO report/verify lines; gate case invwedge_lusgs.cfg; noisefloor case).
   - Queue step 1 DONE (builds): `ninja -C build-kokkos-strict -j4 SU2_CFD/src/SU2_CFD` rc=0 (91/91); `ninja -C build-kokkos-serial -j4 SU2_CFD/src/SU2_CFD` rc=0 (91/91). No compile fixes needed.
   - Next: step 2 G1 strict `timeout 1500 bash .g1run.sh ../kk/logs/g1-lusgs-r64.log invwedge_lusgs` (expect OVERALL PASS bitwise + 2 EXPECT lines: LU_SGS device, resident ON); then 4 (viscous super_cat with EXTRA_CFG LU_SGS), 5 (regressions), 6 (A/B verify + noisefloor CASE=invwedge_lusgs), 7 (PERF), 8 (bookkeeping + MERGE: 4.6-LUSGS).
+
+- 2026-11-25T19:01:06-05:00 [loop] round 64 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_185022_64.log
