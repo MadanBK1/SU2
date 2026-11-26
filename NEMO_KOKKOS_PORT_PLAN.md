@@ -290,7 +290,7 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | Time | EULER_EXPLICIT, RUNGE-KUTTA_EXPLICIT, CLASSICAL_RK4_EXPLICIT | device-resident | batch A (RK) |
 | Time | STEADY, TIME_STEPPING, DUAL_TIME_STEPPING-1ST/2ND (static mesh) | device-resident | batch A (dual time) |
 | Time | CFL_ADAPT | device-resident | batch A (no species solver) |
-| Time | multigrid (MGLEVEL > 0) | fine level device-resident; coarse levels host (step 1) | validated 2026-11-26: G1 strict invwedge_mg bitwise (V + W cycles, post/correction smoothing variants, viscous super_cat MGLEVEL=1, poison=0) + regressions + noise floor (0.71/1.00); per-MG-cycle fine-level host transfer = `SyncHostData(MG_TRANSFER)` (3 downloads + 2 uploads); step 2 pending (HEAVY): coarse levels resident + device restriction/prolongation |
+| Time | multigrid (MGLEVEL > 0) | fine + coarse levels device-resident (step 2, `SU2_KOKKOS_NEMO_MG_DEVICE` default ON) | step 1 validated 2026-11-26 (G1 strict invwedge_mg bitwise + variants + viscous + poison + regressions + noise floor 0.71/1.00). Step 2 validated 2026-11-26 (same suite, coarse levels ON: `MG level 1|2 device-resident state: ON`, `MG device transfers=66`; control MG_DEVICE=0 bitwise via step-1 path; viscous super_cat coarse OFF; poison bitwise; noise floor 1.12/1.00; regressions 6/6 bitwise) — merge requested `MERGE: 4.6-MG2` |
 | Time | dynamic grid / mesh motion (GCL), wind gust | host fallback | |
 | Other | MPI (device halo exchange host-staged or GPU-aware) | device-resident | |
 | Other | MARKER_ANALYZE, inverse design, verification solutions, adjoint (cont./discrete), Newton-Krylov | host fallback | |

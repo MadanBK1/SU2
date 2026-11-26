@@ -1,0 +1,23 @@
+invwedge_mg NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=64.56s
+invwedge_mg YES exit=0 wall=53.52s
+  expected stage line missing: MG level 1 device-resident state: ON
+  expected stage line missing: MG level 2 device-resident state: ON
+  expected stage line missing: MG device transfers=
+    got: [KOKKOS_NEMO] stage upwind (AUSM + MUSCL, residual + Jacobian): device
+    got: [KOKKOS_NEMO] stage bc:FAR_FIELD (Inlet): device
+    got: [KOKKOS_NEMO] stage bc:OUTLET_FLOW (Exit): device
+    got: [KOKKOS_NEMO] stage bc:FAR_FIELD (Farfield): device
+    got: [KOKKOS_NEMO] stage bc:EULER_WALL (Wall): device
+    got: [KOKKOS_NEMO] stage bc:EULER_WALL (Euler): device
+    got: [KOKKOS_NEMO] device-resident state (Step 6): ON (U, V, secondaries, gradient, limiter, dt, Non_Physical, residual, Jacobian, LinSysSol stay on the device; host copies on demand)
+    got: [KOKKOS_NEMO] MG level 1 device-resident state: OFF (SU2_KOKKOS_NEMO_MG_DEVICE=0)
+    got: [KOKKOS_NEMO] MG level 2 device-resident state: OFF (SU2_KOKKOS_NEMO_MG_DEVICE=0)
+    got: [KOKKOS_NEMO_LEDGER] MG 0 21 closed iterations (device-resident); non-output iterations >= 1: max HtoD 1.027e+08 B, max DtoH 8.728e+06 B; output iterations: 0, DtoH 0.000e+00 B in total
+  residual row NO : [-1.057766 -1.580043 -6.777495 -5.355051 -2.500215  2.272437  1.854181
+  5.322666  4.216248]
+  residual row YES: [-1.057766 -1.580043 -6.777495 -5.355051 -2.500215  2.272437  1.854181
+  5.322666  4.216248]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_mg_mg2off: PASS
+OVERALL: FAIL
