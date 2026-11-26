@@ -147,7 +147,7 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
    dynamic / deforming grids.
 8. Host-touch removal: device residual norms, output / restart every N iterations, CUDA-aware MPI halos.
 9. 4.7 turbulence coupling (SA / SST device kernels for NEMO).
-10. Then 4.8 performance.
+10. Then 4.8 performance. G7 hot spots (2026-11-26): LU_SGS device apply ~0.1 s/apply (level-scheduled single team), ILU build ~0.29 s/build; kernels are ms-level.
 **DEFERRED (Madan 2026-11-26): items 11–12 are a later stage. Do NOT start them, and do not request HEAVY for them, until Madan says so.**
 11. **SHAPE OPTIMIZATION, stage 1 (later stage):** finite-difference shape
    optimization with every primal on the GPU. A `TestCases/kokkos_nemo/shapeopt/` FFD wedge (and sphere-cone) case:
@@ -163,6 +163,9 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
 - [x] **4.1 Script paths:** add env-var paths to the scripts (section 2), then commit.
 - [x] **4.2 Finish Batch A** (commit `35b6f39`, WIP). Run G2, G3 (against `cd2cd46` binaries) and G6. Fix any failures, then commit "Batch A gates complete".
 - [ ] **4.3 CUDA V100 build and GPU run:** run G5 and G7.
+  - 2026-11-26 G7 run by Madan on su2kokkos 8277424 (results: su2kokkos TestCases/kokkos_nemo/VALIDATION_LOG.md, "GPU runs").
+    All 5 cases device-resident; ausm/lusgs noise floor PASS; roe PASS at ITER 11 (ITER 100 is chaotic, case does not converge).
+    **Agent task (when Madan has copied the logs):** commit `validation_logs/2026-11-26_G7-V100/*` and add INDEX.md rows.
   - On a runtime failure, check `cudaLimitStackSize`; the big-stack kernels are `KernelBoundaryFlux` (~15.5 KB) and `KernelViscousEdges` (~12.4 KB).
   - Profile: `nsys profile -o nemo SU2_CFD run.cfg` for 20 iterations of invwedge_ausm.
   - Report the per-stage times, and wall time vs `ENABLE_KOKKOS=NO`.
