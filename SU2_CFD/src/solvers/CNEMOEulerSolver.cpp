@@ -317,6 +317,10 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
           config->GetKind_Linear_Solver_Prec() == LU_SGS)
         cout << "[KOKKOS_NEMO] stage linear preconditioner (LU_SGS apply): " << (deviceResident ? "device" : "host")
              << endl;
+      if (rank == MASTER_NODE && iMesh == MESH_0 && config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT &&
+          config->GetKind_Linear_Solver_Prec() == LINELET)
+        cout << "[KOKKOS_NEMO] stage linear preconditioner (LINELET apply): " << (deviceResident ? "device" : "host")
+             << endl;
       if (rank == MASTER_NODE && iMesh == MESH_0)
         cout << "[KOKKOS_NEMO] device-resident state (Step 6): "
              << (deviceResident ? std::string("ON (U, V, secondaries, gradient, limiter, dt, Non_Physical, residual, "
@@ -356,6 +360,13 @@ CNEMOEulerSolver::~CNEMOEulerSolver() {
     if (Jacobian.GetKokkosLU_SGSVerify() > 0)
       cout << "[KOKKOS_NEMO_VERIFY] LU_SGS device apply vs host apply: compares=" << Jacobian.GetKokkosLU_SGSVerify()
            << " non-bitwise=" << Jacobian.GetKokkosLU_SGSVerifyNonBitwise() << endl;
+  }
+  if (kokkosData && rank == MASTER_NODE && Jacobian.GetKokkosLineletApplies() > 0) {
+    cout << "[KOKKOS_NEMO_PERF] device LINELET applies=" << Jacobian.GetKokkosLineletApplies() << " ("
+         << Jacobian.GetKokkosLineletSeconds() << " s incl. verification)" << endl;
+    if (Jacobian.GetKokkosLineletVerify() > 0)
+      cout << "[KOKKOS_NEMO_VERIFY] LINELET device apply vs host apply: compares=" << Jacobian.GetKokkosLineletVerify()
+           << " non-bitwise=" << Jacobian.GetKokkosLineletVerifyNonBitwise() << endl;
   }
   kokkosData.reset(); /*--- Prints [KOKKOS_NEMO_PERF]; must go before the gas model it references. ---*/
 #endif
@@ -4233,7 +4244,10 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
       return "linear solver without a Kokkos device-resident branch";
     const auto pc = config->GetKind_Linear_Solver_Prec();
     /*--- 4.6: LU_SGS applied on the device (KokkosComputeLU_SGSPreconditioner, nothing to build). ---*/
-    if (pc != ILU && pc != JACOBI && pc != LU_SGS) return "preconditioner without a device build (ILU / JACOBI / LU_SGS only)";
+    /*--- 4.6-Linelet: LINELET applied on the device (KokkosComputeLineletPreconditioner; its Jacobi part is the
+     *    device Jacobi build). ---*/
+    if (pc != ILU && pc != JACOBI && pc != LU_SGS && pc != LINELET)
+      return "preconditioner without a device build (ILU / JACOBI / LU_SGS / LINELET only)";
     if (config->GetKind_Linear_Solver_Inner() != LINEAR_SOLVER_INNER::NONE) return "nested linear solver";
     if (Jacobian.GetNumNonZeros() != kokkosData->geo.nnz) return "Jacobian pattern != FV pattern";
   }

@@ -292,6 +292,17 @@ class CLineletPreconditioner final : public CPreconditioner<ScalarType> {
    * \note Request the associated matrix to build the preconditioner.
    */
   inline void Build() override { sparse_matrix.BuildLineletPreconditioner(geometry, config); }
+
+#ifdef HAVE_KOKKOS
+  /*--- 4.6-Linelet: device apply only when the device values are authoritative (device-resident owner, e.g. NEMO),
+   *    as for LU_SGS; the Jacobi part reads the device-built d_invM. ---*/
+  inline bool SupportsKokkosDeviceResident() const override {
+    return config->GetKokkos() && sparse_matrix.GetKokkosValuesOnDevice();
+  }
+  inline void KokkosDeviceResident(const CSysVector<ScalarType>& u, CSysVector<ScalarType>& v) const override {
+    sparse_matrix.KokkosComputeLineletPreconditioner(u, v, geometry, config);
+  }
+#endif
 };
 
 /*!

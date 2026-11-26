@@ -96,6 +96,13 @@ CSysMatrix<ScalarType>::~CSysMatrix() {
   GPUMemoryAllocation::gpu_free(d_lusgs_bwd_rows);
   GPUMemoryAllocation::gpu_free(d_lusgs_lb);
   GPUMemoryAllocation::gpu_free(d_lusgs_ub);
+  GPUMemoryAllocation::gpu_free(d_ll_jac_pts);
+  GPUMemoryAllocation::gpu_free(d_ll_ptr);
+  GPUMemoryAllocation::gpu_free(d_ll_pts);
+  GPUMemoryAllocation::gpu_free(d_ll_lblk);
+  GPUMemoryAllocation::gpu_free(d_ll_ublk);
+  GPUMemoryAllocation::gpu_free(d_ll_invdiag);
+  GPUMemoryAllocation::gpu_free(d_ll_vec);
 #endif
 
 #ifdef USE_MKL
