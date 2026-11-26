@@ -135,6 +135,13 @@ class CNEMOKokkosData {
     View1D<unsigned char> marker_flags; /*!< (nMarker) MarkerFlag bits */
     View2D<double> vtx_sym_normal;    /*!< (nVertexTotal, nDim) unit normal used by correctGradientsSymmetry */
     bool domain_first = true;         /*!< GetDomain(i) == (i < nPointDomain), required by the device stages */
+
+    /*--- 6b.a dynamic grid (rigid motion / deformation, config->GetDynamic_Grid()): allocated and filled by
+     *    RefreshDynamicGeometry; the time step, max eigenvalue and dual-time kernels add the grid-velocity / GCL
+     *    terms of CFVMFlowSolverBase when `dynamic` is set. ---*/
+    View2D<double> grid_vel;          /*!< (nPoint, nDim) geometry->nodes->GetGridVel */
+    View1D<double> volume_nm1;        /*!< (nPoint) geometry->nodes->GetVolume_nM1 */
+    bool dynamic = false;
   };
 
   /*!
@@ -230,6 +237,15 @@ class CNEMOKokkosData {
 
   /*! \brief (Re)upload all geometry arrays (constructor; TODO: call after mesh deformation). */
   void UploadGeometry(CGeometry* geometry);
+
+  /*!
+   * \brief 6b.a: re-upload the metric arrays that move with the grid (edge / vertex normals, coordinates, volumes,
+   *        periodic volumes, symmetry unit normals, grid velocity, Volume_nM1) from the host geometry, which the
+   *        host grid movement / deformation updated. Topology (CSR, pattern, colouring) is unchanged.
+   *        Called once per (time iteration, outer iteration) by the solver; sets geo.dynamic.
+   */
+  void RefreshDynamicGeometry(CGeometry* geometry);
+  unsigned long dynGeoRefreshes = 0; /*!< number of RefreshDynamicGeometry calls (perf report) */
 
   /*! \brief HtoD: Solution, Solution_Old (inputs of Cons2Prim). */
   void UploadConservative();

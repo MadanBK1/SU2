@@ -115,6 +115,8 @@ CNEMOKokkosData::CNEMOKokkosData(CGeometry* geometry, const CConfig* config, CNE
   UploadGeometry(geometry);
   UploadBoundaryInfo(geometry, config);
   BuildEdgeColoring(geometry, config);
+  /*--- 6b.a: grid velocity / Volume_nM1 views and geo.dynamic (refreshed by the solver every time step). ---*/
+  if (config->GetDynamic_Grid() && iMesh == MESH_0) RefreshDynamicGeometry(geometry);
 
   /*--- State views. ---*/
   st.Solution = View2D<double>("NEMO::Solution", nPoint, nVar);

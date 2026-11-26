@@ -46,3 +46,4 @@ Steps 5–10 and Batch A were validated by earlier reviewer sessions; results ar
   with ionization reads stale members and an uninitialised dPdU entry, so its result is undefined; not ported, not patched.
 
 From 2026-11-26 every merge adds a row here citing the archived log paths under `validation_logs/`.
+| 2026-11-26 | (this merge) | 6b.a-DynGrid: dynamic grid device path (RefreshDynamicGeometry, grid-velocity dt/eigenvalue, dual-time GCL; refresh in CommonPreprocessing for NS) — agent code bf2ff4ad8f, reviewed at 4e49fe63ae | strict REF_MODE=HOST RES_TOL=0 FIELD_TOL=0: invwedge_dyn, dyn1st, dyntr, DYNGRID=0 control, poison inviscid+viscous, super_cat dynvisc (r2), default list + invwedge_mg/lusgs regressions all PASS bitwise; noise floor invwedge_dyn K=10 ratio 0.19 PASS | agent branch validation_logs/2026-11-26_6b.a-DynGrid/ (g1-dynvisc-r2, g1-dyn-r2, poison-dynvisc-r2, g1-dynregress-r2, g1-dynregress2-r2, nf-dyn-r1, build-dyn-r2; r1 incl. failing dynvisc) |

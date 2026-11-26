@@ -52,7 +52,8 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [smol_maxwell]=$TC/visc_wedge/smol_maxwell.cfg
                  [supin_visc]=$TC/visc_wedge/supin_visc.cfg
                  [invwedge_lusgs]=$TC/invwedge/invwedge_lusgs.cfg
-                 [invwedge_mg]=$TC/invwedge/invwedge_mg.cfg )
+                 [invwedge_mg]=$TC/invwedge/invwedge_mg.cfg
+                 [invwedge_dyn]=$TC/invwedge/invwedge_dyn.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
@@ -63,7 +64,9 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [smol_maxwell]="stage bc:SMOLUCHOWSKI_MAXWELL (Wall): device"
                     [supin_visc]="stage bc:SUPERSONIC_INLET (Inlet): device|stage bc:FAR_FIELD (Farfield) [+ viscous]: device|stage bc:ISOTHERMAL (Wall) [non-catalytic]: device"
                     [invwedge_lusgs]="stage linear preconditioner (LU_SGS apply): device|device-resident state (Step 6): ON"
-                    [invwedge_mg]="device-resident state (Step 6): ON|MG level 1 device-resident state: ON|MG level 2 device-resident state: ON|MG device transfers=" )
+                    [invwedge_mg]="device-resident state (Step 6): ON|MG level 1 device-resident state: ON|MG level 2 device-resident state: ON|MG device transfers="
+                    [invwedge_dyn]="stage dynamic grid (grid-velocity dt/eigenvalue terms + GCL, metric re-upload per time step): device|stage time step (spectral radii + local dt + min/max reduce): device|stage dual-time source (2nd order): device|device-resident state (Step 6): ON"
+                    [invwedge_dyn_dyn1st]="stage dynamic grid (grid-velocity dt/eigenvalue terms + GCL, metric re-upload per time step): device|stage time step (spectral radii + local dt + min/max reduce): device|stage dual-time source (1st order): device|device-resident state (Step 6): ON" )
 cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat axi_visccone)
 status=0
 for c in "${cases[@]}"; do
@@ -76,12 +79,13 @@ for c in "${cases[@]}"; do
     if [ "$mode" = NO ] && [ "$REF_MODE" = YES ]; then kmode=YES; fi
     sed -i '/^ENABLE_KOKKOS/d' run.cfg; printf "\nENABLE_KOKKOS= %s\n" "$kmode" >> run.cfg  # leading newline: some cfgs lack a trailing one
     if [ -n "${EXTRA_CFG:-}" ]; then echo "$EXTRA_CFG" | tr ';' '\n' | while read -r l; do
-      [ -n "$l" ] && { sed -i "/^${l%%=*}[ =]/d" run.cfg; echo "$l" >> run.cfg; }; done; fi
+      [ -n "$l" ] && { sed -i "/^${l%%=*}[ =]/d" run.cfg; [ -n "${l#*=}" ] && echo "$l" >> run.cfg; }; done; fi  # "KEY=" (no value) deletes the line (e.g. ITER= when going unsteady)
     t0=$(date +%s.%N); SU2_KOKKOS_NEMO_HOST=$hostenv $(mpiprefix "$np") "$bin" run.cfg > log.txt 2>&1; rc=$?
     echo "$c $mode${hostenv:+ (REF_MODE=HOST: YES, all NEMO stages host)}${np:+ np=$np} exit=$rc wall=$(printf '%.2f' "$(echo "$(date +%s.%N)-$t0" | bc)")s"
     [ $rc -ne 0 ] && { status=1; tail -5 log.txt; }
-    if [ "$mode" = YES ] && [ -n "${EXPECT[$c]:-}" ]; then
-      IFS='|' read -ra exp_lines <<< "${EXPECT[$c]}"
+    expkey=$c$RUN_TAG; [ -z "${EXPECT[$expkey]:-}" ] && expkey=$c   # per-RUN_TAG EXPECT key first, else plain case key (backward compatible)
+    if [ "$mode" = YES ] && [ -n "${EXPECT[$expkey]:-}" ]; then
+      IFS='|' read -ra exp_lines <<< "${EXPECT[$expkey]}"
       for e in "${exp_lines[@]}"; do
         grep -qF "$e" log.txt || { echo "  expected stage line missing: $e"; status=1; miss=1; }
       done

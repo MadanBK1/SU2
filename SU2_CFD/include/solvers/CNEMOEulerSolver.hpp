@@ -182,6 +182,15 @@ protected:
                                unsigned short iRKStep, unsigned short iMesh, unsigned short RunTime_EqSystem);
   std::string Device_DualTimeUnsupported(const CConfig *config) const;
   bool dualTimeHostOnly = false; /*!< \brief A/B rerun of the host SetResidual_DualTime. */
+  /*!
+   * \brief 6b.a dynamic grid on the device: "" if the device stages may run with dynamic_grid (grid velocity /
+   *        GCL terms in the device time step, max eigenvalue and dual-time kernels; metric arrays re-uploaded once per
+   *        time / outer iteration by Device_RefreshDynamicGeometry), else the host-fallback reason.
+   *        SU2_KOKKOS_NEMO_DYNGRID=0: previous behaviour (dynamic grid -> host).
+   */
+  std::string Device_DynamicGridUnsupported(const CConfig *config) const;
+  void Device_RefreshDynamicGeometry(CGeometry *geometry, const CConfig *config);
+  unsigned long dynGeoTimeIter = ~0ul, dynGeoOuterIter = ~0ul; /*!< \brief last refreshed (time, outer) iteration */
   bool Device_ExplicitRK(CGeometry *geometry, CConfig *config, unsigned short iRKStep, bool rk4);
 
   /*!

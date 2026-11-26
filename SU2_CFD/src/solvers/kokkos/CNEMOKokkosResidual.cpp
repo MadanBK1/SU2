@@ -2441,6 +2441,78 @@ void CNEMOKokkosData::DualTimeResidual(bool secondOrder, bool impl, double timeS
   const auto jac = st.JacVal;
   const int nv = nVar;
   const double TimeStep = timeStep;
+  if (geo.dynamic) {
+    /*--- CFVMFlowSolverBase::SetResidual_DualTime, dynamic grid (GCL). The CPU runs three loops (edge GCL over the
+     *    domain points, boundary GCL over every vertex of the non INTERNAL/NEARFIELD/PERIODIC markers incl. halo
+     *    vertices, then the remainder over the domain points); each writes only row iPoint, so one point kernel
+     *    over all points in that per-point order is the same arithmetic. ---*/
+    const auto ptr = geo.point_ptr, idx = geo.point_idx;
+    const auto pedge = geo.pedge_idx;
+    const auto enrm = geo.edge_normal;
+    const auto pvtx_ptr = geo.pvtx_ptr, pvtx_idx = geo.pvtx_idx;
+    const auto vtx_marker = geo.vtx_marker;
+    const auto mflags = geo.marker_flags;
+    const auto vnrm = geo.vtx_normal;
+    const auto gv = geo.grid_vel;
+    const auto vnm1 = geo.volume_nm1;
+    const int nd = geo.nDim;
+    const unsigned long npd = geo.nPointDomain;
+    Kokkos::parallel_for(
+        "NEMO::DualTimeResidualGCL", Kokkos::RangePolicy<exec_space>(0, geo.nPoint),
+        KOKKOS_LAMBDA(const unsigned long iPoint) {
+          if (iPoint < npd) {
+            for (auto k = ptr(iPoint); k < ptr(iPoint + 1); ++k) {
+              const auto iEdge = static_cast<unsigned long>(pedge(k));
+              const double* Normal = &enrm(iEdge, 0);
+              const auto jPoint = idx(k);
+
+              /*--- Determine whether to consider the normal outward or inward. ---*/
+              const double dir = (iPoint < jPoint) ? 0.5 : -0.5;
+
+              double Residual_GCL = 0.0;
+              for (int iDim = 0; iDim < nd; iDim++)
+                Residual_GCL += dir * (gv(iPoint, iDim) + gv(jPoint, iDim)) * Normal[iDim];
+
+              for (int iVar = 0; iVar < nv; iVar++) res(iPoint, iVar) += Un(iPoint, iVar) * Residual_GCL;
+            }
+          }
+
+          /*--- Boundary edges (no GetDomain check on the CPU). ---*/
+          for (auto k = pvtx_ptr(iPoint); k < pvtx_ptr(iPoint + 1); ++k) {
+            const auto kv = pvtx_idx(k);
+            if (!(mflags(vtx_marker(kv)) & CNEMOKokkosData::MARKER_GG_BOUNDARY)) continue;
+            const double* Normal = &vnrm(kv, 0);
+
+            double Residual_GCL = 0.0;
+            for (int iDim = 0; iDim < nd; iDim++)
+              Residual_GCL -= 0.5 * (gv(iPoint, iDim) + gv(iPoint, iDim)) * Normal[iDim];
+
+            for (int iVar = 0; iVar < nv; iVar++) res(iPoint, iVar) += Un(iPoint, iVar) * Residual_GCL;
+          }
+
+          if (iPoint >= npd) return;
+
+          /*--- Remainder of the dual time source term (GCL form). ---*/
+          const double Volume_nM1 = vnm1(iPoint);
+          const double Volume_nP1 = vol(iPoint);
+          for (int iVar = 0; iVar < nv; iVar++) {
+            if (!secondOrder)
+              res(iPoint, iVar) += (U(iPoint, iVar) - Un(iPoint, iVar)) * (Volume_nP1 / TimeStep);
+            else
+              res(iPoint, iVar) += (U(iPoint, iVar) - Un(iPoint, iVar)) * (3.0 * Volume_nP1 / (2.0 * TimeStep)) +
+                                   (Unm1(iPoint, iVar) - Un(iPoint, iVar)) * (Volume_nM1 / (2.0 * TimeStep));
+          }
+          if (impl) {
+            const double val = !secondOrder ? Volume_nP1 / TimeStep : (Volume_nP1 * 3.0) / (2.0 * TimeStep);
+            const unsigned long base = dia(iPoint) * nv * nv;
+            for (int iVar = 0; iVar < nv; iVar++) jac(base + iVar * (nv + 1)) += val;
+          }
+        });
+    Kokkos::fence();
+    P.kernel += timer.seconds();
+    P.calls++;
+    return;
+  }
   /*--- CFVMFlowSolverBase::SetResidual_DualTime, static mesh: per point independent. ---*/
   Kokkos::parallel_for(
       "NEMO::DualTimeResidual", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
