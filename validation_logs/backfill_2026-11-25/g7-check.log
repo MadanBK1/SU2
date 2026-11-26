@@ -1,0 +1,23 @@
+super_cat NO exit=0 wall=12.12s
+super_cat YES exit=0 wall=6.50s
+  residual columns ignored as round-off (> 10 orders below max): ['rms[Rho_2]', 'rms[Rho_3]', 'rms[Rho_4]']
+  residual row NO : [-5.2325980e+00 -5.7578920e+00 -2.0647960e+01 -2.0637121e+01
+ -2.0515889e+01  1.2469520e+00 -3.2052830e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  residual row YES: [-5.2325980e+00 -5.7578920e+00 -2.0647960e+01 -2.0637121e+01
+ -2.0515889e+01  1.2469520e+00 -3.2052830e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  max |dres| = 0.00e+00 (tol 2e-06)
+  max field |diff|/phys scale = 1.94e-15 (tol 1e-09)
+  super_cat: PASS
+thermalbath NO exit=0 wall=0.13s
+thermalbath YES exit=0 wall=0.15s
+  residual columns ignored as round-off (> 10 orders below max): ['rms[RhoU]', 'rms[RhoV]', 'rms[RhoE]']
+  residual row NO : [  0.         0.945997   0.945997 -11.897761 -11.867806 -32.
+  10.013239]
+  residual row YES: [  0.         0.945997   0.945997 -11.97873  -12.018144 -32.
+  10.013239]
+  max |dres| = 0.00e+00 (tol 2e-06)
+  max field |diff|/phys scale = 4.38e-16 (tol 1e-09)
+  thermalbath: PASS
+OVERALL: PASS

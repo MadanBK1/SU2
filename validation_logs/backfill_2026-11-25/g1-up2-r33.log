@@ -1,0 +1,14 @@
+invwedge_ausmplusup2 NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=3.56s
+invwedge_ausmplusup2 YES exit=0 wall=2.92s
+  expected stage line missing: stage upwind (AUSM+-up2, residual): device
+  expected stage line missing: stage bc:FAR_FIELD (Inlet): device
+  expected stage line missing: stage bc:OUTLET_FLOW (Exit): device
+  expected stage line missing: stage bc:EULER_WALL (Wall): device
+  residual row NO : [ -0.982059  -1.506822 -16.735977 -17.063993 -17.009083   2.354326
+   1.482256   5.373931   0.927155]
+  residual row YES: [ -0.982059  -1.506822 -16.735977 -17.063993 -17.009083   2.354326
+   1.482256   5.373931   0.927155]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_ausmplusup2: PASS
+OVERALL: FAIL

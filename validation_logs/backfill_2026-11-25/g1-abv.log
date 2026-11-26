@@ -1,0 +1,369 @@
+== ausm exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 24263 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== ausmplusm exit=0  (AUSM+M + MUSCL, residual): device
+   source (finite-rate chemistry + V-T relaxation, residual): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=44 entries=3125441 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=11 entries=2557170 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=66 entries=12797400 non-bitwise=0 max rel diff=0.000e+00
+   PressureSensor compares=22 entries=568260 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 1376 reconstructed states for upwinding are non-physical.
+   stage pressure diffusion sensor (AUSM+M): host (device only in device-resident mode; A/B with SU2_KOKKOS_ST
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=55 mismatching entries=0
+== amimpl exit=0  (AUSM+M + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   PressureSensor compares=22 entries=568260 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 27414 reconstructed states for upwinding are non-physical.
+   stage pressure diffusion sensor (AUSM+M): host (device only in device-resident mode; A/B with SU2_KOKKOS_ST
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=55 mismatching entries=0
+== vanalbada exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=22 mismatching entries=0
+== nolim exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 26209 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=22 mismatching entries=0
+== bj_gg exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 23601 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== wang exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 16027 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== explicit exit=0  (AUSM + MUSCL, residual): device
+   source (finite-rate chemistry + V-T relaxation, residual): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=44 entries=3125441 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=11 entries=2557170 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=66 entries=12797400 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 5252 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== first exit=0  (AUSM, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=33 entries=116847533 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=11 mismatching entries=0
+== air7 exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=9660420 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=14490630 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=174423733 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=173855462 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=869290400 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 30767 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== air7ion exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=0
+   Gradient compares=11 entries=9660420 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=14490630 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=174423733 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=173855462 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=869290400 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 30767 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== ns_muscl exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet) [+ viscous]: device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield) [+ viscous]: device
+   bc:ISOTHERMAL (Wall) [non-catalytic]: device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=10
+   Gradient compares=22 entries=17047800 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=66 entries=852423 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584250700 non-bitwise=0 max rel diff=0.000e+00
+   Viscous compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 19231 reconstructed states for upwinding are non-physical.
+   stage viscous residual (CAvgGradCorrected_NEMO, residual + Jacobian): device (eager download after the stag
+   stage NS transport (WILKE, in SetPrimVar): device
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=44 mismatching entries=0
+== supercat exit=0  (AUSM, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet) [+ viscous]: device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield) [+ viscous]: device
+   bc:ISOTHERMAL (Wall) [non-catalytic]: device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=10
+   Gradient compares=22 entries=17047800 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=66 entries=852423 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=33 entries=116847533 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584250700 non-bitwise=0 max rel diff=0.000e+00
+   Viscous compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   stage viscous residual (CAvgGradCorrected_NEMO, residual + Jacobian): device (eager download after the stag
+   stage NS transport (WILKE, in SetPrimVar): device
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== up2 exit=0  (AUSM+-up2, residual): host (AUSM+-up2 (CPU Jacobian reads uninitialised M_L/M_R members))
+   source (finite-rate chemistry + V-T relaxation, residual): device
+   bc:FAR_FIELD (Inlet): host (boundary numerics not AUSM / AUSM+M)
+   bc:OUTLET_FLOW (Exit): host (boundary numerics not AUSM / AUSM+M)
+   bc:FAR_FIELD (Farfield): host (boundary numerics not AUSM / AUSM+M)
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=11 entries=2557170 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=22 entries=5114340 non-bitwise=0 max rel diff=0.000e+00
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=11 mismatching entries=0
+== tb exit=0  (AUSM, residual): device
+   source (finite-rate chemistry + V-T relaxation, residual): device
+   bc:SYMMETRY_PLANE (bottom): device
+   bc:SYMMETRY_PLANE (left): device
+   bc:SYMMETRY_PLANE (right): device
+   bc:SYMMETRY_PLANE (top): device
+   NaN-warning lines: 0
+   TimeStep compares=55 entries=825 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=22 entries=2387 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=11 entries=2376 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=44 entries=9504 non-bitwise=0 max rel diff=0.000e+00
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=11 mismatching entries=0
+== tb_impl exit=0  (AUSM, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:SYMMETRY_PLANE (bottom): device
+   bc:SYMMETRY_PLANE (left): device
+   bc:SYMMETRY_PLANE (right): device
+   bc:SYMMETRY_PLANE (top): device
+   NaN-warning lines: 0
+   TimeStep compares=55 entries=825 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=33 entries=64163 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=64152 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=88 entries=256608 non-bitwise=0 max rel diff=0.000e+00
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=11 mismatching entries=0
+== tb_frozen exit=0  (AUSM, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:SYMMETRY_PLANE (bottom): device
+   bc:SYMMETRY_PLANE (left): device
+   bc:SYMMETRY_PLANE (right): device
+   bc:SYMMETRY_PLANE (top): device
+   NaN-warning lines: 0
+   TimeStep compares=55 entries=825 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=33 entries=64163 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=64152 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=88 entries=256608 non-bitwise=0 max rel diff=0.000e+00
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=11 mismatching entries=0
+== tb_vtlim exit=0  (AUSM, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:SYMMETRY_PLANE (bottom): device
+   bc:SYMMETRY_PLANE (left): device
+   bc:SYMMETRY_PLANE (right): device
+   bc:SYMMETRY_PLANE (top): device
+   NaN-warning lines: 0
+   TimeStep compares=55 entries=825 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=33 entries=64163 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=64152 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=88 entries=256608 non-bitwise=0 max rel diff=0.000e+00
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=11 mismatching entries=0
+== tb_air5 exit=0  (AUSM, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:SYMMETRY_PLANE (bottom): device
+   bc:SYMMETRY_PLANE (left): device
+   bc:SYMMETRY_PLANE (right): device
+   bc:SYMMETRY_PLANE (top): device
+   NaN-warning lines: 0
+   TimeStep compares=55 entries=825 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=33 entries=142571 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=142560 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=88 entries=570240 non-bitwise=0 max rel diff=0.000e+00
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=11 mismatching entries=0
+== supersonic exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:SUPERSONIC_INLET (Inlet): device
+   bc:SUPERSONIC_OUTLET (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=110 entries=584237610 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 24753 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== subout exit=0  (AUSM + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=11
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 3166 reconstructed states for upwinding are non-physical.
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+== subout_am exit=0  (AUSM+M + MUSCL, residual + Jacobian): device
+   source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+   bc:FAR_FIELD (Inlet): device
+   bc:OUTLET_FLOW (Exit): device
+   bc:FAR_FIELD (Farfield): device
+   bc:EULER_WALL (Wall): device
+   bc:EULER_WALL (Euler): device
+   NaN-warning lines: 0
+   BC_Outlet calls=11, with subsonic outlet vertices=11
+   Gradient compares=11 entries=8523900 non-bitwise=0 max rel diff=0.000e+00
+   Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00
+   TimeStep compares=55 entries=568293 non-bitwise=0 max rel diff=0.000e+00
+   Upwind compares=55 entries=117415793 non-bitwise=0 max rel diff=0.000e+00
+   Source compares=22 entries=116847522 non-bitwise=0 max rel diff=0.000e+00
+   BC compares=121 entries=584249160 non-bitwise=0 max rel diff=0.000e+00
+   PressureSensor compares=22 entries=568260 non-bitwise=0 max rel diff=0.000e+00
+   Warning: 85140 reconstructed states for upwinding are non-physical.
+   stage pressure diffusion sensor (AUSM+M): host (device only in device-resident mode; A/B with SU2_KOKKOS_ST
+   device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=55 mismatching entries=0

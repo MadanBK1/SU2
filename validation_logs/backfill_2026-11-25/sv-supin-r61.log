@@ -1,0 +1,12 @@
+supin_visc NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=16.45s
+supin_visc YES exit=0 wall=37.08s
+  residual row NO : [-5.2325960e+00 -5.7578900e+00 -2.0647968e+01 -2.0637117e+01
+ -2.0515923e+01  1.2469560e+00 -3.2052820e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  residual row YES: [-5.2325960e+00 -5.7578900e+00 -2.0647968e+01 -2.0637117e+01
+ -2.0515923e+01  1.2469560e+00 -3.2052820e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  supin_visc_sv: PASS
+OVERALL: PASS

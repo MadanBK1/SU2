@@ -1,0 +1,10 @@
+invwedge_lax NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=16.53s
+invwedge_lax YES exit=0 wall=15.82s
+  residual row NO : [ -0.881943  -1.406706 -32.       -32.       -24.95317    2.447165
+   1.851652   5.478828   1.046162]
+  residual row YES: [ -0.881943  -1.406706 -32.       -32.       -24.95317    2.447165
+   1.851652   5.478828   1.046162]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_lax: PASS
+OVERALL: PASS

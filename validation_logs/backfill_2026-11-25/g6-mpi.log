@@ -1,0 +1,42 @@
+invwedge_ausm NO (REF_MODE=HOST: YES, all NEMO stages host) np=2 exit=0 wall=10.89s
+invwedge_ausm YES np=2 exit=0 wall=9.47s
+  residual row NO : [ -1.069675  -1.594438 -18.299923 -18.627316 -18.573325   2.245721
+   1.874105   5.290285   0.847729]
+  residual row YES: [ -1.069675  -1.594438 -18.299923 -18.627316 -18.573325   2.245721
+   1.874105   5.290285   0.847729]
+  max |dres| = 0.00e+00 (tol 0.0)
+  NO vs reference max |d| = 5.55e-03
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_ausm_np2: PASS
+thermalbath NO (REF_MODE=HOST: YES, all NEMO stages host) np=2 exit=0 wall=0.11s
+thermalbath YES np=2 exit=0 wall=0.14s
+  residual row NO : [  0.         0.945997   0.945997 -12.039262 -12.171767 -32.
+  10.013239]
+  residual row YES: [  0.         0.945997   0.945997 -12.039262 -12.171767 -32.
+  10.013239]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  thermalbath_np2: PASS
+super_cat NO (REF_MODE=HOST: YES, all NEMO stages host) np=2 exit=0 wall=9.95s
+super_cat YES np=2 exit=0 wall=9.65s
+  residual row NO : [-5.2325950e+00 -5.7578890e+00 -2.0641415e+01 -2.0640623e+01
+ -2.0541670e+01  1.2468660e+00 -3.2052580e+00 -2.8372000e-02
+  2.5064700e-01  3.2440000e+04]
+  residual row YES: [-5.2325950e+00 -5.7578890e+00 -2.0641415e+01 -2.0640623e+01
+ -2.0541670e+01  1.2468660e+00 -3.2052580e+00 -2.8372000e-02
+  2.5064700e-01  3.2440000e+04]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  super_cat_np2: PASS
+axi_visccone NO (REF_MODE=HOST: YES, all NEMO stages host) np=2 exit=0 wall=10.43s
+axi_visccone YES np=2 exit=0 wall=10.00s
+  residual row NO : [-5.2222700e+00 -5.7465250e+00 -2.0560278e+01 -2.0510152e+01
+ -2.0409102e+01  1.2557580e+00 -3.2083820e+00 -1.6014000e-02
+  9.3462000e-02  3.2619000e+04]
+  residual row YES: [-5.2222700e+00 -5.7465250e+00 -2.0560278e+01 -2.0510152e+01
+ -2.0409102e+01  1.2557580e+00 -3.2083820e+00 -1.6014000e-02
+  9.3462000e-02  3.2619000e+04]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  axi_visccone_np2: PASS
+OVERALL: PASS

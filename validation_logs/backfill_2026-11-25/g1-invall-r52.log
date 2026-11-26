@@ -1,0 +1,37 @@
+invwedge_am NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=4.45s
+invwedge_am YES exit=0 wall=3.83s
+  residual row NO : [ -1.173033  -1.697796 -16.739586 -17.063491 -17.012692   2.124519
+   1.963804   5.182881   0.747539]
+  residual row YES: [ -1.173033  -1.697796 -16.739586 -17.063491 -17.012692   2.124519
+   1.963804   5.182881   0.747539]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_am: PASS
+invwedge_lax NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=16.70s
+invwedge_lax YES exit=0 wall=15.39s
+  residual row NO : [ -0.881943  -1.406706 -32.       -32.       -24.95317    2.447165
+   1.851652   5.478828   1.046162]
+  residual row YES: [ -0.881943  -1.406706 -32.       -32.       -24.95317    2.447165
+   1.851652   5.478828   1.046162]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_lax: PASS
+invwedge_roe NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=18.28s
+invwedge_roe YES exit=0 wall=17.08s
+  residual row NO : [ -1.064249  -1.589011 -17.363321 -17.692193 -17.636425   2.255308
+   1.814311   5.2945     0.931232]
+  residual row YES: [ -1.064249  -1.589011 -17.363321 -17.692193 -17.636425   2.255308
+   1.814311   5.2945     0.931232]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_roe: PASS
+invwedge_msw NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=19.81s
+invwedge_msw YES exit=0 wall=15.80s
+  residual row NO : [ -1.212911  -1.737673 -18.298526 -18.625965 -18.571945   2.1056
+   1.651305   5.143374   0.703876]
+  residual row YES: [ -1.212911  -1.737673 -18.298526 -18.625965 -18.571945   2.1056
+   1.651305   5.143374   0.703876]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_msw: PASS
+OVERALL: PASS

@@ -1,0 +1,363 @@
+Kokkos execution space: Serial
+
+######## N2  nSpecies=2 nHeavy=2 nEl=0 nDim=3 maxEl=15 nReactions=2 states=5000
+
+== N2: individual functions ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Cvtr_s              10000   100.000%    0.000e+00    0.000e+00  ok
+Cvve_s              10000   100.000%    0.000e+00    0.000e+00  ok
+Eve_s               10000   100.000%    0.000e+00    0.000e+00  ok
+Ev_s(vibonly)       10000   100.000%    0.000e+00    0.000e+00  ok
+h_s                 10000   100.000%    0.000e+00    0.000e+00  ok
+e_mix                5000   100.000%    0.000e+00    0.000e+00  ok
+e_ve                 5000   100.000%    0.000e+00    0.000e+00  ok
+P                    5000   100.000%    0.000e+00    0.000e+00  ok
+a                    5000   100.000%    0.000e+00    0.000e+00  ok
+Gamma                5000   100.000%    0.000e+00    0.000e+00  ok
+rhoCvtr              5000   100.000%    0.000e+00    0.000e+00  ok
+rhoCvve              5000   100.000%    0.000e+00    0.000e+00  ok
+T(CompT)             5000   100.000%    0.000e+00    0.000e+00  ok
+Tve(CompT)           5000   100.000%    0.000e+00    0.000e+00  ok
+dPdU                35000   100.000%    0.000e+00    0.000e+00  ok
+dTdU                35000   100.000%    0.000e+00    0.000e+00  ok
+dTvedU              35000   100.000%    0.000e+00    0.000e+00  ok
+
+== N2: source terms (production rates, chemistry Jacobian, Eve source, Jacobian) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+ws                  10000   100.000%    0.000e+00    0.000e+00  ok
+dws/dU             245000   100.000%    0.000e+00    0.000e+00  ok
+domega/dU          245000   100.000%    0.000e+00    0.000e+00  ok
+omega_ve             5000   100.000%    0.000e+00    0.000e+00  ok
+
+== N2: Cons2Prim (2 passes, implicit) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+U(clipped)          35000   100.000%    0.000e+00    0.000e+00  ok
+V:rho_s             10000   100.000%    0.000e+00    0.000e+00  ok
+V:T                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:Tve                5000   100.000%    0.000e+00    0.000e+00  ok
+V:u_i               15000   100.000%    0.000e+00    0.000e+00  ok
+V:P                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:rho                5000   100.000%    0.000e+00    0.000e+00  ok
+V:h                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:a                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvtr            5000   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvve            5000   100.000%    0.000e+00    0.000e+00  ok
+dPdU                35000   100.000%    0.000e+00    0.000e+00  ok
+dTdU                35000   100.000%    0.000e+00    0.000e+00  ok
+dTvedU              35000   100.000%    0.000e+00    0.000e+00  ok
+eves                10000   100.000%    0.000e+00    0.000e+00  ok
+Cvves               10000   100.000%    0.000e+00    0.000e+00  ok
+Gamma                5000   100.000%    0.000e+00    0.000e+00  ok
+nonPhys: 390 of 10000 calls (injected edge cases: 309), flag mismatches: 0
+
+######## N2  nSpecies=2 nHeavy=2 nEl=0 nDim=2 maxEl=15 nReactions=2 states=1250
+
+== N2: individual functions ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Cvtr_s               2500   100.000%    0.000e+00    0.000e+00  ok
+Cvve_s               2500   100.000%    0.000e+00    0.000e+00  ok
+Eve_s                2500   100.000%    0.000e+00    0.000e+00  ok
+Ev_s(vibonly)        2500   100.000%    0.000e+00    0.000e+00  ok
+h_s                  2500   100.000%    0.000e+00    0.000e+00  ok
+e_mix                1250   100.000%    0.000e+00    0.000e+00  ok
+e_ve                 1250   100.000%    0.000e+00    0.000e+00  ok
+P                    1250   100.000%    0.000e+00    0.000e+00  ok
+a                    1250   100.000%    0.000e+00    0.000e+00  ok
+Gamma                1250   100.000%    0.000e+00    0.000e+00  ok
+rhoCvtr              1250   100.000%    0.000e+00    0.000e+00  ok
+rhoCvve              1250   100.000%    0.000e+00    0.000e+00  ok
+T(CompT)             1250   100.000%    0.000e+00    0.000e+00  ok
+Tve(CompT)           1250   100.000%    0.000e+00    0.000e+00  ok
+dPdU                 7500   100.000%    0.000e+00    0.000e+00  ok
+dTdU                 7500   100.000%    0.000e+00    0.000e+00  ok
+dTvedU               7500   100.000%    0.000e+00    0.000e+00  ok
+
+== N2: source terms (production rates, chemistry Jacobian, Eve source, Jacobian) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+ws                   2500   100.000%    0.000e+00    0.000e+00  ok
+dws/dU              45000   100.000%    0.000e+00    0.000e+00  ok
+domega/dU           45000   100.000%    0.000e+00    0.000e+00  ok
+omega_ve             1250   100.000%    0.000e+00    0.000e+00  ok
+
+== N2: Cons2Prim (2 passes, implicit) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+U(clipped)           7500   100.000%    0.000e+00    0.000e+00  ok
+V:rho_s              2500   100.000%    0.000e+00    0.000e+00  ok
+V:T                  1250   100.000%    0.000e+00    0.000e+00  ok
+V:Tve                1250   100.000%    0.000e+00    0.000e+00  ok
+V:u_i                2500   100.000%    0.000e+00    0.000e+00  ok
+V:P                  1250   100.000%    0.000e+00    0.000e+00  ok
+V:rho                1250   100.000%    0.000e+00    0.000e+00  ok
+V:h                  1250   100.000%    0.000e+00    0.000e+00  ok
+V:a                  1250   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvtr            1250   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvve            1250   100.000%    0.000e+00    0.000e+00  ok
+dPdU                 7500   100.000%    0.000e+00    0.000e+00  ok
+dTdU                 7500   100.000%    0.000e+00    0.000e+00  ok
+dTvedU               7500   100.000%    0.000e+00    0.000e+00  ok
+eves                 2500   100.000%    0.000e+00    0.000e+00  ok
+Cvves                2500   100.000%    0.000e+00    0.000e+00  ok
+Gamma                1250   100.000%    0.000e+00    0.000e+00  ok
+nonPhys: 90 of 2500 calls (injected edge cases: 70), flag mismatches: 0
+
+######## AIR-5  nSpecies=5 nHeavy=5 nEl=0 nDim=3 maxEl=16 nReactions=17 states=5000
+
+== AIR-5: individual functions ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Cvtr_s              25000   100.000%    0.000e+00    0.000e+00  ok
+Cvve_s              25000   100.000%    0.000e+00    0.000e+00  ok
+Eve_s               25000   100.000%    0.000e+00    0.000e+00  ok
+Ev_s(vibonly)       25000   100.000%    0.000e+00    0.000e+00  ok
+h_s                 25000   100.000%    0.000e+00    0.000e+00  ok
+e_mix                5000   100.000%    0.000e+00    0.000e+00  ok
+e_ve                 5000   100.000%    0.000e+00    0.000e+00  ok
+P                    5000   100.000%    0.000e+00    0.000e+00  ok
+a                    5000   100.000%    0.000e+00    0.000e+00  ok
+Gamma                5000   100.000%    0.000e+00    0.000e+00  ok
+rhoCvtr              5000   100.000%    0.000e+00    0.000e+00  ok
+rhoCvve              5000   100.000%    0.000e+00    0.000e+00  ok
+T(CompT)             5000   100.000%    0.000e+00    0.000e+00  ok
+Tve(CompT)           5000   100.000%    0.000e+00    0.000e+00  ok
+dPdU                50000   100.000%    0.000e+00    0.000e+00  ok
+dTdU                50000   100.000%    0.000e+00    0.000e+00  ok
+dTvedU              50000   100.000%    0.000e+00    0.000e+00  ok
+
+== AIR-5: source terms (production rates, chemistry Jacobian, Eve source, Jacobian) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+ws                  25000   100.000%    0.000e+00    0.000e+00  ok
+dws/dU             500000   100.000%    0.000e+00    0.000e+00  ok
+domega/dU          500000   100.000%    0.000e+00    0.000e+00  ok
+omega_ve             5000   100.000%    0.000e+00    0.000e+00  ok
+
+== AIR-5: Cons2Prim (2 passes, implicit) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+U(clipped)          50000   100.000%    0.000e+00    0.000e+00  ok
+V:rho_s             25000   100.000%    0.000e+00    0.000e+00  ok
+V:T                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:Tve                5000   100.000%    0.000e+00    0.000e+00  ok
+V:u_i               15000   100.000%    0.000e+00    0.000e+00  ok
+V:P                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:rho                5000   100.000%    0.000e+00    0.000e+00  ok
+V:h                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:a                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvtr            5000   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvve            5000   100.000%    0.000e+00    0.000e+00  ok
+dPdU                50000   100.000%    0.000e+00    0.000e+00  ok
+dTdU                50000   100.000%    0.000e+00    0.000e+00  ok
+dTvedU              50000   100.000%    0.000e+00    0.000e+00  ok
+eves                25000   100.000%    0.000e+00    0.000e+00  ok
+Cvves               25000   100.000%    0.000e+00    0.000e+00  ok
+Gamma                5000   100.000%    0.000e+00    0.000e+00  ok
+nonPhys: 390 of 10000 calls (injected edge cases: 322), flag mismatches: 0
+
+######## AIR-7  nSpecies=7 nHeavy=6 nEl=1 nDim=3 maxEl=16 nReactions=22 states=5000
+
+== AIR-7: individual functions ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Cvtr_s              35000   100.000%    0.000e+00    0.000e+00  ok
+Cvve_s              35000   100.000%    0.000e+00    0.000e+00  ok
+Eve_s               35000   100.000%    0.000e+00    0.000e+00  ok
+Ev_s(vibonly)       35000   100.000%    0.000e+00    0.000e+00  ok
+h_s                 35000   100.000%    0.000e+00    0.000e+00  ok
+e_mix                5000   100.000%    0.000e+00    0.000e+00  ok
+e_ve                 5000   100.000%    0.000e+00    0.000e+00  ok
+P                    5000   100.000%    0.000e+00    0.000e+00  ok
+a                    5000   100.000%    0.000e+00    0.000e+00  ok
+Gamma                5000   100.000%    0.000e+00    0.000e+00  ok
+rhoCvtr              5000   100.000%    0.000e+00    0.000e+00  ok
+rhoCvve              5000   100.000%    0.000e+00    0.000e+00  ok
+T(CompT)             5000   100.000%    0.000e+00    0.000e+00  ok
+Tve(CompT)           5000   100.000%    0.000e+00    0.000e+00  ok
+dPdU                60000   100.000%    0.000e+00    0.000e+00  ok
+dTdU                60000   100.000%    0.000e+00    0.000e+00  ok
+dTvedU              60000   100.000%    0.000e+00    0.000e+00  ok
+
+== AIR-7: source terms (production rates, chemistry Jacobian, Eve source, Jacobian) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+ws                  35000   100.000%    0.000e+00    0.000e+00  ok
+dws/dU             720000   100.000%    0.000e+00    0.000e+00  ok
+domega/dU          720000   100.000%    0.000e+00    0.000e+00  ok
+omega_ve             5000   100.000%    0.000e+00    0.000e+00  ok
+
+== AIR-7: Cons2Prim (2 passes, implicit) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+U(clipped)          60000   100.000%    0.000e+00    0.000e+00  ok
+V:rho_s             35000   100.000%    0.000e+00    0.000e+00  ok
+V:T                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:Tve                5000   100.000%    0.000e+00    0.000e+00  ok
+V:u_i               15000   100.000%    0.000e+00    0.000e+00  ok
+V:P                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:rho                5000   100.000%    0.000e+00    0.000e+00  ok
+V:h                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:a                  5000   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvtr            5000   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvve            5000   100.000%    0.000e+00    0.000e+00  ok
+dPdU                60000   100.000%    0.000e+00    0.000e+00  ok
+dTdU                60000   100.000%    0.000e+00    0.000e+00  ok
+dTvedU              60000   100.000%    0.000e+00    0.000e+00  ok
+eves                35000   100.000%    0.000e+00    0.000e+00  ok
+Cvves               35000   100.000%    0.000e+00    0.000e+00  ok
+Gamma                5000   100.000%    0.000e+00    0.000e+00  ok
+nonPhys: 852 of 10000 calls (injected edge cases: 294), flag mismatches: 0
+
+######## ARGON  nSpecies=1 nHeavy=1 nEl=0 nDim=3 maxEl=7 nReactions=0 states=1250
+
+== ARGON: individual functions ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Cvtr_s               1250   100.000%    0.000e+00    0.000e+00  ok
+Cvve_s               1250   100.000%    0.000e+00    0.000e+00  ok
+Eve_s                1250   100.000%    0.000e+00    0.000e+00  ok
+Ev_s(vibonly)        1250   100.000%    0.000e+00    0.000e+00  ok
+h_s                  1250   100.000%    0.000e+00    0.000e+00  ok
+e_mix                1250   100.000%    0.000e+00    0.000e+00  ok
+e_ve                 1250   100.000%    0.000e+00    0.000e+00  ok
+P                    1250   100.000%    0.000e+00    0.000e+00  ok
+a                    1250   100.000%    0.000e+00    0.000e+00  ok
+Gamma                1250   100.000%    0.000e+00    0.000e+00  ok
+rhoCvtr              1250   100.000%    0.000e+00    0.000e+00  ok
+rhoCvve              1250   100.000%    0.000e+00    0.000e+00  ok
+T(CompT)             1250   100.000%    0.000e+00    0.000e+00  ok
+Tve(CompT)           1250   100.000%    0.000e+00    0.000e+00  ok
+dPdU                 7500   100.000%    0.000e+00    0.000e+00  ok
+dTdU                 7500   100.000%    0.000e+00    0.000e+00  ok
+dTvedU               7500   100.000%    0.000e+00    0.000e+00  ok
+
+== ARGON: source terms (production rates, chemistry Jacobian, Eve source, Jacobian) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+ws                   1250   100.000%    0.000e+00    0.000e+00  ok
+dws/dU              45000   100.000%    0.000e+00    0.000e+00  ok
+domega/dU           45000   100.000%    0.000e+00    0.000e+00  ok
+omega_ve             1250   100.000%    0.000e+00    0.000e+00  ok
+
+== ARGON: Cons2Prim (2 passes, implicit) ==
+quantity                n   bitwise%      max_rel      max_abs  status
+U(clipped)           7500   100.000%    0.000e+00    0.000e+00  ok
+V:rho_s              1250   100.000%    0.000e+00    0.000e+00  ok
+V:T                  1250   100.000%    0.000e+00    0.000e+00  ok
+V:Tve                1250   100.000%    0.000e+00    0.000e+00  ok
+V:u_i                3750   100.000%    0.000e+00    0.000e+00  ok
+V:P                  1250   100.000%    0.000e+00    0.000e+00  ok
+V:rho                1250   100.000%    0.000e+00    0.000e+00  ok
+V:h                  1250   100.000%    0.000e+00    0.000e+00  ok
+V:a                  1250   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvtr            1250   100.000%    0.000e+00    0.000e+00  ok
+V:rhoCvve            1250   100.000%    0.000e+00    0.000e+00  ok
+dPdU                 7500   100.000%    0.000e+00    0.000e+00  ok
+dTdU                 7500   100.000%    0.000e+00    0.000e+00  ok
+dTvedU               7500   100.000%    0.000e+00    0.000e+00  ok
+eves                 1250   100.000%    0.000e+00    0.000e+00  ok
+Cvves                1250   100.000%    0.000e+00    0.000e+00  ok
+Gamma                1250   100.000%    0.000e+00    0.000e+00  ok
+nonPhys: 122 of 2500 calls (injected edge cases: 71), flag mismatches: 0
+
+######## transport N2 WILKE ionization=0 nSpecies=2 states=1250 (device model 0)
+
+== N2 WILKE: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                   2500   100.000%    0.000e+00    0.000e+00  ok
+hs                   2500   100.000%    0.000e+00    0.000e+00  ok
+mu                   1250   100.000%    0.000e+00    0.000e+00  ok
+k_tr                 1250   100.000%    0.000e+00    0.000e+00  ok
+k_ve                 1250   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport AIR-5 WILKE ionization=0 nSpecies=5 states=2500 (device model 0)
+
+== AIR-5 WILKE: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                  12500   100.000%    0.000e+00    0.000e+00  ok
+hs                  12500   100.000%    0.000e+00    0.000e+00  ok
+mu                   2500   100.000%    0.000e+00    0.000e+00  ok
+k_tr                 2500   100.000%    0.000e+00    0.000e+00  ok
+k_ve                 2500   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport ARGON WILKE ionization=0 nSpecies=1 states=625 (device model 0)
+
+== ARGON WILKE: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                    625   100.000%    0.000e+00    0.000e+00  ok
+hs                    625   100.000%    0.000e+00    0.000e+00  ok
+mu                    625   100.000%    0.000e+00    0.000e+00  ok
+k_tr                  625   100.000%    0.000e+00    0.000e+00  ok
+k_ve                  625   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport N2 GUPTA-YOS ionization=0 nSpecies=2 states=1250 (device model 1)
+
+== N2 GUPTA-YOS: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                   2500   100.000%    0.000e+00    0.000e+00  ok
+hs                   2500   100.000%    0.000e+00    0.000e+00  ok
+mu                   1250   100.000%    0.000e+00    0.000e+00  ok
+k_tr                 1250   100.000%    0.000e+00    0.000e+00  ok
+k_ve                 1250   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport AIR-5 GUPTA-YOS ionization=0 nSpecies=5 states=2500 (device model 1)
+
+== AIR-5 GUPTA-YOS: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                  12500   100.000%    0.000e+00    0.000e+00  ok
+hs                  12500   100.000%    0.000e+00    0.000e+00  ok
+mu                   2500   100.000%    0.000e+00    0.000e+00  ok
+k_tr                 2500   100.000%    0.000e+00    0.000e+00  ok
+k_ve                 2500   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport ARGON GUPTA-YOS ionization=0 nSpecies=1 states=625 (device model 1)
+
+== ARGON GUPTA-YOS: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                    625   100.000%    0.000e+00    0.000e+00  ok
+hs                    625   100.000%    0.000e+00    0.000e+00  ok
+mu                    625   100.000%    0.000e+00    0.000e+00  ok
+k_tr                  625   100.000%    0.000e+00    0.000e+00  ok
+k_ve                  625   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport N2 SUTHERLAND ionization=0 nSpecies=2 states=1250 (device model 2)
+
+== N2 SUTHERLAND: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                   2500   100.000%    0.000e+00    0.000e+00  ok
+hs                   2500   100.000%    0.000e+00    0.000e+00  ok
+mu                   1250   100.000%    0.000e+00    0.000e+00  ok
+k_tr                 1250   100.000%    0.000e+00    0.000e+00  ok
+k_ve                 1250   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport AIR-5 SUTHERLAND ionization=0 nSpecies=5 states=2500 (device model 2)
+
+== AIR-5 SUTHERLAND: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                  12500   100.000%    0.000e+00    0.000e+00  ok
+hs                  12500   100.000%    0.000e+00    0.000e+00  ok
+mu                   2500   100.000%    0.000e+00    0.000e+00  ok
+k_tr                 2500   100.000%    0.000e+00    0.000e+00  ok
+k_ve                 2500   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport ARGON SUTHERLAND ionization=0 nSpecies=1 states=625 (device model 2)
+
+== ARGON SUTHERLAND: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                    625   100.000%    0.000e+00    0.000e+00  ok
+hs                    625   100.000%    0.000e+00    0.000e+00  ok
+mu                    625   100.000%    0.000e+00    0.000e+00  ok
+k_tr                  625   100.000%    0.000e+00    0.000e+00  ok
+k_ve                  625   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport AIR-7 GUPTA-YOS ionization=1 nSpecies=7 states=1250 (device model 1)
+
+== AIR-7 GUPTA-YOS: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                   8750   100.000%    0.000e+00    0.000e+00  ok
+hs                   8750   100.000%    0.000e+00    0.000e+00  ok
+mu                   1250   100.000%    0.000e+00    0.000e+00  ok
+k_tr                 1250   100.000%    0.000e+00    0.000e+00  ok
+k_ve                 1250   100.000%    0.000e+00    0.000e+00  ok
+
+######## transport AIR-7 GUPTA-YOS ionization=1 nSpecies=7 states=1250 (device model 1)
+
+== AIR-7 GUPTA-YOS: transport properties ==
+quantity                n   bitwise%      max_rel      max_abs  status
+Ds                   8750   100.000%    0.000e+00    0.000e+00  ok
+hs                   8750   100.000%    0.000e+00    0.000e+00  ok
+mu                   1250   100.000%    0.000e+00    0.000e+00  ok
+k_tr                 1250   100.000%    0.000e+00    0.000e+00  ok
+k_ve                 1250   100.000%    0.000e+00    0.000e+00  ok
+
+RESULT: PASS

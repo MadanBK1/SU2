@@ -1,0 +1,6 @@
+ninja-serial rc=0
+ninja: Entering directory `build-kokkos-serial'
+[1/4] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CNEMOEulerSolver.cpp.o
+[2/4] Linking static target SU2_CFD/src/libSU2core.a
+[3/4] Linking target UnitTests/nemo_gas_kokkos_validation
+[4/4] Linking target SU2_CFD/src/SU2_CFD

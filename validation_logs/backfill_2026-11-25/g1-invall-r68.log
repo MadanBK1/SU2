@@ -1,0 +1,41 @@
+invwedge_roe NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=18.54s
+invwedge_roe YES exit=0 wall=17.20s
+  residual row NO : [ -1.064249  -1.589011 -17.363321 -17.692193 -17.636425   2.255308
+   1.814311   5.2945     0.931232]
+  residual row YES: [ -1.064249  -1.589011 -17.363321 -17.692193 -17.636425   2.255308
+   1.814311   5.2945     0.931232]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_roe: PASS
+invwedge_msw NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=20.21s
+invwedge_msw YES exit=0 wall=15.94s
+  residual row NO : [ -1.212911  -1.737673 -18.298526 -18.625965 -18.571945   2.1056
+   1.651305   5.143374   0.703876]
+  residual row YES: [ -1.212911  -1.737673 -18.298526 -18.625965 -18.571945   2.1056
+   1.651305   5.143374   0.703876]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_msw: PASS
+smol_maxwell NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=16.24s
+smol_maxwell YES exit=0 wall=15.99s
+  residual row NO : [-5.2150910e+00 -5.7398540e+00 -2.0632449e+01 -2.0657149e+01
+ -2.0402433e+01  1.2390620e+00 -3.1651080e+00 -1.6268000e-01
+  2.3313300e-01 -6.0858000e+03]
+  residual row YES: [-5.2150910e+00 -5.7398540e+00 -2.0632449e+01 -2.0657149e+01
+ -2.0402433e+01  1.2390620e+00 -3.1651080e+00 -1.6268000e-01
+  2.3313300e-01 -6.0858000e+03]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  smol_maxwell: PASS
+supin_visc NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=16.55s
+supin_visc YES exit=0 wall=16.16s
+  residual row NO : [-5.2325960e+00 -5.7578900e+00 -2.0647968e+01 -2.0637117e+01
+ -2.0515923e+01  1.2469560e+00 -3.2052820e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  residual row YES: [-5.2325960e+00 -5.7578900e+00 -2.0647968e+01 -2.0637117e+01
+ -2.0515923e+01  1.2469560e+00 -3.2052820e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  supin_visc: PASS
+OVERALL: PASS

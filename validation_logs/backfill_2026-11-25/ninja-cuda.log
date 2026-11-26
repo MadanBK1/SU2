@@ -1,0 +1,1706 @@
+ninja: Entering directory `build-kokkos-cuda'
+[0/1] Regenerating build files
+The Meson build system
+Version: 1.8.2
+Source dir: /home/mpr7366/software/AgenticTest/SU2
+Build dir: /home/mpr7366/software/AgenticTest/SU2/build-kokkos-cuda
+Build type: native build
+Project name: SU2
+Project version: 8.5.0 "Harrier"
+C compiler for the host machine: /opt/rh/gcc-toolset-12/root/usr/bin/gcc (gcc 12.2.1 "gcc (GCC) 12.2.1 20221121 (Red Hat 12.2.1-7)")
+C linker for the host machine: /opt/rh/gcc-toolset-12/root/usr/bin/gcc ld.bfd 2.38-19
+C++ compiler for the host machine: /home/mpr7366/software/AgenticTest/SU2/meson_scripts/kokkos_compiler_dispatcher (gcc 12.2.1 "g++ (GCC) 12.2.1 20221121 (Red Hat 12.2.1-7)")
+C++ linker for the host machine: /home/mpr7366/software/AgenticTest/SU2/meson_scripts/kokkos_compiler_dispatcher ld.bfd 2.38-19
+Host machine cpu family: x86_64
+Host machine cpu: x86_64
+Program python3 found: YES (/usr/bin/python3)
+Compiler for C++ supports arguments -Wno-empty-body: YES (cached)
+Compiler for C++ supports arguments -Wno-ignored-qualifiers: YES (cached)
+Compiler for C++ supports arguments -Wno-unused-parameter: YES (cached)
+Compiler for C++ supports arguments -Wno-deprecated-declarations: YES (cached)
+Compiler for C++ supports arguments -Wno-error=cast-function-type: YES (cached)
+Compiler for C++ supports arguments -Wno-cast-function-type: YES (cached)
+Compiler for C++ supports arguments -Wno-error=stringop-truncation: YES (cached)
+Compiler for C++ supports arguments -Wno-stringop-truncation: YES (cached)
+Compiler for C++ supports arguments -Wno-error=missing-field-initializers: YES (cached)
+Compiler for C++ supports arguments -Wno-missing-field-initializers: YES (cached)
+Compiler for C++ supports arguments -Wno-error=class-memaccess: YES (cached)
+Compiler for C++ supports arguments -Wno-class-memaccess: YES (cached)
+Compiler for C++ supports arguments -Wno-overloaded-virtual: YES (cached)
+Compiler for C++ supports arguments -Wno-array-bounds: YES (cached)
+Compiler for C++ supports arguments -Wno-dangling-pointer: YES (cached)
+Compiler for C++ supports arguments -ffast-math: YES (cached)
+Compiler for C++ supports arguments -fno-finite-math-only: YES (cached)
+Dependency mpi skipped: feature with-mpi disabled
+Dependency mpi skipped: feature with-mpi disabled
+Program ninja found: YES (/usr/bin/ninja)
+
+Executing subproject Kokkos method cmake 
+
+Kokkos| Found CMake: /usr/bin/cmake (3.31.8)
+
+| Configuring the build directory with CMake version 3.31.8
+| Running CMake with: -G Ninja -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=False -DCMAKE_POSITION_INDEPENDENT_CODE=True -DCMAKE_CXX_STANDARD=20 -DKokkos_ENABLE_TESTS=False -DKokkos_ENABLE_EXAMPLES=False -DKokkos_ENABLE_BENCHMARKS=False -DKokkos_ENABLE_SERIAL=True -DKokkos_ENABLE_OPENMP=False -DKokkos_ENABLE_CUDA=True -DKokkos_ENABLE_SYCL=False -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja -DKokkos_ARCH_VOLTA70=True -DCMAKE_BUILD_TYPE=Release
+| - build directory:          /home/mpr7366/software/AgenticTest/SU2/build-kokkos-cuda/subprojects/Kokkos/__CMake_build
+| - source directory:         /home/mpr7366/software/AgenticTest/SU2/subprojects/Kokkos
+| - toolchain file:           /home/mpr7366/software/AgenticTest/SU2/build-kokkos-cuda/subprojects/Kokkos/__CMake_build/CMakeMesonToolchainFile.cmake
+| - preload file:             /home/mpr7366/SU2/externals/meson/mesonbuild/cmake/data/preload.cmake
+| - trace args:               --trace-expand --trace-format=json-v1 --no-warn-unused-cli --trace-redirect=cmake_trace.txt
+| - disabled policy warnings: [CMP0025, CMP0047, CMP0056, CMP0060, CMP0065, CMP0066, CMP0067, CMP0082, CMP0089, CMP0102]
+
+| Put cmake in trace mode, but with variables expanded.
+| Put cmake in trace mode and sets the trace output format.
+| Not searching for unused variables given on the command line.
+| Put cmake in trace mode and redirect trace output to a file instead of stderr.
+| Trace will be written to cmake_trace.txt
+| -- Setting default Kokkos CXX standard to 20
+| -- The CXX compiler identification is GNU 12.2.1
+| -- Detecting CXX compiler ABI info
+| -- Detecting CXX compiler ABI info - done
+| -- Check for working CXX compiler: /home/mpr7366/software/AgenticTest/SU2/meson_scripts/kokkos_compiler_dispatcher - skipped
+| -- Detecting CXX compile features
+| -- Detecting CXX compile features - done
+| -- Kokkos version: 5.2.2
+| -- The project name is: Kokkos
+| -- kokkos_launch_compiler (/home/mpr7366/software/AgenticTest/SU2/subprojects/Kokkos/bin/kokkos_launch_compiler) is enabled...
+| -- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 12.9.86)
+| -- Using -std=c++20 for C++20 standard as feature
+| -- Built-in Execution Spaces:
+| --     Device Parallel: Kokkos::Cuda
+| --     Host Parallel: NoTypeDefined
+| --       Host Serial: SERIAL
+| --
+| -- Architectures:
+| --  VOLTA70
+| -- Found CUDAToolkit: /usr/local/cuda-12.9/targets/x86_64-linux/include (found version "12.9.86")
+| -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+| -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+| -- Found Threads: TRUE
+| -- Using bundled desul_atomics copy (desul/desul@83d26f34db50b4fefe30ed4db38b10e04c7a9384)
+| -- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+| -- Kokkos Backends: SERIAL;CUDA
+| -- Configuring done (0.8s)
+| CMake Warning (dev) at cmake/build_env_info.cmake:108 (add_library):
+| Policy CMP0156 is not set: De-duplicate libraries on link lines based on
+| linker capabilities.  Run "cmake --help-policy CMP0156" for policy details.
+| Use the cmake_policy command to set the policy and suppress this warning.
+
+| Since the policy is not set, legacy libraries de-duplication strategy will
+| be applied.
+| Call Stack (most recent call first):
+| CMakeLists.txt:208 (check_git_setup)
+| This warning is for project developers.  Use -Wno-dev to suppress it.
+
+| CMake Warning (dev) at cmake/kokkos_tribits.cmake:394 (add_library):
+| Policy CMP0156 is not set: De-duplicate libraries on link lines based on
+| linker capabilities.  Run "cmake --help-policy CMP0156" for policy details.
+| Use the cmake_policy command to set the policy and suppress this warning.
+
+| Since the policy is not set, legacy libraries de-duplication strategy will
+| be applied.
+| Call Stack (most recent call first):
+| core/src/CMakeLists.txt:131 (kokkos_add_library)
+| This warning is for project developers.  Use -Wno-dev to suppress it.
+
+| CMake Warning (dev) at cmake/kokkos_tribits.cmake:394 (add_library):
+| Policy CMP0156 is not set: De-duplicate libraries on link lines based on
+| linker capabilities.  Run "cmake --help-policy CMP0156" for policy details.
+| Use the cmake_policy command to set the policy and suppress this warning.
+
+| Since the policy is not set, legacy libraries de-duplication strategy will
+| be applied.
+| Call Stack (most recent call first):
+| containers/src/CMakeLists.txt:35 (kokkos_add_library)
+| This warning is for project developers.  Use -Wno-dev to suppress it.
+
+| CMake Warning (dev) at cmake/kokkos_tribits.cmake:394 (add_library):
+| Policy CMP0156 is not set: De-duplicate libraries on link lines based on
+| linker capabilities.  Run "cmake --help-policy CMP0156" for policy details.
+| Use the cmake_policy command to set the policy and suppress this warning.
+
+| Since the policy is not set, legacy libraries de-duplication strategy will
+| be applied.
+| Call Stack (most recent call first):
+| algorithms/src/CMakeLists.txt:23 (kokkos_add_library)
+| This warning is for project developers.  Use -Wno-dev to suppress it.
+
+| CMake Warning (dev) at cmake/kokkos_tribits.cmake:394 (add_library):
+| Policy CMP0156 is not set: De-duplicate libraries on link lines based on
+| linker capabilities.  Run "cmake --help-policy CMP0156" for policy details.
+| Use the cmake_policy command to set the policy and suppress this warning.
+
+| Since the policy is not set, legacy libraries de-duplication strategy will
+| be applied.
+| Call Stack (most recent call first):
+| simd/src/CMakeLists.txt:23 (kokkos_add_library)
+| This warning is for project developers.  Use -Wno-dev to suppress it.
+
+| -- Generating done (0.0s)
+| -- Build files have been written to: /home/mpr7366/software/AgenticTest/SU2/build-kokkos-cuda/subprojects/Kokkos/__CMake_build
+
+Kokkos| CMake configuration: SUCCEEDED
+Kokkos| CMake project Kokkos  has 36 build targets.
+Kokkos| Generated Meson AST: /home/mpr7366/software/AgenticTest/SU2/build-kokkos-cuda/subprojects/Kokkos/meson.build
+Kokkos| Project name: Kokkos
+Kokkos| Project version: undefined
+Kokkos| C compiler for the host machine: /opt/rh/gcc-toolset-12/root/usr/bin/gcc (gcc 12.2.1 "gcc (GCC) 12.2.1 20221121 (Red Hat 12.2.1-7)")
+Kokkos| C linker for the host machine: /opt/rh/gcc-toolset-12/root/usr/bin/gcc ld.bfd 2.38-19
+Kokkos| C++ compiler for the host machine: /home/mpr7366/software/AgenticTest/SU2/meson_scripts/kokkos_compiler_dispatcher (gcc 12.2.1 "g++ (GCC) 12.2.1 20221121 (Red Hat 12.2.1-7)")
+Kokkos| C++ linker for the host machine: /home/mpr7366/software/AgenticTest/SU2/meson_scripts/kokkos_compiler_dispatcher ld.bfd 2.38-19
+Kokkos| Build targets in project: 34
+Kokkos| Subproject Kokkos finished.
+
+../SU2_PY/meson.build:74: WARNING: Project targets '>=1.8.2' but uses feature deprecated since '0.60.0': install_subdir with empty directory. It worked by accident and is buggy. Use install_emptydir instead.
+Message: -------------------------------------------------------------------------
+         |    ___ _   _ ___                                                      |
+         |   / __| | | |_  )   Release 8.5.0 "Harrier"                           |
+         |   \__ \ |_| |/ /                                                      |
+         |   |___/\___//___|   Meson Configuration Summary                       |
+         |                                                                       |
+         -------------------------------------------------------------------------
+
+         Option          Value
+         ---------------------
+         TecIO:          false
+         CGNS:           false
+         AD (reverse):   false
+         AD (forward):   false
+         Python Wrapper: false
+         Intel-MKL:      false
+         OpenBlas:       false
+         PaStiX:         false
+         Mixed Float:    false
+         Kokkos:         true
+         Kokkos Backend: cuda
+         Kokkos Arch:    VOLTA70
+         libROM:         false
+         CoolProp:       false
+         MLPCpp:         false
+         Tracy Profiler: false
+
+         Please be sure to add the $SU2_HOME and $SU2_RUN environment variables,
+         and update your $PATH (and $PYTHONPATH if applicable) with $SU2_RUN
+
+         Based on the input to this configuration, add these lines to your .bashrc file:
+
+         export SU2_RUN=/usr/local/bin
+         export SU2_HOME=/home/mpr7366/software/AgenticTest/SU2
+         export PATH=$PATH:$SU2_RUN
+         export PYTHONPATH=$PYTHONPATH:$SU2_RUN
+
+         Use './ninja -C build-kokkos-cuda install' to compile and install SU2
+
+Build targets in project: 43
+WARNING: Deprecated features used:
+ * 0.60.0: {'install_subdir with empty directory'}
+
+SU2 8.5.0 "Harrier"
+
+  Subprojects
+    Kokkos           : YES
+
+  User defined options
+    buildtype        : release
+    enable-autodiff  : false
+    enable-cgns      : false
+    enable-cuda      : false
+    enable-directdiff: false
+    enable-kokkos    : true
+    enable-tecio     : false
+    kokkos-arch      : VOLTA70
+    kokkos-backend   : cuda
+    with-mpi         : disabled
+
+Found ninja-1.10.2 at /usr/bin/ninja
+Generating targets:   0%|          | 0/43 eta ?Generating targets:  84%|████████▎ | 36/43 eta 00:00                                                    Writing build.ninja:   0%|          | 0/398 eta ?                                                 Cleaning... 0 files.
+[1/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosCentered.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[2/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosStages.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[3/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosData.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[4/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosUpwind.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[5/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CSolverFactory.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::GetDensity" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::SetDensity" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::SetPressure" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::SetTemperature" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CEulerVariable, ENUM_REGIME::COMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" at line 39 of ../SU2_CFD/src/solvers/../../include/solvers/CEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CEulerSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CEulerSolver"
+  class CEulerSolver : public CFVMFlowSolverBase<CEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(41): warning #611-D: overloaded virtual function "CVariable::GetDensity" is only partially overridden in class "CIncEulerVariable"
+  class CIncEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(130): warning #997-D: function "CVariable::SetEnthalpy(unsigned long)" is hidden by "CIncEulerVariable::SetEnthalpy" -- virtual function override intended?
+    inline void SetEnthalpy(unsigned long iPoint, su2double val_enthalpy) {
+                ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(41): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CIncEulerVariable"
+  class CIncEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(41): warning #611-D: overloaded virtual function "CVariable::SetDensity" is only partially overridden in class "CIncEulerVariable"
+  class CIncEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(41): warning #611-D: overloaded virtual function "CVariable::SetPressure" is only partially overridden in class "CIncEulerVariable"
+  class CIncEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(121): warning #997-D: overloaded function "CVariable::SetTemperature" is hidden by "CIncEulerVariable::SetTemperature" -- virtual function override intended?
+    inline bool SetTemperature(unsigned long iPoint, su2double val_temperature, const su2double *val_temp_limits) {
+                ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CIncEulerVariable, ENUM_REGIME::INCOMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CIncEulerVariable, FlowRegime=ENUM_REGIME::INCOMPRESSIBLE]" at line 39 of ../SU2_CFD/src/solvers/../../include/solvers/CIncEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CIncEulerSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CIncEulerSolver"
+  class CIncEulerSolver : public CFVMFlowSolverBase<CIncEulerVariable, ENUM_REGIME::INCOMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNSSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNSSolver"
+  class CNSSolver final : public CEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNSSolver.hpp(115): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CNSSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(unsigned long iEdge, CGeometry *geometry, CSolver **solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CIncNSSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CIncNSSolver"
+  class CIncNSSolver final : public CIncEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CIncNSSolver.hpp(65): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CIncNSSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(unsigned long iEdge, CGeometry *geometry, CSolver **solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" at line 46 of ../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMONSSolver.hpp(42): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMONSSolver"
+  class CNEMONSSolver final : public CNEMOEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMONSSolver.hpp(64): warning #997-D: overloaded function "CFVMFlowSolverBase<VariableType, FlowRegime>::Viscous_Residual [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" is hidden by "CNEMONSSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CScalarSolver.hpp(44): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CScalarSolver<CTurbVariable>"
+  class CScalarSolver : public CSolver {
+        ^
+          detected during instantiation of class "CScalarSolver<VariableType> [with VariableType=CTurbVariable]" at line 40 of ../SU2_CFD/src/solvers/../../include/solvers/CTurbSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSASolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CTurbSASolver"
+  class CTurbSASolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSASolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CTurbSASolver"
+  class CTurbSASolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSASolver.hpp(151): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CTurbSASolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSSTSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CTurbSSTSolver"
+  class CTurbSSTSolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSSTSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CTurbSSTSolver"
+  class CTurbSSTSolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSSTSolver.hpp(117): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CTurbSSTSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTransLMSolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CTransLMSolver"
+  class CTransLMSolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTransLMSolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CTransLMSolver"
+  class CTransLMSolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTransLMSolver.hpp(101): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CTransLMSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CAdjEulerVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CAdjEulerVariable"
+  class CAdjEulerVariable : public CVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CAdjEulerSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CAdjEulerSolver"
+  class CAdjEulerSolver : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CAdjEulerSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CAdjEulerSolver"
+  class CAdjEulerSolver : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CAdjNSSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CAdjNSSolver"
+  class CAdjNSSolver final : public CAdjEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CAdjTurbSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CAdjTurbSolver"
+  class CAdjTurbSolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CScalarSolver.hpp(44): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CScalarSolver<CHeatVariable>"
+  class CScalarSolver : public CSolver {
+        ^
+          detected during instantiation of class "CScalarSolver<VariableType> [with VariableType=CHeatVariable]" at line 39 of ../SU2_CFD/src/solvers/../../include/solvers/CHeatSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CHeatSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CHeatSolver"
+  class CHeatSolver final : public CScalarSolver<CHeatVariable> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEASolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CFEASolver"
+  class CFEASolver : public CFEASolverBase {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEASolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CFEASolver"
+  class CFEASolver : public CFEASolverBase {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEASolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFEASolver"
+  class CFEASolver : public CFEASolverBase {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTemplateSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CTemplateSolver"
+  class CTemplateSolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTemplateSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CTemplateSolver"
+  class CTemplateSolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CDiscAdjSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CDiscAdjSolver"
+  class CDiscAdjSolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CDiscAdjFEASolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CDiscAdjFEASolver"
+  class CDiscAdjFEASolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_EulerSolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CFEM_DG_EulerSolver"
+  class CFEM_DG_EulerSolver : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_EulerSolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CFEM_DG_EulerSolver"
+  class CFEM_DG_EulerSolver : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(186): warning #997-D: function "CSolver::BC_Euler_Wall(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Euler_Wall" -- virtual function override intended?
+    void BC_Euler_Wall(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(226): warning #997-D: overloaded function "CSolver::BC_Sym_Plane" is hidden by "CFEM_DG_NSSolver::BC_Sym_Plane" -- virtual function override intended?
+    void BC_Sym_Plane(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(333): warning #997-D: function "CSolver::BC_Isothermal_Wall(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Isothermal_Wall" -- virtual function override intended?
+    void BC_Isothermal_Wall(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(311): warning #997-D: function "CSolver::BC_HeatFlux_Wall(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_HeatFlux_Wall" -- virtual function override intended?
+    void BC_HeatFlux_Wall(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(206): warning #997-D: function "CSolver::BC_Far_Field(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Far_Field" -- virtual function override intended?
+    void BC_Far_Field(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(355): warning #997-D: function "CSolver::BC_Riemann(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Riemann" -- virtual function override intended?
+    void BC_Riemann(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(267): warning #997-D: function "CSolver::BC_Inlet(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Inlet" -- virtual function override intended?
+    void BC_Inlet(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(246): warning #997-D: function "CSolver::BC_Supersonic_Outlet(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Supersonic_Outlet" -- virtual function override intended?
+    void BC_Supersonic_Outlet(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(376): warning #997-D: function "CSolver::BC_Custom(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Custom" -- virtual function override intended?
+    void BC_Custom(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(289): warning #997-D: function "CSolver::BC_Outlet(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Outlet" -- virtual function override intended?
+    void BC_Outlet(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CMeshSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::DeformMesh" is only partially overridden in class "CMeshSolver"
+  class CMeshSolver final : public CFEASolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CRadP1Solver.hpp(32): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CRadP1Solver"
+  class CRadP1Solver final: public CRadSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CRadP1Solver.hpp(32): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CRadP1Solver"
+  class CRadP1Solver final: public CRadSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CScalarSolver.hpp(44): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CScalarSolver<CSpeciesVariable>"
+  class CScalarSolver : public CSolver {
+        ^
+          detected during instantiation of class "CScalarSolver<VariableType> [with VariableType=CSpeciesVariable]" at line 39 of ../SU2_CFD/src/solvers/../../include/solvers/CSpeciesSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CSpeciesSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CSpeciesSolver"
+  class CSpeciesSolver : public CScalarSolver<CSpeciesVariable> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CSpeciesSolver.hpp(94): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CSpeciesSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container, CNumerics* numerics,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CSpeciesFlameletSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CSpeciesFlameletSolver"
+  class CSpeciesFlameletSolver final : public CSpeciesSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CSpeciesFlameletSolver.hpp(197): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CSpeciesFlameletSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container, CNumerics* numerics,
+         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                      ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                                ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                          ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                     ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                               ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                                   ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1719): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float com = ::expf(x.real());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1720): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_real = com * ::cosf(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1721): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_imag = com * ::sinf(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1719): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float com = ::expf(x.real());
+                             ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1720): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_real = com * ::cosf(x.imag());
+                                        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1721): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_imag = com * ::sinf(x.imag());
+                                        ^
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1727): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double com = ::exp(x.real());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1728): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_real = com * ::cos(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1729): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_imag = com * ::sin(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1727): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double com = ::exp(x.real());
+                             ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1728): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_real = com * ::cos(x.imag());
+                                        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1729): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_imag = com * ::sin(x.imag());
+                                        ^
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::GetDensity" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::SetDensity" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::SetPressure" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CEulerVariable.hpp(46): warning #611-D: overloaded virtual function "CVariable::SetTemperature" is only partially overridden in class "CEulerVariable"
+  class CEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CEulerVariable, ENUM_REGIME::COMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" at line 39 of ../SU2_CFD/src/solvers/../../include/solvers/CEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CEulerSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CEulerSolver"
+  class CEulerSolver : public CFVMFlowSolverBase<CEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(41): warning #611-D: overloaded virtual function "CVariable::GetDensity" is only partially overridden in class "CIncEulerVariable"
+  class CIncEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(130): warning #997-D: function "CVariable::SetEnthalpy(unsigned long)" is hidden by "CIncEulerVariable::SetEnthalpy" -- virtual function override intended?
+    inline void SetEnthalpy(unsigned long iPoint, su2double val_enthalpy) {
+                ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(41): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CIncEulerVariable"
+  class CIncEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(41): warning #611-D: overloaded virtual function "CVariable::SetDensity" is only partially overridden in class "CIncEulerVariable"
+  class CIncEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(41): warning #611-D: overloaded virtual function "CVariable::SetPressure" is only partially overridden in class "CIncEulerVariable"
+  class CIncEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CIncEulerVariable.hpp(121): warning #997-D: overloaded function "CVariable::SetTemperature" is hidden by "CIncEulerVariable::SetTemperature" -- virtual function override intended?
+    inline bool SetTemperature(unsigned long iPoint, su2double val_temperature, const su2double *val_temp_limits) {
+                ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CIncEulerVariable, ENUM_REGIME::INCOMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CIncEulerVariable, FlowRegime=ENUM_REGIME::INCOMPRESSIBLE]" at line 39 of ../SU2_CFD/src/solvers/../../include/solvers/CIncEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CIncEulerSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CIncEulerSolver"
+  class CIncEulerSolver : public CFVMFlowSolverBase<CIncEulerVariable, ENUM_REGIME::INCOMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNSSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNSSolver"
+  class CNSSolver final : public CEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNSSolver.hpp(115): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CNSSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(unsigned long iEdge, CGeometry *geometry, CSolver **solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CIncNSSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CIncNSSolver"
+  class CIncNSSolver final : public CIncEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CIncNSSolver.hpp(65): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CIncNSSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(unsigned long iEdge, CGeometry *geometry, CSolver **solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" at line 46 of ../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMONSSolver.hpp(42): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMONSSolver"
+  class CNEMONSSolver final : public CNEMOEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMONSSolver.hpp(64): warning #997-D: overloaded function "CFVMFlowSolverBase<VariableType, FlowRegime>::Viscous_Residual [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" is hidden by "CNEMONSSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CScalarSolver.hpp(44): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CScalarSolver<CTurbVariable>"
+  class CScalarSolver : public CSolver {
+        ^
+          detected during instantiation of class "CScalarSolver<VariableType> [with VariableType=CTurbVariable]" at line 40 of ../SU2_CFD/src/solvers/../../include/solvers/CTurbSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSASolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CTurbSASolver"
+  class CTurbSASolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSASolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CTurbSASolver"
+  class CTurbSASolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSASolver.hpp(151): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CTurbSASolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSSTSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CTurbSSTSolver"
+  class CTurbSSTSolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSSTSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CTurbSSTSolver"
+  class CTurbSSTSolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTurbSSTSolver.hpp(117): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CTurbSSTSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTransLMSolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CTransLMSolver"
+  class CTransLMSolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTransLMSolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CTransLMSolver"
+  class CTransLMSolver final : public CTurbSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTransLMSolver.hpp(101): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CTransLMSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CAdjEulerVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CAdjEulerVariable"
+  class CAdjEulerVariable : public CVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CAdjEulerSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CAdjEulerSolver"
+  class CAdjEulerSolver : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CAdjEulerSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CAdjEulerSolver"
+  class CAdjEulerSolver : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CAdjNSSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CAdjNSSolver"
+  class CAdjNSSolver final : public CAdjEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CAdjTurbSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CAdjTurbSolver"
+  class CAdjTurbSolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CScalarSolver.hpp(44): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CScalarSolver<CHeatVariable>"
+  class CScalarSolver : public CSolver {
+        ^
+          detected during instantiation of class "CScalarSolver<VariableType> [with VariableType=CHeatVariable]" at line 39 of ../SU2_CFD/src/solvers/../../include/solvers/CHeatSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CHeatSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CHeatSolver"
+  class CHeatSolver final : public CScalarSolver<CHeatVariable> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEASolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CFEASolver"
+  class CFEASolver : public CFEASolverBase {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEASolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CFEASolver"
+  class CFEASolver : public CFEASolverBase {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEASolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFEASolver"
+  class CFEASolver : public CFEASolverBase {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTemplateSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CTemplateSolver"
+  class CTemplateSolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CTemplateSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CTemplateSolver"
+  class CTemplateSolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CDiscAdjSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CDiscAdjSolver"
+  class CDiscAdjSolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CDiscAdjFEASolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CDiscAdjFEASolver"
+  class CDiscAdjFEASolver final : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_EulerSolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CFEM_DG_EulerSolver"
+  class CFEM_DG_EulerSolver : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_EulerSolver.hpp(40): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CFEM_DG_EulerSolver"
+  class CFEM_DG_EulerSolver : public CSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(186): warning #997-D: function "CSolver::BC_Euler_Wall(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Euler_Wall" -- virtual function override intended?
+    void BC_Euler_Wall(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(226): warning #997-D: overloaded function "CSolver::BC_Sym_Plane" is hidden by "CFEM_DG_NSSolver::BC_Sym_Plane" -- virtual function override intended?
+    void BC_Sym_Plane(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(333): warning #997-D: function "CSolver::BC_Isothermal_Wall(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Isothermal_Wall" -- virtual function override intended?
+    void BC_Isothermal_Wall(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(311): warning #997-D: function "CSolver::BC_HeatFlux_Wall(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_HeatFlux_Wall" -- virtual function override intended?
+    void BC_HeatFlux_Wall(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(206): warning #997-D: function "CSolver::BC_Far_Field(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Far_Field" -- virtual function override intended?
+    void BC_Far_Field(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(355): warning #997-D: function "CSolver::BC_Riemann(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Riemann" -- virtual function override intended?
+    void BC_Riemann(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(267): warning #997-D: function "CSolver::BC_Inlet(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Inlet" -- virtual function override intended?
+    void BC_Inlet(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(246): warning #997-D: function "CSolver::BC_Supersonic_Outlet(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Supersonic_Outlet" -- virtual function override intended?
+    void BC_Supersonic_Outlet(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(376): warning #997-D: function "CSolver::BC_Custom(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Custom" -- virtual function override intended?
+    void BC_Custom(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFEM_DG_NSSolver.hpp(289): warning #997-D: function "CSolver::BC_Outlet(CGeometry *, CSolver **, CNumerics *, CNumerics *, CConfig *, unsigned short)" is hidden by "CFEM_DG_NSSolver::BC_Outlet" -- virtual function override intended?
+    void BC_Outlet(CConfig *config,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CMeshSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::DeformMesh" is only partially overridden in class "CMeshSolver"
+  class CMeshSolver final : public CFEASolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CRadP1Solver.hpp(32): warning #611-D: overloaded virtual function "CSolver::Postprocessing" is only partially overridden in class "CRadP1Solver"
+  class CRadP1Solver final: public CRadSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CRadP1Solver.hpp(32): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CRadP1Solver"
+  class CRadP1Solver final: public CRadSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CScalarSolver.hpp(44): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CScalarSolver<CSpeciesVariable>"
+  class CScalarSolver : public CSolver {
+        ^
+          detected during instantiation of class "CScalarSolver<VariableType> [with VariableType=CSpeciesVariable]" at line 39 of ../SU2_CFD/src/solvers/../../include/solvers/CSpeciesSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CSpeciesSolver.hpp(39): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CSpeciesSolver"
+  class CSpeciesSolver : public CScalarSolver<CSpeciesVariable> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CSpeciesSolver.hpp(94): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CSpeciesSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container, CNumerics* numerics,
+         ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CSpeciesFlameletSolver.hpp(38): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CSpeciesFlameletSolver"
+  class CSpeciesFlameletSolver final : public CSpeciesSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CSpeciesFlameletSolver.hpp(197): warning #997-D: function "CSolver::Viscous_Residual(CGeometry *, CSolver **, CNumerics **, CConfig *, unsigned short, unsigned short)" is hidden by "CSpeciesFlameletSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(const unsigned long iEdge, const CGeometry* geometry, CSolver** solver_container, CNumerics* numerics,
+         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_multiply(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during:
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide_fast(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 107 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_multiply(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during:
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide_fast(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 107 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[6/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosViscous.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[7/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CNEMOEulerSolver.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" at line 46 of ../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                      ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                                ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                          ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                     ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                               ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                                   ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1719): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float com = ::expf(x.real());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1720): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_real = com * ::cosf(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1721): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_imag = com * ::sinf(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1719): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float com = ::expf(x.real());
+                             ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1720): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_real = com * ::cosf(x.imag());
+                                        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1721): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_imag = com * ::sinf(x.imag());
+                                        ^
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1727): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double com = ::exp(x.real());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1728): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_real = com * ::cos(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1729): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_imag = com * ::sin(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1727): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double com = ::exp(x.real());
+                             ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1728): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_real = com * ::cos(x.imag());
+                                        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1729): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_imag = com * ::sin(x.imag());
+                                        ^
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" at line 46 of ../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_multiply(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during:
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide_fast(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 107 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_multiply(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during:
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide_fast(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 107 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[8/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CNEMONSSolver.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" at line 46 of ../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMONSSolver.hpp(42): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMONSSolver"
+  class CNEMONSSolver final : public CNEMOEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMONSSolver.hpp(64): warning #997-D: overloaded function "CFVMFlowSolverBase<VariableType, FlowRegime>::Viscous_Residual [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" is hidden by "CNEMONSSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/../../include/solvers/../variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                      ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                                ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                          ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1690): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypotf(x.real(), x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                     ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("abs") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                               ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1695): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    return ::hypot(x.real(), x.imag());
+                                   ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1719): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float com = ::expf(x.real());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1720): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_real = com * ::cosf(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1721): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_imag = com * ::sinf(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1719): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float com = ::expf(x.real());
+                             ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1720): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_real = com * ::cosf(x.imag());
+                                        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1721): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    float res_imag = com * ::sinf(x.imag());
+                                        ^
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1727): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double com = ::exp(x.real());
+                         ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1728): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_real = com * ::cos(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1729): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("exp") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_imag = com * ::sin(x.imag());
+                                    ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1727): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double com = ::exp(x.real());
+                             ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1728): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_real = com * ::cos(x.imag());
+                                        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(1729): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+    double res_imag = com * ::sin(x.imag());
+                                        ^
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+
+../SU2_CFD/src/solvers/../../include/solvers/CFVMFlowSolverBase.hpp(36): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE>"
+  class CFVMFlowSolverBase : public CSolver {
+        ^
+          detected during instantiation of class "CFVMFlowSolverBase<VariableType, FlowRegime> [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" at line 46 of ../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMOEulerSolver.hpp(46): warning #611-D: overloaded virtual function "CSolver::BC_Sym_Plane" is only partially overridden in class "CNEMOEulerSolver"
+  class CNEMOEulerSolver : public CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE> {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMONSSolver.hpp(42): warning #611-D: overloaded virtual function "CSolver::Preprocessing" is only partially overridden in class "CNEMONSSolver"
+  class CNEMONSSolver final : public CNEMOEulerSolver {
+        ^
+
+../SU2_CFD/src/solvers/../../include/solvers/CNEMONSSolver.hpp(64): warning #997-D: overloaded function "CFVMFlowSolverBase<VariableType, FlowRegime>::Viscous_Residual [with VariableType=CNEMOEulerVariable, FlowRegime=ENUM_REGIME::COMPRESSIBLE]" is hidden by "CNEMONSSolver::Viscous_Residual" -- virtual function override intended?
+    void Viscous_Residual(CGeometry *geometry, CSolver **solver_container, CNumerics **numerics_container,
+         ^
+
+../SU2_CFD/src/solvers/../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=float]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<float>]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_multiply(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during:
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide_fast(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 107 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide(const std::complex<T> &, const std::complex<T> &) [with T=float]" at line 245 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20013-D: calling a constexpr __host__ function("real") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(110): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.real();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::real_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1387
+            instantiation of "Eigen::internal::real_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::real(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20013-D: calling a constexpr __host__ function("imag") from a __host__ __device__ function("run") is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+               ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+../externals/eigen/Eigen/src/Core/MathFunctions.h(158): warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+      return x.imag();
+                   ^
+          detected during:
+            instantiation of "T Eigen::internal::imag_impl<std::complex<T>>::run(const std::complex<T> &) [with T=double]" at line 1408
+            instantiation of "Eigen::internal::imag_retval<Eigen::internal::global_math_functions_filtering_base<Scalar, void>::type>::type Eigen::numext::imag(const Scalar &) [with Scalar=std::complex<double>]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_multiply(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+Warning #20015-D: calling a constexpr __host__ function from a __host__ __device__ function is not allowed. The experimental flag '--expt-relaxed-constexpr' can be used to allow this.
+          detected during:
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide_fast(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 107 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+            instantiation of "std::complex<T> Eigen::complex_operator_detail::complex_divide(const std::complex<T> &, const std::complex<T> &) [with T=double]" at line 246 of ../externals/eigen/Eigen/src/Core/arch/CUDA/Complex.h
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[9/12] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosResidual.cpp.o
+nvcc_wrapper - *warning* you have set multiple standard flags (-std=c++1* or --std=c++1*), only the last is used because nvcc can only accept a single std setting
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[10/12] Linking static target SU2_CFD/src/libSU2core.a
+[11/12] Linking target UnitTests/nemo_gas_kokkos_validation
+[12/12] Linking target SU2_CFD/src/SU2_CFD

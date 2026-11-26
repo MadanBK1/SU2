@@ -1,0 +1,111 @@
+# Validation logs index
+
+One row per committed log. New runs are added as they happen (see VALIDATION LOGS in LOCAL_AGENT_TASK.md).
+
+| date | item | gate | exact command | binary + git sha | result | log path |
+|---|---|---|---|---|---|---|
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (build finished) | backfill_2026-11-25/build-serial-r52.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (build finished) | backfill_2026-11-25/build-serial-r55.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (already built) | backfill_2026-11-25/build-serial-r57.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (build finished) | backfill_2026-11-25/build-serial-r59.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/build-strict-r52.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/build-strict-r55.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (already built) | backfill_2026-11-25/build-strict-r57.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/build-strict-r59.log |
+| 2026-11-25 | baseline gates (G2-G7) | A/B verify (G1 ab_resident, early) | unknown | strict, sha unknown | PASS (A/B, mismatching entries=0, non-bitwise=0) | backfill_2026-11-25/g1-abv.log |
+| 2026-11-25 | 4.4-Roe-BC | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-bcroe-r26-driver.log |
+| 2026-11-25 | 4.4-Roe-BC | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-bcroe-r26.log |
+| 2026-11-25 | regressions | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-default-strict-r21.log |
+| 2026-11-25 | regressions | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-default-strict.log |
+| 2026-11-25 | regressions | G1 strict, invwedge_all list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-invall-r52.log |
+| 2026-11-25 | regressions | G1 strict, invwedge_all list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-invall-r57.log |
+| 2026-11-25 | regressions | G1 strict, invwedge_all list | timeout 4000 bash .g1run.sh ../kk/logs/g1-invall-r59.log invwedge_am invwedge_lax invwedge_roe invwedge_msw invwedge_ausmplusup2 super_cat smol_maxwell | strict, sha unknown | PASS | backfill_2026-11-25/g1-invall-r59.log |
+| 2026-11-25 | regressions | G1 strict, invwedge_all list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-invall-r61.log |
+| 2026-11-25 | regressions | G1 strict, invwedge_all list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-invall-r64.log |
+| 2026-11-25 | regressions | G1 strict, invwedge_all list | timeout 4000 bash .g1run.sh ../kk/logs/g1-invall-r67.log invwedge_roe invwedge_msw smol_maxwell supin_visc | strict, sha unknown | PASS | backfill_2026-11-25/g1-invall-r67.log |
+| 2026-11-25 | regressions | G1 strict, invwedge_all list | timeout 4000 bash .g1run.sh ../kk/logs/g1-invall-r68.log invwedge_roe invwedge_msw smol_maxwell supin_visc | strict, sha unknown | PASS | backfill_2026-11-25/g1-invall-r68.log |
+| 2026-11-25 | 4.6-LUSGS | G1 strict bitwise gate | timeout 1500 bash .g1run.sh ../kk/logs/g1-lusgs-r64.log invwedge_lusgs | strict, sha unknown | PASS | backfill_2026-11-25/g1-lusgs-r64.log |
+| 2026-11-25 | 4.6-LUSGS | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-lusgs-r64.tall.log |
+| 2026-11-25 | 4.6-LUSGS | G1 strict bitwise gate | EXTRA_CFG="LINEAR_SOLVER_PREC= LU_SGS" RUN_TAG=_lusgs timeout 1500 bash .g1run.sh ../kk/logs/g1-lusgs-visc-r64.log super_cat | strict, sha unknown | PASS | backfill_2026-11-25/g1-lusgs-visc-r64.log |
+| 2026-11-25 | 4.4-MSW | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-msw-r28.log |
+| 2026-11-25 | partial-cat survey | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-partialcat-r52.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r25.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r26.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r28-driver.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r28.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r52.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r57.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | timeout 2400 bash .g1run.sh ../kk/logs/g1-regress-r59.log | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r59.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r61.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r64.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | timeout 2400 bash .g1run.sh ../kk/logs/g1-regress-r67.log | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r67.log |
+| 2026-11-25 | regressions | G1 strict, default regression list | timeout 2400 bash .g1run.sh ../kk/logs/g1-regress-r68.log | strict, sha unknown | PASS | backfill_2026-11-25/g1-regress-r68.log |
+| 2026-11-25 | smol_maxwell | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-smol-r57.log |
+| 2026-11-25 | unknown | G1 strict bitwise gate | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1-strict.log |
+| 2026-11-25 | 4.5-SupInVisc | G1 strict bitwise gate | timeout 1500 bash .g1run.sh ../kk/logs/g1-supin-r59.log supin_visc | strict, sha unknown | PASS | backfill_2026-11-25/g1-supin-r59.log |
+| 2026-11-25 | 4.4-AUSMup2 | G1 strict bitwise gate | unknown | strict, sha unknown | FAIL | backfill_2026-11-25/g1-up2-r30.log |
+| 2026-11-25 | 4.4-AUSMup2 | G1 strict bitwise gate | unknown | strict, sha unknown | FAIL | backfill_2026-11-25/g1-up2-r32.log |
+| 2026-11-25 | 4.4-AUSMup2 | G1 strict bitwise gate | unknown | strict, sha unknown | FAIL | backfill_2026-11-25/g1-up2-r33.log |
+| 2026-11-25 | 4.4-AUSMup2 | G1 strict bitwise gate | unknown | strict, sha unknown | FAIL | backfill_2026-11-25/g1-up2-r35.log |
+| 2026-11-25 | 4.4-AUSMup2 | G1 strict bitwise gate | timeout 1500 bash .g1run.sh ../kk/logs/g1-up2-r39.log invwedge_ausmplusup2 | strict, sha unknown | FAIL | backfill_2026-11-25/g1-up2-r39.log |
+| 2026-11-25 | 4.4-AUSMup2 | G1 strict bitwise gate | timeout 1500 bash .g1run.sh ../kk/logs/g1-up2-r52.log invwedge_ausmplusup2 | strict, sha unknown | PASS | backfill_2026-11-25/g1-up2-r52.log |
+| 2026-11-25 | 4.3-LAX | unknown | bash .g1run.sh ../kk/logs/g1lax-r24.log invwedge_lax | strict, sha unknown | PASS | backfill_2026-11-25/g1lax-r24.log |
+| 2026-11-25 | 4.3-LAX | unknown | unknown | serial, sha unknown | FAIL | backfill_2026-11-25/g1lax-serial.log |
+| 2026-11-25 | 4.3-LAX | unknown | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1lax-strict-r21.log |
+| 2026-11-25 | 4.3-LAX | unknown | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1lax-strict.log |
+| 2026-11-25 | 4.3-LAX | unknown | unknown | serial, sha unknown | FAIL | backfill_2026-11-25/g1laxv-serial.log |
+| 2026-11-25 | 4.3-LAX | unknown | unknown | serial, sha unknown | FAIL | backfill_2026-11-25/g1laxv2-serial.log |
+| 2026-11-25 | 4.4-Roe-BC | unknown | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1roe-strict-r25.log |
+| 2026-11-25 | 4.4-Roe-BC | unknown | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g1roe-sv-r25.log |
+| 2026-11-25 | baseline gates (G2-G7) | G2 production (noise) | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g2-check.log |
+| 2026-11-25 | baseline gates (G2-G7) | G2 production (noise) | unknown | strict, sha unknown | PASS; ratios 1.00/1.05 | backfill_2026-11-25/g2-nf-inv.log |
+| 2026-11-25 | baseline gates (G2-G7) | G2 production (noise) | unknown | strict, sha unknown | PASS; ratios 0.36/0.82 | backfill_2026-11-25/g2-nf-sc.log |
+| 2026-11-25 | baseline gates (G2-G7) | G3 CPU identity (no-identity) | unknown | strict, sha unknown | PASS (no-identity) | backfill_2026-11-25/g3-noid.log |
+| 2026-11-25 | baseline gates (G2-G7) | G3 CPU identity (non-NEMO Kokkos) | unknown | strict, sha unknown | PASS (non-NEMO Kokkos identity) | backfill_2026-11-25/g3-non.log |
+| 2026-11-25 | baseline gates (G2-G7) | G4 thermo unit driver | unknown | serial, sha unknown | PASS (thermo unit driver) | backfill_2026-11-25/g4-serial.log |
+| 2026-11-25 | baseline gates (G2-G7) | G4 thermo unit driver | unknown | strict, sha unknown | PASS (thermo unit driver) | backfill_2026-11-25/g4-strict.log |
+| 2026-11-25 | baseline gates (G2-G7) | G6 MPI | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g6-mpi.log |
+| 2026-11-25 | baseline gates (G2-G7) | G7 noise floor / GPU | unknown | strict, sha unknown | PASS | backfill_2026-11-25/g7-check.log |
+| 2026-11-25 | baseline gates (G2-G7) | G7 noise floor / GPU | unknown | strict, sha unknown | PASS; ratios 1.00/1.05 | backfill_2026-11-25/g7-nf-inv.log |
+| 2026-11-25 | baseline gates (G2-G7) | G7 noise floor / GPU | unknown | strict, sha unknown | PASS; ratio 0.36 | backfill_2026-11-25/g7-nf-sc.log |
+| 2026-11-25 | 4.6-LUSGS | noise floor (K=10) | unknown | strict, sha unknown | PASS; ratios 0.71/0.95 | backfill_2026-11-25/nf-lusgs-r67.log |
+| 2026-11-25 | 4.6-LUSGS | noise floor (K=10) | timeout 2400 bash .nfslusgs.sh ../kk/logs/nf-lusgs-r68.log | strict, sha unknown | PASS; ratios 0.71/0.95 | backfill_2026-11-25/nf-lusgs-r68.log |
+| 2026-11-25 | 4.4-MSW | noise floor (K=10) | unknown | strict, sha unknown | PASS; ratios 0.11/1.05 | backfill_2026-11-25/nf-msw-r29.log |
+| 2026-11-25 | smol_maxwell | noise floor (K=10) | unknown | strict, sha unknown | PASS; ratios 0.61/0.50 | backfill_2026-11-25/nf-smol-r57.log |
+| 2026-11-25 | 4.5-SupInVisc | noise floor (K=10) | unknown | strict, sha unknown | PASS; ratios 0.50/0.72 | backfill_2026-11-25/nf-supin-r61.log |
+| 2026-11-25 | 4.4-AUSMup2 | noise floor (K=10) | unknown | strict, sha unknown | PASS; ratios 0.64/1.17 | backfill_2026-11-25/nf-up2-r53.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-baseline-mpi.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-baseline.log |
+| 2026-11-25 | unknown | build/configure | unknown | cuda, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-cuda-r27.log |
+| 2026-11-25 | unknown | build/configure | unknown | cuda, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-cuda.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | unknown | backfill_2026-11-25/ninja-serial-nnb.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (already built) | backfill_2026-11-25/ninja-serial-r20.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-serial-r25.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (already built) | backfill_2026-11-25/ninja-serial-r26b.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (already built) | backfill_2026-11-25/ninja-serial-r28.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-serial-r30.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-serial.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-strict-mpi.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-strict-r20.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-strict-r25.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (already built) | backfill_2026-11-25/ninja-strict-r26b.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-strict-r28.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-strict-r30.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (build finished) | backfill_2026-11-25/ninja-strict.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (cmake done) | backfill_2026-11-25/setup-baseline-mpi.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (cmake done) | backfill_2026-11-25/setup-baseline.log |
+| 2026-11-25 | unknown | build/configure | unknown | cuda, sha unknown | OK (cmake done) | backfill_2026-11-25/setup-cuda.log |
+| 2026-11-25 | unknown | build/configure | unknown | serial, sha unknown | OK (cmake done) | backfill_2026-11-25/setup-serial.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (cmake done) | backfill_2026-11-25/setup-strict-mpi.log |
+| 2026-11-25 | unknown | build/configure | unknown | strict, sha unknown | OK (cmake done) | backfill_2026-11-25/setup-strict.log |
+| 2026-11-25 | invwedge survey | log analysis | unknown | strict, sha unknown | PASS | backfill_2026-11-25/survey-invwdam-r24.log |
+| 2026-11-25 | partial-cat survey | log analysis | unknown | strict, sha unknown | PASS | backfill_2026-11-25/survey-partialcat-r24.log |
+| 2026-11-25 | 4.4-Roe-BC | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | unknown | strict, sha unknown | PASS | backfill_2026-11-25/sv-bcroe-lax-r26.log |
+| 2026-11-25 | 4.4-Roe-BC | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | unknown | strict, sha unknown | PASS | backfill_2026-11-25/sv-bcroe-roe-r26.log |
+| 2026-11-25 | 4.6-LUSGS | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | unknown | strict, sha unknown | PASS | backfill_2026-11-25/sv-lusgs-r67.log |
+| 2026-11-25 | 4.6-LUSGS | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | timeout 1500 bash .svlusgs.sh ../kk/logs/sv-lusgs-r68.log | strict, sha unknown | PASS | backfill_2026-11-25/sv-lusgs-r68.log |
+| 2026-11-25 | 4.4-MSW | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | unknown | strict, sha unknown | PASS | backfill_2026-11-25/sv-msw-r28.log |
+| 2026-11-25 | smol_maxwell | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | unknown | strict, sha unknown | PASS | backfill_2026-11-25/sv-smol-r57.log |
+| 2026-11-25 | 4.5-SupInVisc | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | unknown | strict, sha unknown | PASS | backfill_2026-11-25/sv-supin-r59.log |
+| 2026-11-25 | 4.5-SupInVisc | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | unknown | strict, sha unknown | PASS | backfill_2026-11-25/sv-supin-r61.log |
+| 2026-11-25 | 4.4-AUSMup2 | A/B verify (SU2_KOKKOS_PRECOND_VERIFY=1) | timeout 1500 bash .svrun.sh ../kk/logs/sv-up2-r53.log invwedge_ausmplusup2 | strict, sha unknown | PASS | backfill_2026-11-25/sv-up2-r53.log |

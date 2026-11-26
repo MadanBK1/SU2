@@ -1,0 +1,42 @@
+invwedge_ausm NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=16.45s
+invwedge_ausm YES exit=0 wall=15.36s
+  residual row NO : [ -1.073699  -1.598462 -18.299911 -18.627322 -18.573334   2.24176
+   1.868575   5.286072   0.843741]
+  residual row YES: [ -1.073699  -1.598462 -18.299911 -18.627322 -18.573334   2.24176
+   1.868575   5.286072   0.843741]
+  max |dres| = 0.00e+00 (tol 0.0)
+  NO vs reference max |d| = 9.17e-04
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_ausm: PASS
+thermalbath NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=0.01s
+thermalbath YES exit=0 wall=0.01s
+  residual row NO : [  0.         0.945997   0.945997 -12.018025 -12.217291 -32.
+  10.013239]
+  residual row YES: [  0.         0.945997   0.945997 -12.018025 -12.217291 -32.
+  10.013239]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  thermalbath: PASS
+super_cat NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=16.41s
+super_cat YES exit=0 wall=16.06s
+  residual row NO : [-5.2325980e+00 -5.7578920e+00 -2.0647960e+01 -2.0637121e+01
+ -2.0515889e+01  1.2469520e+00 -3.2052830e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  residual row YES: [-5.2325980e+00 -5.7578920e+00 -2.0647960e+01 -2.0637121e+01
+ -2.0515889e+01  1.2469520e+00 -3.2052830e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  super_cat: PASS
+axi_visccone NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=17.96s
+axi_visccone YES exit=0 wall=17.66s
+  residual row NO : [-5.2152390e+00 -5.7393730e+00 -2.0560910e+01 -2.0517094e+01
+ -2.0406632e+01  1.2627790e+00 -3.2054840e+00 -1.5695000e-02
+  9.3205000e-02  3.2641000e+04]
+  residual row YES: [-5.2152390e+00 -5.7393730e+00 -2.0560910e+01 -2.0517094e+01
+ -2.0406632e+01  1.2627790e+00 -3.2054840e+00 -1.5695000e-02
+  9.3205000e-02  3.2641000e+04]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  axi_visccone: PASS
+OVERALL: PASS

@@ -1,0 +1,21 @@
+ninja-cuda rc=0
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CFlowVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimitive" is only partially overridden in class "CFlowVariable"
+  class CFlowVariable : public CVariable {
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMOEulerVariable.hpp(43): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMOEulerVariable"
+  class CNEMOEulerVariable : public CFlowVariable {
+        ^
+
+../SU2_CFD/src/solvers/kokkos/../../../include/variables/CNEMONSVariable.hpp(38): warning #611-D: overloaded virtual function "CVariable::SetPrimVar" is only partially overridden in class "CNEMONSVariable"
+  class CNEMONSVariable final : public CNEMOEulerVariable {
+        ^
+
+nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+[10/12] Linking static target SU2_CFD/src/libSU2core.a
+[11/12] Linking target UnitTests/nemo_gas_kokkos_validation
+[12/12] Linking target SU2_CFD/src/SU2_CFD

@@ -637,3 +637,11 @@ READY FOR REVIEW: MERGE: 4.6-LUSGS — device LU_SGS preconditioner apply (02676
 - 2026-11-25T20:22:35-05:00 [loop] round 69 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_201248_69.log
 
 - 2026-11-25T20:37:53-05:00 [loop] round 70 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_202255_70.log
+
+- 2026-11-25T20:52:03-05:00 [loop] round 71 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_203813_71.log
+
+- 2026-11-25 (round 72, closing review-15 item 7 — log archive committed):
+  - Verified backfill completeness: `validation_logs/backfill_2026-11-25/` holds all 105 `../kk/logs/*.log` files (only `.out`/`.wrap` wrapper captures not copied — they wrap the same runs); `validation_logs/INDEX.md` lists exactly those 105 files (diff of INDEX paths vs directory = empty).
+  - Removed stray broken symlink `*.su2 -> /home/claude/meshes/*.su2` (junk from an earlier unquoted-glob command; target path does not exist on this host).
+  - Committed `validation_logs/` (backfill + INDEX.md) + this note. This finishes the last outstanding item of review 15's "Agent: do next" (item 7: "do this first, ... commit"); item 8 (ionization) is DECIDED host-only in LOCAL_AGENT_TASK.md queue, nothing to do.
+  - NEXT: wait for the reviewer's next section in REVIEW_NOTES.md (READY FOR REVIEW: MERGE: 4.6-LUSGS is the last line of the queue above). Expected next heavy after merge: `HEAVY: 4.6-MG` (multigrid coarse levels) or a periodic-marker case.

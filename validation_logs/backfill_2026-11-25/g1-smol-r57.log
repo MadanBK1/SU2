@@ -1,0 +1,12 @@
+smol_maxwell NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=15.94s
+smol_maxwell YES exit=0 wall=15.57s
+  residual row NO : [-5.2150910e+00 -5.7398540e+00 -2.0632449e+01 -2.0657149e+01
+ -2.0402433e+01  1.2390620e+00 -3.1651080e+00 -1.6268000e-01
+  2.3313300e-01 -6.0858000e+03]
+  residual row YES: [-5.2150910e+00 -5.7398540e+00 -2.0632449e+01 -2.0657149e+01
+ -2.0402433e+01  1.2390620e+00 -3.1651080e+00 -1.6268000e-01
+  2.3313300e-01 -6.0858000e+03]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  smol_maxwell: PASS
+OVERALL: PASS
