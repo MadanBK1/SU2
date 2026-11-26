@@ -136,7 +136,8 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
 8. Host-touch removal: device residual norms, output / restart every N iterations, CUDA-aware MPI halos.
 9. 4.7 turbulence coupling (SA / SST device kernels for NEMO).
 10. Then 4.8 performance.
-11. **SHAPE OPTIMIZATION, stage 1 (REQUIRED, Madan 2026-11-26), AFTER the GPU port (items 7–10) is complete:** finite-difference shape
+**DEFERRED (Madan 2026-11-26): items 11–12 are a later stage. Do NOT start them, and do not request HEAVY for them, until Madan says so.**
+11. **SHAPE OPTIMIZATION, stage 1 (later stage):** finite-difference shape
    optimization with every primal on the GPU. A `TestCases/kokkos_nemo/shapeopt/` FFD wedge (and sphere-cone) case:
    DEFINITION_DV FFD_CONTROL_POINT_2D (≈4–8 DVs), OBJECTIVE_FUNCTION DRAG and TOTAL_HEATFLUX, `shape_optimization.py
    -g FINDIFF`, ENABLE_KOKKOS= YES, warm start from the previous design's restart. Developer: config + any GPU-path fixes
