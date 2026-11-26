@@ -776,3 +776,9 @@ LOOP HINT: 2026-11-26T07:49:57-05:00 no progress for 3 rounds on the current ite
 - 2026-11-26T10:31:07-05:00 [loop] round 98 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_100921_98.log
 
 - 2026-11-26T10:45:28-05:00 [loop] round 99 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_103127_99.log
+
+- 2026-11-26T10:53:43-05:00 [loop] round 100 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_104548_100.log
+
+- 2026-11-26 (round 101, review-22 queue: dev fix bf2ff4ad8f built + re-gates):
+  - State: dev fix (refresh moved to CommonPreprocessing) IN HEAD (bf2ff4ad8f); scripts .builddyn.sh/.g1dynvisc.sh/.g1dynpoisonvisc.sh/.nfdyn.sh already point at r2 log names.
+  - RUNNING: step 1 build strict+serial (`.builddyn.sh` -> build-dyn-r2.log / build-dyn-serial-r2.log). Next: step 2 G1 dynvisc (`.g1dynvisc.sh` -> g1-dynvisc-r2.log, expect PASS bitwise), step 3 inviscid regression g1-dyn-r2.log. Then 4-8 next sessions.
