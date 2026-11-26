@@ -879,3 +879,11 @@ READY FOR REVIEW: MERGE: 4.8-ILUTeam — steps 1-7 all PASS: G1 super_cat team d
   - Note: steps 3-5 were executed in rounds 114-115 (log files present in kk/logs, all rc=0) but the sessions ended at max-turns before progress was recorded; recorded now. Runner scripts: TestCases/kokkos_nemo/.g1lusgs_w1.sh, .g1lusgs_single.sh, .abilusgsw1.sh (untracked, to be committed with this note).
   - RUNNING step 6: viscous super_cat LU_SGS (EXTRA_CFG="LINEAR_SOLVER_PREC= LU_SGS") with SU2_KOKKOS_LUSGS_WIDE=1, strict bitwise -> g1-lusgs-visc-w1-r1.log.
   - NEXT: step 7 regressions strict (default list + invwedge_mg invwedge_dyn supin_visc) -> g1-lusgs-regress-r1.log; step 8 noise floor K=10 invwedge_lusgs -> nf-lusgs-r1.log; step 9 archive steps 3-8 logs + chk log.txt pairs to validation_logs/2026-11-26_4.8-LUSGSHyb/ + INDEX rows (incl. applies= perf lines for steps 2/3/4); then `READY FOR REVIEW: MERGE: 4.8-LUSGSHyb`.
+
+- 2026-11-26T16:21:35-05:00 [loop] round 116 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_160250_116.log
+
+- 2026-11-26 (round 117, review-25 queue 4.8-LUSGSHyb — steps 6-7 VERIFIED (ran in round 116, unrecorded); step 8 running):
+  - Step 6 (viscous super_cat LU_SGS, SU2_KOKKOS_LUSGS_WIDE=1, strict): **OVERALL PASS bitwise** (kk/logs/g1-lusgs-visc-w1-r1.log; tag super_cat_lusgsw1v; max|dres|=0.00e+00, field diff=0.00e+00, wall NO 18.22s/YES 17.92s; chk YES log: `LU_SGS device apply: hybrid (wide >= 1 rows; fwd levels=438 wide=438 segments=438; bwd ...)`; `[KOKKOS_NEMO_PERF] device LU_SGS applies=62 (2.22723 s incl. verification)`; resident ON).
+  - Step 7 (regressions strict: invwedge_ausm thermalbath super_cat axi_visccone invwedge_mg invwedge_dyn supin_visc): **OVERALL PASS bitwise** (kk/logs/g1-lusgs-regress-r1.log; all 7 cases PASS, max|dres|=0.00e+00 each; invwedge_mg wall NO 63.25s/YES 54.09s).
+  - RUNNING step 8: noise floor K=10 invwedge_lusgs (`bash TestCases/kokkos_nemo/.nflusgs.sh` -> kk/logs/nf-lusgs-r1.log; expect ratios <= 10).
+  - NEXT: step 9 archive validation_logs/2026-11-26_4.8-LUSGSHyb/ (steps 3-8 logs + chk log.txt pairs; steps 1-2 already archived) + INDEX rows incl. applies= perf lines (hyb 3.61801 s / w1 3.73177 s / single 3.62565 s / visc-w1 2.22723 s); then `READY FOR REVIEW: MERGE: 4.8-LUSGSHyb`.
