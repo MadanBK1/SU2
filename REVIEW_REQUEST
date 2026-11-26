@@ -1,3 +1,3 @@
-id: 20261126T020852-e3ba221662
-head: e3ba22166264635190886ace18149d55ef2c3405
+id: 20261126T025300-c5fb22465b
+head: c5fb22465b8c5ba126619fa3776f90340b519572
 reason: READY FOR REVIEW: MERGE: 4.6-MG1 — logs now committed: validation_logs/2026-11-26_4.6-MG/ has all 37 logs (ls-tree 37==37 disk; check-ignore clean) cited by the 12 INDEX rows (INDEX.md at validation_logs/INDEX.md:112-123); item-4 check zero MISSING across all INDEX paths. Gate results unchanged: G1 strict invwedge_mg PASS bitwise (max|dres|=0, field diff=0, wall NO 63.84s/YES 53.86s, resident ON, MG transfers=11 — g1-mg-r1.log); control MG_RESIDENT=0 PASS bitwise (g1-mgoff-r1.log); variants mgpost/mgw/mgcs + viscous super_cat MGLEVEL=1 PASS bitwise (g1-mg{post,w,cs,visc}-r1.log); poison=0 PASS bitwise (poison-mg-r1.log); noisefloor PASS ratios 0.71/1.00 K=10 (nf-mg-r1.log); regressions default + targeted PASS bitwise (g1-regress-r1.log, g1-regress2-r1.log); thermalbath wall=0.01s verified genuine (25-pt mesh). Next heavy after merge: `HEAVY: 4.6-MG2` (coarse levels resident + device restriction/prolongation).
