@@ -840,3 +840,11 @@ READY FOR REVIEW: 6b.b-TwallIn — steps 1-4 PASS bitwise (logs + INDEX committe
   - NEXT: step 2 G1 `REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 RUN_TAG=_iluteam bash TestCases/kokkos_nemo/check.sh super_cat` -> g1-ilu-team-r1.log (expect PASS bitwise + `ILU(0) device build: team-per-row` line); step 3 A/B SU2_KOKKOS_PRECOND_VERIFY=1 RUN_TAG=_iluteamv; step 4 row fallback RUN_TAG=_ilurow; step 5 regressions default+invwedge_mg+invwedge_dyn+supin_visc; step 6 noise floor; step 7 record `[KOKKOS_NEMO_PERF] device preconditioner builds=` in INDEX. Then MERGE: 4.8-ILUTeam.
 
 - 2026-11-26T13:52:24-05:00 [loop] round 110 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_134636_110.log
+
+- 2026-11-26 (round 111, review-24 queue 4.8-ILUTeam — steps 2-4 DONE, step 5 running):
+  - Step 2 (G1 super_cat _iluteam, strict bitwise): **OVERALL PASS bitwise** (g1-ilu-team-r1.log; max|dres|=0.00e+00, field diff=0.00e+00, wall NO 16.38s/YES 17.35s; startup line `[KOKKOS] ILU(0) device build: team-per-row`; `[KOKKOS_NEMO_PERF] device preconditioner builds=11 (2.03283 s incl. verification)`; resident ON).
+  - Step 3 (A/B SU2_KOKKOS_PRECOND_VERIFY=1 RUN_TAG=_iluteamv): **PASS bitwise** + `[KOKKOS_NEMO_VERIFY] preconditioner device build vs host build: compares=11 non-bitwise=0` (ab-ilu-team-r1.log).
+  - Step 4 (row fallback SU2_KOKKOS_ILU_BUILD=row RUN_TAG=_ilurow): **PASS bitwise** + `row-per-thread` line; `builds=11 (0.722925 s)` — serial-Backend artifact (team kernel slower under Serial); V100 timing is the real 4.8 test (g1-ilu-row-r1.log).
+  - RUNNING step 5: regressions default list + invwedge_mg invwedge_dyn supin_visc (strict bitwise) via `.g1iluregress.sh` -> g1-ilu-regress-r1.log.
+  - NEXT: step 6 noise floor `CASE=super_cat BIN=$PROD BIN_STRICT=$STRICT K=10 check_noisefloor.sh` -> nf-ilu-r1.log; archive validation_logs/2026-11-26_4.8-ILUTeam/ (build-ilu-r1.log, build-ilu-serial-r1.log, g1-ilu-team-r1.log, ab-ilu-team-r1.log, g1-ilu-row-r1.log, g1-ilu-regress-r1.log, nf-ilu-r1.log + chk log.txt pairs) + INDEX rows (record step-2/step-4 `builds=` lines per review-24 item 7); then `READY FOR REVIEW: MERGE: 4.8-ILUTeam`.
+  - New runner scripts: TestCases/kokkos_nemo/.g1iluteam.sh, .abiluteam.sh, .g1ilurow.sh, .g1iluregress.sh.
