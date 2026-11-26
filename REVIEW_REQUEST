@@ -1,3 +1,3 @@
-id: 20261126T142737-3468ddec5a
-head: 3468ddec5a89acd6daa888071d24e14a74888c37
+id: 20261126T145723-5ca315fe41
+head: 5ca315fe41c77a0c839939cac8d68d1ce3f60e13
 reason: READY FOR REVIEW: MERGE: 4.8-ILUTeam — steps 1-7 all PASS: G1 super_cat team default + A/B verify (compares=11 non-bitwise=0) + row fallback + 7-case regressions all bitwise (strict); noise floor super_cat K=10 ratios 0.39/0.77 <= 10; serial builds=11 team 2.03283s vs row 0.722925s (V100 timing is the real 4.8 test — Madan: run G7 team vs row); 33 logs committed under validation_logs/2026-11-26_4.8-ILUTeam/ + 7 INDEX rows
