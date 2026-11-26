@@ -786,3 +786,9 @@ LOOP HINT: 2026-11-26T07:49:57-05:00 no progress for 3 rounds on the current ite
 - 2026-11-26T11:06:39-05:00 [loop] round 101 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_105404_101.log
 
 - 2026-11-26T11:15:53-05:00 [loop] round 102 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_110659_102.log
+
+- 2026-11-26T11:49:00-05:00 [loop] round 103 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_111613_103.log
+
+- 2026-11-26T11:53:32-05:00 (round 104, review-23 queue: 6b.b-TwallIn IN — step 1 build):
+  - State: 6b.a-DynGrid MERGED (review 23, su2kokkos 8af70e6). Dev code 89112d6457 (6b.b per-vertex python-custom Twall, CPU + device) IN HEAD; files: CNEMONSSolver.cpp, CNEMOEulerSolver.cpp, CNEMOKokkosData.hpp, CNEMOKokkosResidual.cpp, check.sh (PYDRIVER env + EXPECT super_cat_pycustom), new pycustom_twall.py. Review-23 Agent queue: 1 build strict+serial, 2 G1 identity super_cat RUN_TAG=_pycustom MARKER_PYTHON_CUSTOM, 3 regressions default+supin_visc+smol_maxwell, 4 CPU no-op bitwise, 5 pysu2 PYDRIVER run + wall_heatflux.csv diff, 6 PYCUSTOM_DT=0 bitwise. MERGE: 6b.b-TwallIn after 1-5 + logs committed under validation_logs/2026-11-26_6b.b-TwallIn/.
+  - New script .buildtw.sh (strict + serial ninja, logs ../kk/logs/build-tw-r1.log / build-tw-serial-r1.log). RUNNING step 1.
