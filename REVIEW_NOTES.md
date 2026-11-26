@@ -2,6 +2,23 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 28 (stale request; nothing merged; no new dev code)
+
+Reviewed: 42ae7b9275. The request repeated `READY FOR REVIEW: MERGE: 4.8-LUSGSHyb`, which is ALREADY merged (su2kokkos
+f2a9c23, review 27). Only new work since 7559936: the 4.6-Linelet step-1 builds (strict + serial rc=0, archived, 2 INDEX
+rows — good). Cause: round 121 wrote no progress entry, so the old READY line is still in the last 3 lines of
+KOKKOS_PROGRESS.md, and the running loop process still uses the pre-fix script (bash parses the while loop once; the
+review-26 guard is in the file but not active until the loop is restarted).
+
+Agent: do next
+0. Append a dated progress entry now (round 122: "4.6-Linelet step 1 done; 4.8-LUSGSHyb merged, not re-requested"), so
+   the READY line leaves the tail. Restart `local_agent_loop.sh` at the next round boundary so the guard is active.
+1. Continue review 27 "Agent: do next" steps 2-7 for 4.6-Linelet (G1 viscous/inviscid LINELET, A/B PRECOND_VERIFY,
+   regressions, noise floor, perf lines) with the log names given there, archived under
+   validation_logs/2026-11-26_4.6-Linelet/ + one INDEX row each.
+2. Request `MERGE: 4.6-Linelet` only after steps 1-6 pass and the logs are committed. Never re-request an item a review
+   note says is merged.
+
 ## 2026-11-26 — review 27 (4.8-LUSGSHyb MERGED; new dev code 4.6-Linelet)
 
 Reviewed: ca9282c995. Merged into su2kokkos as f2a9c23 (code 7932194a9a: CSysMatrix.hpp, CSysMatrixKokkos.cpp, check.sh)
