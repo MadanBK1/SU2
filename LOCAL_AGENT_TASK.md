@@ -11,6 +11,17 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
   - `READY FOR REVIEW: HEAVY: <item>: <what code or which bug>`: you need new code, or a failure you could not localize after 3 sessions (paste ≤ 20 StageCompare/log lines).
 - Finish the whole queue before requesting. Routine results do not need a review.
 
+## VALIDATION LOGS (standing rule, Madan 2026-11-26) — keep every run, start to end
+- Every gate / A/B / noise-floor / perf / GPU run you do: copy its log into the repo at
+  `validation_logs/<YYYY-MM-DD>_<item>/<logname>.log` (e.g. `validation_logs/2026-11-26_4.6-LUSGS/g1-lusgs-r64.log`),
+  together with the YES/NO `log.txt` of each case (`chk_<case>_{NO,YES}/log.txt` -> `<logname>__<case>_{NO,YES}.log`).
+  Do NOT copy meshes, restart/solution files or binaries. gzip any single log > 1 MB.
+- Add one line per run to `validation_logs/INDEX.md`:
+  `| date | item | gate | exact command | binary (strict/serial/cuda) + git sha | result (PASS/FAIL, max|dres|, field diff, ratio) | log path |`.
+- Failed runs are kept too (mark FAIL); never delete or overwrite a log — new run, new file name.
+- Commit the logs + INDEX.md in the same commit as the progress note for that run (`git add validation_logs`).
+  A `MERGE:` request is only valid if every log it cites is committed under validation_logs/.
+
 ## 0. Restart protocol (do this every session)
 1. `cd` to the clone, run `git checkout su2kokkos_qwenlocal_agent`, then `git status` and `git log --oneline -5`. Stop if you are not on that branch.
 2. Read `KOKKOS_PROGRESS.md` (create it if missing). It is the only memory you have between sessions.
@@ -117,8 +128,9 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
 3. MSW scheme.
 4. AUSM+-up2 (deterministically initialised M_L/M_R; document the CPU quirk; G1 vs the patched CPU variant).
 5. 4.5 BCs: subsonic BC_Inlet, Smoluchowski-Maxwell slip, catalytic heat-flux wall.
-6. Ionization with Roe / LAX (RoedPdU / MeandPdU per edge, documented deviation from the CPU's edge-order
-   dependence; gate: noise floor <= 10, not bitwise). **BLOCKED: CPU ComputedPdU ionization undefined (review 13), Madan decision pending — skip until then.**
+6. Ionization with Roe / LAX / MSW: **DECIDED (Madan, 2026-11-26): stays on the CPU (host).** The CPU ComputedPdU with
+   ionization is undefined (review 13), so it is not ported and not patched. Do not work on it; the host fallback reason in
+   Device_UpwindUnsupported / Device_CenteredUnsupported is the intended behaviour.
 7. 4.6 solver options: LU-SGS, ILU(n>0) / GPU preconditioners, multigrid coarse levels, periodic markers,
    dynamic / deforming grids.
 8. Host-touch removal: device residual norms, output / restart every N iterations, CUDA-aware MPI halos.
