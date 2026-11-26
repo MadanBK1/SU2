@@ -32,6 +32,7 @@ Steps 5–10 and Batch A were validated by earlier reviewer sessions; results ar
 | 2026-11-25 | 1e8c2e1 | 4.4-AUSM+-up2 (explicit) | agent 24b4086 | G1 bitwise (case + default + all invwedge), A/B bitwise, NF PASS |
 | 2026-11-25 | 33bd882 | 4.5 Smoluchowski–Maxwell slip wall | 0d7a7b9 | G1 smol_maxwell bitwise, default + invall bitwise, A/B bitwise, NF 0.61/0.50 |
 | 2026-11-25 | 986dc2b | 4.5 viscous supersonic inlet | d2fee8f | G1 supin_visc bitwise, default + invall 7/7 bitwise, A/B bitwise, NF 0.50/0.72 (g1-supin-r59.log, g1-regress-r59.log, g1-invall-r59.log, sv-supin-r61.log, nf-supin-r61.log) |
+| 2026-11-26 | 91f8df0 | 4.6 device LU_SGS preconditioner apply | 02676f8 (reviewed head 065f855) | G1 invwedge_lusgs bitwise, super_cat+LU_SGS bitwise, default + invall 4/4 bitwise, A/B compares=106 non-bitwise=0, NF 0.71/0.95 (backfill_2026-11-25/g1-lusgs-r64.log, g1-lusgs-visc-r64.log, g1-regress-r68.log, g1-invall-r68.log, sv-lusgs-r68.log, nf-lusgs-r68.log) |
 
 ## Decisions
 - 2026-11-26 (Madan): IONIZATION= YES with Roe / LAX / MSW stays on the CPU (host). The CPU `CNEMOGas::ComputedPdU`
