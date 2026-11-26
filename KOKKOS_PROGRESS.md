@@ -744,3 +744,5 @@ READY FOR REVIEW: MERGE: 4.6-MG2 — coarse MG levels device-resident + device t
   - RUNNING: step 5 variants (dyn1st, dyntr, dynvisc), then step 7 poison + regressions (g1-dynregress-r1.log default list + invwedge_mg invwedge_lusgs), step 8 perf already have NO/YES wall above. New scripts: .g1dynvisc.sh, .g1dynpoison.sh.
   - Step 5a (variant 1st-order dual time): invwedge_dyn_dyn1st **PASS bitwise** (g1-dyn1st-r1.log; max|dres|=0, field diff=0; wall NO 23.77s / YES 21.87s). YES log line 211: `stage dual-time source (1st order): device` — stage on device; OVERALL:FAIL only = EXPECT hardcodes "(2nd order)" (EXPECT artifact, same class as control run). All other stage lines device, resident ON.
   - Step 5b (variant translation-only): invwedge_dyn_dyntr **PASS bitwise, OVERALL PASS** (g1-dyntr-r1.log; max|dres|=0, field diff=0; wall NO 23.71s / YES ~21.9s) — zero rotation, non-zero grid velocity path.
+
+- 2026-11-26T06:59:46-05:00 [loop] round 89 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_062505_89.log
