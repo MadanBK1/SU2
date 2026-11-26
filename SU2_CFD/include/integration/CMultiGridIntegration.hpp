@@ -86,7 +86,7 @@ private:
    * \param[in] geometry - Geometrical definition of the problem.
    * \param[in] flow - Flow solution.
    */
-  void SetResidual_Term(CGeometry *geometry, CSolver *flow);
+  void SetResidual_Term(CGeometry *geometry, CSolver *flow, bool device = false);
 
   /*!
    * \brief Set the value of the corrected fine grid solution.

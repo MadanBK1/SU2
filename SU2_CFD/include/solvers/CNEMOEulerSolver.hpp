@@ -143,6 +143,10 @@ protected:
   std::string Device_ResidentUnsupported(const CConfig *config) const;
   bool deviceResident = false;   /*!< \brief Device-resident mode (decided at construction). */
   unsigned long mgHostTransfers = 0; /*!< \brief 4.6-MG step 1: fine-level MG transfer syncs (perf line). */
+  /*! \brief 4.6-MG2: why the device MG path (coarse levels resident, device transfer operators) is off ("" = on). */
+  std::string Device_MGUnsupported(const CConfig *config) const;
+  bool mgDevice = false;   /*!< \brief 4.6-MG2: this level is on the device MG path (decided at construction). */
+  static std::vector<char> s_mgLevelDevice; /*!< \brief 4.6-MG2: per MG level, mgDevice (levels are built in order). */
   bool hostAccNeedsZero = false; /*!< \brief Resident: host LinSysRes / Jacobian were not zeroed (stale). */
   bool Device_ResidentActive() const;
   /*! \brief Device-resident MPI comms: download the send rows of the group, host comms, upload the receive rows. */
@@ -502,6 +506,17 @@ public:
    * \brief Squared norm of LinSysRes, reduced on the device in device-resident mode.
    */
   su2double LinSysResSquaredNorm() const override;
+
+  /*!
+   * \brief 4.6-MG2: the MG transfer operators between this level and coarse run on the device.
+   */
+  bool MG_DeviceTransfer(const CSolver *coarse) const override;
+
+  /*!
+   * \brief 4.6-MG2: one device MG transfer operator (CNEMOKokkosMG.cpp kernels).
+   */
+  void MG_DeviceOp(MGDeviceOp op, CSolver *coarse, CGeometry *geometry, CGeometry *geoCoarse, const CConfig *config,
+                   su2double value) override;
 
   /*!
    * \brief Complete an implicit iteration.

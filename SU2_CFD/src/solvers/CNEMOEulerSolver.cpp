@@ -274,8 +274,25 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
       deferResidualSync = Device_DeferralUnsupported(config).empty();
       deviceJacobianAllocated = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
       /*--- Step 6: device-resident state when every stage of the iteration is on the device. ---*/
-      const auto whyNotResident = (iMesh == MESH_0) ? Device_ResidentUnsupported(config) : std::string("MG level");
+      /*--- 4.6-MG2: coarse MG levels device-resident too (Device_MGUnsupported), transfers on the device. ---*/
+      std::string whyNotResident;
+      if (iMesh == MESH_0) {
+        whyNotResident = Device_ResidentUnsupported(config);
+      } else {
+        whyNotResident = Device_MGUnsupported(config);
+        if (whyNotResident.empty() && (iMesh > s_mgLevelDevice.size() || !s_mgLevelDevice[iMesh - 1]))
+          whyNotResident = "finer level not on the device MG path";
+        if (whyNotResident.empty()) whyNotResident = Device_ResidentUnsupported(config);
+      }
       deviceResident = whyNotResident.empty();
+      mgDevice = deviceResident && config->GetnMGLevels() > 0 && (iMesh > MESH_0 || Device_MGUnsupported(config).empty());
+      if (config->GetnMGLevels() > 0) {
+        if (s_mgLevelDevice.size() <= iMesh) s_mgLevelDevice.resize(iMesh + 1, 0);
+        s_mgLevelDevice[iMesh] = mgDevice ? 1 : 0;
+      }
+      if (rank == MASTER_NODE && iMesh > MESH_0)
+        cout << "[KOKKOS_NEMO] MG level " << iMesh << " device-resident state: "
+             << (deviceResident ? std::string("ON (device MG transfers)") : "OFF (" + whyNotResident + ")") << endl;
       if (rank == MASTER_NODE && iMesh == MESH_0) PrintDeviceStages(config);
       if (deviceResident) {
         const bool impl = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
@@ -331,6 +348,8 @@ CNEMOEulerSolver::~CNEMOEulerSolver() {
   }
   if (kokkosData && rank == MASTER_NODE && mgHostTransfers > 0)
     cout << "[KOKKOS_NEMO_PERF] MG fine-level host transfers=" << mgHostTransfers << endl;
+  if (kokkosData && rank == MASTER_NODE && kokkosData->mgDeviceOps > 0)
+    cout << "[KOKKOS_NEMO_PERF] MG device transfers=" << kokkosData->mgDeviceOps << " (level " << MGLevel << ")" << endl;
   if (kokkosData && rank == MASTER_NODE && Jacobian.GetKokkosLU_SGSApplies() > 0) {
     cout << "[KOKKOS_NEMO_PERF] device LU_SGS applies=" << Jacobian.GetKokkosLU_SGSApplies() << " ("
          << Jacobian.GetKokkosLU_SGSSeconds() << " s incl. verification)" << endl;
@@ -4066,6 +4085,75 @@ bool CNEMOEulerSolver::Device_ResidentActive() const {
 #endif
 }
 
+std::vector<char> CNEMOEulerSolver::s_mgLevelDevice;
+
+std::string CNEMOEulerSolver::Device_MGUnsupported(const CConfig *config) const {
+#ifdef HAVE_KOKKOS
+  /*--- 4.6-MG2: coarse levels device-resident + device transfer operators (CNEMOKokkosMG.cpp). Not covered (step-1
+   *    path: fine level resident, coarse levels host): MPI (the SOLUTION / SOLUTION_OLD comms of the transfer
+   *    operators are host comms), viscous (coarse CAvgGrad_NEMO residual, viscous-wall corrections), full MG. ---*/
+  if (config->GetnMGLevels() == 0) return "no multigrid";
+  if (const char* e = std::getenv("SU2_KOKKOS_NEMO_MG_DEVICE")) {
+    if (std::atoi(e) == 0) return "SU2_KOKKOS_NEMO_MG_DEVICE=0";
+  }
+  if (const char* e = std::getenv("SU2_KOKKOS_NEMO_MG_RESIDENT")) {
+    if (std::atoi(e) == 0) return "SU2_KOKKOS_NEMO_MG_RESIDENT=0";
+  }
+  if (SU2_MPI::GetSize() > 1) return "MPI (host SOLUTION / SOLUTION_OLD comms in the transfer operators)";
+  if (config->GetViscous()) return "viscous (coarse-level CAvgGrad_NEMO residual not on the device)";
+  for (unsigned short iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++)
+    if (config->GetViscous_Wall(iMarker)) return "viscous wall marker (transfer-operator wall corrections)";
+  if (config->GetMGCycle() == MG_CYCLE::FULL) return "full multigrid cycle";
+  if (config->GetGrid_Movement() || dynamic_grid) return "grid movement";
+  return "";
+#else
+  (void)config;
+  return "no Kokkos";
+#endif
+}
+
+bool CNEMOEulerSolver::MG_DeviceTransfer(const CSolver *coarse) const {
+#ifdef HAVE_KOKKOS
+  if (coarse == nullptr) return mgDevice && Device_ResidentActive();
+  const auto* c = dynamic_cast<const CNEMOEulerSolver*>(coarse);
+  if (c == nullptr) return false;
+  if (c->deviceResident && !mgDevice)
+    SU2_MPI::Error("4.6-MG2: coarse MG level device-resident but its fine level is not on the device MG path.",
+                   CURRENT_FUNCTION);
+  return mgDevice && c->mgDevice;
+#else
+  (void)coarse;
+  return false;
+#endif
+}
+
+void CNEMOEulerSolver::MG_DeviceOp(MGDeviceOp op, CSolver *coarse, CGeometry *geometry, CGeometry *geoCoarse,
+                                   const CConfig *config, su2double value) {
+#ifdef HAVE_KOKKOS
+  auto* c = dynamic_cast<CNEMOEulerSolver*>(coarse);
+  auto& K = *kokkosData;
+  /*--- MultigridProjectEulerWall uses prim_idx.Velocity() on the conservative Solution (CPU index, kept). ---*/
+  const int iVel = static_cast<int>(prim_idx.Velocity());
+  if (c != nullptr) c->kokkosData->MGSetupCoarse(geoCoarse, config);
+  switch (op) {
+    case MGDeviceOp::RESIDUAL_TERM: K.MGResidualTerm(); break;
+    case MGDeviceOp::RESTRICT_SOLUTION: K.MGRestrictSolution(*c->kokkosData, iVel); break;
+    case MGDeviceOp::FORCING_TERM: K.MGForcingTerm(*c->kokkosData, value); break;
+    case MGDeviceOp::PROLONG_CORRECTION: K.MGProlongCorrection(*c->kokkosData, iVel); break;
+    case MGDeviceOp::PROLONG_SCATTER: K.MGProlongScatter(*c->kokkosData); break;
+    case MGDeviceOp::SMOOTH_SAVE:
+      K.MGSetupSmoothing(geometry, config);
+      K.MGSmoothSave();
+      break;
+    case MGDeviceOp::SMOOTH_ITERATION: K.MGSmoothIteration(value); break;
+    case MGDeviceOp::SET_CORRECTION: K.MGSetCorrection(value); break;
+    case MGDeviceOp::LOCAL_CFL: K.MGFillLocalCFL(value); break;
+  }
+#else
+  (void)op; (void)coarse; (void)geometry; (void)geoCoarse; (void)config; (void)value;
+#endif
+}
+
 std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) const {
 #ifdef HAVE_KOKKOS
   using K = CNEMOKokkosData;
@@ -4477,7 +4565,9 @@ bool CNEMOEulerSolver::AdaptCFLNumber_Device(unsigned short iMesh, bool reduceCF
                                              su2double CFLMin, su2double CFLMax, su2double MGFactor, bool stats,
                                              su2double& cflMin, su2double& cflMax, su2double& cflSum) {
 #ifdef HAVE_KOKKOS
-  if (iMesh != MESH_0 || !Device_ResidentActive()) return false;
+  /*--- 4.6-MG2: coarse levels too when they are device-resident (their own LocalCFL / UnderRelaxation). ---*/
+  (void)iMesh;
+  if (!Device_ResidentActive()) return false;
   CNEMOKokkosData::CFLAdaptParams p;
   p.reduceCFL = reduceCFL;
   p.canIncrease = canIncrease;

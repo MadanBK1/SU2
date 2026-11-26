@@ -63,7 +63,7 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [smol_maxwell]="stage bc:SMOLUCHOWSKI_MAXWELL (Wall): device"
                     [supin_visc]="stage bc:SUPERSONIC_INLET (Inlet): device|stage bc:FAR_FIELD (Farfield) [+ viscous]: device|stage bc:ISOTHERMAL (Wall) [non-catalytic]: device"
                     [invwedge_lusgs]="stage linear preconditioner (LU_SGS apply): device|device-resident state (Step 6): ON"
-                    [invwedge_mg]="device-resident state (Step 6): ON|MG fine-level host transfers=" )
+                    [invwedge_mg]="device-resident state (Step 6): ON|MG level 1 device-resident state: ON|MG level 2 device-resident state: ON|MG device transfers=" )
 cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat axi_visccone)
 status=0
 for c in "${cases[@]}"; do
