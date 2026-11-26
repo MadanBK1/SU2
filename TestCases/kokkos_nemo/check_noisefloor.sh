@@ -43,7 +43,21 @@ def fld(n):
     f = np.genfromtxt(d(n) + '/restart_flow.csv', delimiter=',', skip_header=1)[:, 3:]
     return f
 def hist(n):
-    return np.array([[float(x) for x in l.strip().strip('|').split('|')[1:]] for l in open(d(n) + '/log.txt') if re.match(r'^\|\s+\d+\|', l)])
+    # Convergence history = the fully-numeric `| n | ... |` rows that follow the LAST
+    # `Inner_Iter` header row. MG logs add other `| int |` tables before it (multigrid
+    # structure: `MG Level|CVs|Aggl. Rate|CFL`) whose fraction fields (e.g. `1/3.86`)
+    # are not float; anchoring on the `Inner_Iter` header row skips those.
+    path = d(n) + '/log.txt'
+    lines = open(path).read().splitlines()
+    anchor = max((i for i, l in enumerate(lines) if 'Inner_Iter' in l), default=-1)
+    rows = []
+    for l in lines[anchor + 1:] if anchor >= 0 else []:
+        if not re.match(r'^\|\s+\d+\|', l):
+            continue
+        xs = l.strip().strip('|').split('|')[1:]
+        try: rows.append([float(x) for x in xs])
+        except ValueError: pass
+    return np.array(rows) if rows else np.zeros((0, 0))
 P, S, Y = fld('prodNO'), fld('strictNO'), fld('prodYES')
 rho = P[:, :5].sum(1).max(); scale = np.abs(P).max(0); scale[:5] = rho
 scale[5:7] = np.sqrt(P[:, :5].sum(1) * np.abs(P[:, 7])).max()
