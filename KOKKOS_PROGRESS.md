@@ -602,3 +602,11 @@ READY FOR REVIEW: MERGE: 4.5-SupInVisc — viscous BC_Supersonic_Inlet (d2fee8f4
   - Next: step 2 G1 strict `timeout 1500 bash .g1run.sh ../kk/logs/g1-lusgs-r64.log invwedge_lusgs` (expect OVERALL PASS bitwise + 2 EXPECT lines: LU_SGS device, resident ON); then 4 (viscous super_cat with EXTRA_CFG LU_SGS), 5 (regressions), 6 (A/B verify + noisefloor CASE=invwedge_lusgs), 7 (PERF), 8 (bookkeeping + MERGE: 4.6-LUSGS).
 
 - 2026-11-25T19:01:06-05:00 [loop] round 64 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_185022_64.log
+
+- 2026-11-25T19:12:56-05:00 [loop] round 65 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_190126_65.log
+
+- 2026-11-25 (round 66, review-15 queue, item 4.6-LUSGS — step 2 done):
+  - Binaries fresh (built round 64, after 02676f862e): build-kokkos-{strict,serial}/SU2_CFD/src/SU2_CFD.
+  - (2) G1 strict: `timeout 1500 bash .g1run.sh ../kk/logs/g1-lusgs-r64.log invwedge_lusgs` -> **OVERALL: PASS, bitwise** (max|dres|=0.00e+00, max field diff=0.00e+00, tol 0).
+  - EXPECT lines present (chk_invwedge_lusgs_YES/log.txt): `[KOKKOS_NEMO] stage linear preconditioner (LU_SGS apply): device` + `device-resident state (Step 6): ON`.
+  - NEXT: step 4 viscous `EXTRA_CFG="LINEAR_SOLVER_PREC= LU_SGS" RUN_TAG=_lusgs timeout 1500 bash .g1run.sh ../kk/logs/g1-lusgs-visc-r64.log super_cat`; then 5 regressions (default + invwedge_roe invwedge_msw smol_maxwell supin_visc), 6 A/B (SU2_KOKKOS_PRECOND_VERIFY=1, non-bitwise=0) + noisefloor CASE=invwedge_lusgs, 7 PERF, 8 bookkeeping + `READY FOR REVIEW: MERGE: 4.6-LUSGS`.
