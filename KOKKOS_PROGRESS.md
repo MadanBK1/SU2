@@ -655,3 +655,4 @@ READY FOR REVIEW: MERGE: 4.6-LUSGS (round-68 gates, unchanged) + log archive com
 
 - 2026-11-25T22:03:05-05:00 [loop] round 73 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_215133_73.log
   - (4) control: `bash .g1mgoff.sh` (SU2_KOKKOS_NEMO_MG_RESIDENT=0) -> invwedge_mg_mgoff PASS bitwise (max|dres|=0.00e+00, max field diff=0.00e+00, tol 0); OVERALL:FAIL only = the two EXPECT lines missing (expected old behaviour: YES log line 11 `device-resident state (Step 6): OFF (multigrid (SU2_KOKKOS_NEMO_MG_RESIDENT=0))`) — g1-mgoff-r1.log. Old behaviour intact.
+  - (5) variants all PASS bitwise: mgpost (MG_POST_SMOOTH= (1,1,1)) g1-mgpost-r1.log; mgw (MGCYCLE= W_CYCLE) g1-mgw-r1.log; mgcs (MG_CORRECTION_SMOOTH= (2,2,2)) g1-mgcs-r1.log; viscous super_cat MGLEVEL=1 g1-mgvisc-r1.log. All max|dres|=0, field diff=0, OVERALL: PASS (EXPECT lines present).
