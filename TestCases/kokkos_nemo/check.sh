@@ -78,7 +78,7 @@ for c in "${cases[@]}"; do
     if [ "$mode" = NO ] && [ "$REF_MODE" = YES ]; then kmode=YES; fi
     sed -i '/^ENABLE_KOKKOS/d' run.cfg; printf "\nENABLE_KOKKOS= %s\n" "$kmode" >> run.cfg  # leading newline: some cfgs lack a trailing one
     if [ -n "${EXTRA_CFG:-}" ]; then echo "$EXTRA_CFG" | tr ';' '\n' | while read -r l; do
-      [ -n "$l" ] && { sed -i "/^${l%%=*}[ =]/d" run.cfg; echo "$l" >> run.cfg; }; done; fi
+      [ -n "$l" ] && { sed -i "/^${l%%=*}[ =]/d" run.cfg; [ -n "${l#*=}" ] && echo "$l" >> run.cfg; }; done; fi  # "KEY=" (no value) deletes the line (e.g. ITER= when going unsteady)
     t0=$(date +%s.%N); SU2_KOKKOS_NEMO_HOST=$hostenv $(mpiprefix "$np") "$bin" run.cfg > log.txt 2>&1; rc=$?
     echo "$c $mode${hostenv:+ (REF_MODE=HOST: YES, all NEMO stages host)}${np:+ np=$np} exit=$rc wall=$(printf '%.2f' "$(echo "$(date +%s.%N)-$t0" | bc)")s"
     [ $rc -ne 0 ] && { status=1; tail -5 log.txt; }
