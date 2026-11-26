@@ -502,6 +502,10 @@ void CMultiGridIntegration::MultiGrid_Cycle(CGeometry ****geometry,
 
     Space_Integration(geometry_fine, solver_container_fine, numerics_fine, config, iMesh, NO_RK_ITER, RunTime_EqSystem);
 
+    /*--- Device-resident fine level (Kokkos NEMO, 4.6-MG): the transfer operators below and the prolongation after the
+     *    recursion run on the host; hand them current host data (no-op for every other solver). ---*/
+    SU2_OMP_SAFE_GLOBAL_ACCESS(solver_fine->SyncHostData(geometry_fine, CSolver::HostSyncScope::MG_TRANSFER);)
+
     SetResidual_Term(geometry_fine, solver_fine);
 
     /*--- Compute $r_(k+1) = F_(k+1)(I^(k+1)_k u_k)$ ---*/

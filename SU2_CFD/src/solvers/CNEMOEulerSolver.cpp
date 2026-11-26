@@ -329,6 +329,8 @@ CNEMOEulerSolver::~CNEMOEulerSolver() {
       cout << "[KOKKOS_NEMO_VERIFY] preconditioner device build vs host build: compares="
            << Jacobian.GetKokkosVerifyBuilds() << " non-bitwise=" << Jacobian.GetKokkosVerifyNonBitwise() << endl;
   }
+  if (kokkosData && rank == MASTER_NODE && mgHostTransfers > 0)
+    cout << "[KOKKOS_NEMO_PERF] MG fine-level host transfers=" << mgHostTransfers << endl;
   if (kokkosData && rank == MASTER_NODE && Jacobian.GetKokkosLU_SGSApplies() > 0) {
     cout << "[KOKKOS_NEMO_PERF] device LU_SGS applies=" << Jacobian.GetKokkosLU_SGSApplies() << " ("
          << Jacobian.GetKokkosLU_SGSSeconds() << " s incl. verification)" << endl;
@@ -4079,7 +4081,15 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
   if (MixedAllowed()) return "SU2_KOKKOS_NEMO_MIXED";
   const auto defer = Device_DeferralUnsupported(config);
   if (!defer.empty()) return "residual sync not deferred: " + defer;
-  if (config->GetnMGLevels() > 0) return "multigrid";
+  if (config->GetnMGLevels() > 0) {
+    /*--- 4.6-MG step 1: fine level device-resident, coarse levels on the host (their own non-resident pipeline);
+     *    the MG transfer operators sync through SyncHostData(MG_TRANSFER). Full MG cycle (fine-level
+     *    SetProlongated_Solution, moving FinestMesh) not covered. SU2_KOKKOS_NEMO_MG_RESIDENT=0 = previous behaviour. ---*/
+    if (config->GetMGCycle() == MG_CYCLE::FULL) return "full multigrid cycle";
+    if (const char* e = std::getenv("SU2_KOKKOS_NEMO_MG_RESIDENT")) {
+      if (std::atoi(e) == 0) return "multigrid (SU2_KOKKOS_NEMO_MG_RESIDENT=0)";
+    }
+  }
   if (config->GetDiscrete_Adjoint() || config->GetContinuous_Adjoint()) return "adjoint";
   if (dynamic_grid) return "dynamic grid";
   if (config->GetViscous()) {
@@ -4233,6 +4243,19 @@ void CNEMOEulerSolver::SyncHostData(CGeometry *geometry, HostSyncScope scope) {
   if (!Device_ResidentActive()) return;
   if (scope == HostSyncScope::BOUNDARY) {
     kokkosData->EnsureHostBoundaryPrimitive();
+  } else if (scope == HostSyncScope::MG_TRANSFER) {
+    /*--- 4.6-MG step 1: the fine level stays device-resident, the MG transfer operators (SetResidual_Term,
+     *    SetRestricted_Solution, SetForcing_Term, Get/Smooth/SetProlongated_Correction) run on the host between the
+     *    fine level's Space_Integration and its post-smoothing. They read Solution, LinSysRes, Res_TruncError and
+     *    write LinSysRes and Solution: download once, hand ownership to the host; Cons2Prim re-uploads Solution, the
+     *    next residual zero-fills the device LinSysRes (the CPU zeroes it too). ---*/
+    using K = CNEMOKokkosData;
+    kokkosData->EnsureHost(K::G_SOLUTION);
+    kokkosData->EnsureHost(K::G_LINSYS);
+    kokkosData->EnsureHost(K::G_TRUNCERR);
+    kokkosData->MarkHostWritten(K::G_SOLUTION);
+    kokkosData->MarkHostWritten(K::G_LINSYS);
+    ++mgHostTransfers;
   } else {
     kokkosData->EnsureHostAll();
     /*--- Step 8: NS vorticity / strain magnitude (output only) from the downloaded gradient (CNEMONSSolver::

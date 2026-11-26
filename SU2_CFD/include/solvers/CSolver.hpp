@@ -1295,9 +1295,11 @@ public:
 
   /*!
    * \brief Scope of SyncHostData: the Primitive of the boundary (marker vertex) points read by the force /
-   *        traction computations, or everything host code may read (volume output, restart).
+   *        traction computations, or everything host code may read (volume output, restart), or (MG_TRANSFER) the
+   *        Solution / LinSysRes / Res_TruncError of a multigrid fine level, which the host transfer operators of
+   *        CMultiGridIntegration read and write (ownership moves to the host; the device re-uploads on next use).
    */
-  enum class HostSyncScope { BOUNDARY, ALL };
+  enum class HostSyncScope { BOUNDARY, ALL, MG_TRANSFER };
 
   /*!
    * \brief Make the host copies of device-resident solver data current before host code reads them

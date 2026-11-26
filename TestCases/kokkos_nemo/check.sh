@@ -51,7 +51,8 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [invwedge_ausmplusup2]=$TC/invwedge/invwedge_ausmplusup2.cfg
                  [smol_maxwell]=$TC/visc_wedge/smol_maxwell.cfg
                  [supin_visc]=$TC/visc_wedge/supin_visc.cfg
-                 [invwedge_lusgs]=$TC/invwedge/invwedge_lusgs.cfg )
+                 [invwedge_lusgs]=$TC/invwedge/invwedge_lusgs.cfg
+                 [invwedge_mg]=$TC/invwedge/invwedge_mg.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
@@ -61,7 +62,8 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invwedge_ausmplusup2]="stage upwind (AUSM+-up2, residual): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [smol_maxwell]="stage bc:SMOLUCHOWSKI_MAXWELL (Wall): device"
                     [supin_visc]="stage bc:SUPERSONIC_INLET (Inlet): device|stage bc:FAR_FIELD (Farfield) [+ viscous]: device|stage bc:ISOTHERMAL (Wall) [non-catalytic]: device"
-                    [invwedge_lusgs]="stage linear preconditioner (LU_SGS apply): device|device-resident state (Step 6): ON" )
+                    [invwedge_lusgs]="stage linear preconditioner (LU_SGS apply): device|device-resident state (Step 6): ON"
+                    [invwedge_mg]="device-resident state (Step 6): ON|MG fine-level host transfers=" )
 cases=("$@"); [ ${#cases[@]} -eq 0 ] && cases=(invwedge_ausm thermalbath super_cat axi_visccone)
 status=0
 for c in "${cases[@]}"; do
