@@ -2,6 +2,51 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-26 — review 18 (merged 4.6-MG1; dev: 4.6-MG2 coarse levels resident + device transfer operators)
+
+**Reviewed:** db03759d2e (code validated at 413b3a0). Logs committed (37/37), INDEX rows strict PASS, code diff as
+expected. **Merged** into su2kokkos as 800d75f (+ VALIDATION_LOG row 8277424): CSolver.hpp, CNEMOEulerSolver.hpp/.cpp,
+CMultiGridIntegration.cpp, check.sh, check_noisefloor.sh, invwedge_mg.cfg.
+
+**Dev code this round (g++ -std=c++20 -fsyntax-only -ffp-contract=off -Wall, with/without -DHAVE_KOKKOS, vs bundled
+Kokkos Serial headers; NOT built, NOT validated):**
+- New `SU2_CFD/src/solvers/kokkos/CNEMOKokkosMG.cpp` (added to SU2_CFD/src/meson.build): device MG transfer ops,
+  verbatim CMultiGridIntegration loops, no atomics: `MGSetupCoarse` (children CSR, EULER_WALL projection list),
+  `MGSetupSmoothing`, `MGResidualTerm`, `MGRestrictSolution` (+ MultigridProjectEulerWall), `MGForcingTerm`,
+  `MGProlongCorrection` (+ projection on Solution_Old), `MGProlongScatter`, `MGSmoothSave` / `MGSmoothIteration`,
+  `MGSetCorrection`, `MGFillLocalCFL`; counter `mgDeviceOps`.
+- CSolver.hpp: `MGDeviceOp`, virtuals `MG_DeviceTransfer(coarse)` / `MG_DeviceOp(...)` (no-op by default).
+- CNEMOEulerSolver: coarse levels (iMesh>0) now device-resident when `Device_MGUnsupported` is empty (serial,
+  inviscid, no viscous-wall marker, not FULL_MG, static grid, env `SU2_KOKKOS_NEMO_MG_DEVICE` != 0) and the finer level
+  is on the device MG path; startup line `[KOKKOS_NEMO] MG level L device-resident state: ON|OFF (why)`; perf line
+  `[KOKKOS_NEMO_PERF] MG device transfers=N (level L)`; `AdaptCFLNumber_Device` now also for resident coarse levels.
+- CMultiGridIntegration.cpp: each transfer operator dispatches to the device when both levels are on the device path;
+  otherwise the step-1 path (fine `SyncHostData(MG_TRANSFER)`, host loops) is unchanged (viscous / MPI / env=0).
+- check.sh: `EXPECT[invwedge_mg]` now requires `MG level 1|2 device-resident state: ON` and `MG device transfers=`.
+
+**Agent: do next** (log dir `validation_logs/2026-11-26_4.6-MG2/`, rows in INDEX.md, `git ls-tree` check before
+requesting):
+1. Build strict + serial (fix compile errors yourself, smallest change; nvcc device-lambda errors: move the lambda to
+   a public member or free function, never change the arithmetic). Archive `build-mg2-r1.log` (tail 200 on failure).
+2. G1 strict: `timeout 1500 bash .g1run.sh ../kk/logs/g1-mg2-r1.log invwedge_mg` -> must be OVERALL PASS bitwise
+   with the new EXPECT lines. Archive g1 log + invwedge_mg_NO/YES logs.
+3. Variants (same scripts as MG1, new log names `-mg2-`): `.g1mgpost.sh`, `.g1mgw.sh`, `.g1mgcs.sh` (correction
+   smoothing = MGSmoothIteration), `.g1mgpoison.sh` (SU2_KOKKOS_NEMO_POISON=1: proves no missed host read), all
+   bitwise. `.g1mgvisc.sh` (viscous: must stay on step 1, `MG level 1 ... OFF (viscous ...)` and bitwise).
+4. Control: `SU2_KOKKOS_NEMO_MG_DEVICE=0` run of invwedge_mg (copy .g1mgoff.sh, RUN_TAG=_mg2off): bitwise PASS,
+   OVERALL FAIL only for the missing MG2 EXPECT lines (= step-1 behaviour). Archive.
+5. Noise floor: `CASE=invwedge_mg` serial+strict (as .nfsmg.sh) -> ratios <= 10. Archive nf-mg2-r1.log.
+6. Regressions: default list + `invwedge_lusgs invwedge_roe` bitwise. Archive.
+7. Perf lines: paste `[KOKKOS_NEMO_PERF] MG device transfers=` and wall NO/YES for invwedge_mg, compare with MG1
+   (NO 63.84 s / YES 53.86 s) in KOKKOS_PROGRESS.md.
+8. On any non-bitwise result: rerun with `SU2_KOKKOS_STAGE_VERIFY=1` is NOT useful here (verify disables resident ->
+   step-1 path); instead bisect with `SU2_KOKKOS_NEMO_MG_DEVICE=0` (must be bitwise) and report the first iteration /
+   level that differs (≤ 20 lines). Suspects: Euler-wall projection order (corner points), smoothing neighbour order,
+   halo rows (nPointDomain vs nPoint), LocalCFL fill, coarse CFL adaptation.
+Request `MERGE: 4.6-MG2` only after 2-6 pass and the logs are committed; `HEAVY: 4.6-MG2: ...` only for a bug you
+cannot localize after 3 sessions. Madan (V100): after the strict gate passes, GPU timing of invwedge_mg:
+`SU2_KOKKOS_NEMO_MG_DEVICE=0` vs default, archive both logs under the same dir.
+
 ## 2026-11-26 — review 17 (NOT merged: 4.6-MG1 logs missing from git)
 
 **Reviewed:** 54e09ba7e3. Code diff since 065f855 is clean and as expected (CSolver.hpp, CNEMOEulerSolver.hpp/.cpp,

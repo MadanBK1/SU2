@@ -1,3 +1,4 @@
-id: 20261125T235529-54e09ba7e3
-reviewed: 54e09ba7e340d04552acc50c763794c2032253e5
-result: not merged — cited logs not committed (*.log gitignored); see REVIEW_NOTES review 17
+id: 20261126T005402-db03759d2e
+reviewed: db03759d2ef4c4772a3e99a87dd1d4c5b9eacf59
+merged: 4.6-MG1 -> su2kokkos 800d75f
+next: test 4.6-MG2 dev code (REVIEW_NOTES review 18)
