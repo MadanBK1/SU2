@@ -142,6 +142,10 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
       that sets T_wall per vertex each step, G1 strict vs ENABLE_KOKKOS=NO.
    c. NEMO conjugate heat transfer path (fluid–solid heat exchange, SU2 multizone CHT or preCICE-style exchange) —
       design after a and b.
+   d. Continuum-breakdown output for hybrid CFD–DSMC (Madan 2026-11-26: our computational part includes rarefied flow
+      with DSMC): device kernel for the gradient-length local Knudsen number Kn_GLL = (λ/Q)|∇Q| (Q = ρ, T, Tve, |u|),
+      written as a volume/surface output field, to mark where DSMC (e.g. SPARTA) must replace continuum NEMO. Gate: G1 strict
+      (output field bitwise vs ENABLE_KOKKOS=NO).
 7. 4.6 solver options (remaining): LU-SGS, ILU(n>0) / GPU preconditioners, multigrid coarse levels, periodic markers,
    dynamic / deforming grids.
 8. Host-touch removal: device residual norms, output / restart every N iterations, CUDA-aware MPI halos.
