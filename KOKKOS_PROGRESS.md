@@ -887,3 +887,5 @@ READY FOR REVIEW: MERGE: 4.8-ILUTeam — steps 1-7 all PASS: G1 super_cat team d
   - Step 7 (regressions strict: invwedge_ausm thermalbath super_cat axi_visccone invwedge_mg invwedge_dyn supin_visc): **OVERALL PASS bitwise** (kk/logs/g1-lusgs-regress-r1.log; all 7 cases PASS, max|dres|=0.00e+00 each; invwedge_mg wall NO 63.25s/YES 54.09s).
   - RUNNING step 8: noise floor K=10 invwedge_lusgs (`bash TestCases/kokkos_nemo/.nflusgs.sh` -> kk/logs/nf-lusgs-r1.log; expect ratios <= 10).
   - NEXT: step 9 archive validation_logs/2026-11-26_4.8-LUSGSHyb/ (steps 3-8 logs + chk log.txt pairs; steps 1-2 already archived) + INDEX rows incl. applies= perf lines (hyb 3.61801 s / w1 3.73177 s / single 3.62565 s / visc-w1 2.22723 s); then `READY FOR REVIEW: MERGE: 4.8-LUSGSHyb`.
+
+- 2026-11-26T16:29:40-05:00 [loop] round 117 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_162155_117.log
