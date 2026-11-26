@@ -264,7 +264,7 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | Convection | AUSM, AUSM+M (incl. pressure sensor) | device-resident | |
 | Convection | AUSM+-up2 (explicit residual) | device-resident | G1 strict bitwise + A/B + noise floor (r52/r53); merge pending |
 | Convection | AUSM+-up2 (implicit) | host fallback | CPU Jacobian reads uninitialised M_L/M_R (documented quirk) |
-| Convection | Roe, LAX-FRIEDRICH, MSW | device-resident | Roe/LAX merged; MSW G1-bitwise-validated, merge pending |
+| Convection | Roe, LAX-FRIEDRICH, MSW | device-resident | Roe/LAX/MSW merged; with IONIZATION= YES -> host by decision (Madan 2026-11-26: CPU ComputedPdU with ionization is undefined, not ported/patched) |
 | Convection | other upwind / centered (JST) | host fallback | not ported |
 | Reconstruction | MUSCL (GG, WLS), Venkatakrishnan, BJ, Venkat-Wang, van Albada, none | device-resident | |
 | Reconstruction | LEAST_SQUARES (unweighted) gradients | device (stage) / resident OFF | resident needs GG or WLS |
