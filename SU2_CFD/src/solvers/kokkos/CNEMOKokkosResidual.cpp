@@ -70,6 +70,9 @@ struct ResArgs {
   bool viscous = false, catalytic = false, supercat = false, writeWallState = false;
   double Twall = 0.0, catEff = 0.0, heatFlux = 0.0, RuSI = 0.0;
   double Yst[MAXNS] = {0.0};
+  /*--- 6b.b: per-vertex (MARKER_PYTHON_CUSTOM) wall temperature, indexed by the packed vertex kv. ---*/
+  bool customTwall = false;
+  View1D<double> twallVtx;
   /*--- 4.5 BC_Smoluchowski_Maxwell. ---*/
   double gasConstant = 0.0, prandtlLam = 0.0;
   View2D<double> slip;
@@ -146,7 +149,7 @@ void KernelIsothermal(const ResArgs& r, unsigned long v0, unsigned long v1) {
 
         /*====================== BC_IsothermalNonCatalytic_Wall ======================*/
         const double C = 5;
-        const double Twall = r.Twall;
+        const double Twall = r.customTwall ? r.twallVtx(kv) : r.Twall;
         double Normal[ND], UnitNormal[ND];
         for (int iDim = 0; iDim < nDim; iDim++) Normal[iDim] = r.vtxNormal(kv, iDim);
         double sq = 0.0;
@@ -1323,6 +1326,16 @@ CNEMOKokkosData::BCResult CNEMOKokkosData::ComputeBCResidual(const BCParams& p, 
     h_markerPtr.assign(hm.data(), hm.data() + geo.nMarker + 1);
   }
   const unsigned long v0 = h_markerPtr[p.marker], v1 = h_markerPtr[p.marker + 1];
+
+  /*--- 6b.b: per-vertex wall temperature (python-custom isothermal marker): copy only this marker's values. ---*/
+  if (p.kind == BCKind::ISOTHERMAL && p.customTwall != nullptr && v1 > v0) {
+    if (customTwall_.extent(0) != geo.vtx_node.extent(0))
+      customTwall_ = View1D<double>("NEMO::custom_Twall", geo.vtx_node.extent(0));
+    Kokkos::View<const double*, HostSpace, Unmanaged> hT(p.customTwall, v1 - v0);
+    Kokkos::deep_copy(Kokkos::subview(customTwall_, std::make_pair(v0, v1)), hT);
+    r.customTwall = true;
+    r.twallVtx = customTwall_;
+  }
 
   long lastSub = -1;
   if (smol) {

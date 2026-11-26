@@ -279,6 +279,7 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | BC | SUPERSONIC_INLET / OUTLET, AUSM+M | device-resident if a FAR/OUTLET(/SUP_OUT) marker precedes it | otherwise the CPU reads uninitialised numerics in iteration 1: host |
 | BC | SUPERSONIC_INLET viscous | device-resident (validated 2026-11-25: G1 strict supin_visc bitwise + regressions + A/B + noise floor) | same CAvgGrad_NEMO path as viscous FAR_FIELD, node_inlet state; gate case supin_visc |
 | BC | ISOTHERMAL (non-cat., supercatalytic, partially catalytic explicit), HEAT_FLUX non-cat. | device-resident | |
+| BC | ISOTHERMAL with MARKER_PYTHON_CUSTOM (per-vertex python-custom wall temperature, 6b.b) | device-resident (partial merge 2026-11-26: identity + regressions + CPU no-op bitwise; pywrapper-driven run not yet tested — swig missing on the workstation) | per-vertex Twall uploaded only when the python driver sets it |
 | BC | implicit partially catalytic, catalytic heat flux | unsupported | not available on the CPU |
 | BC | SMOLUCHOWSKI_MAXWELL (slip wall) | device-resident | `ComputeGasConstant` evaluated on the host once per call (gas-state dependent) and passed as a scalar; no Jacobian term, as on the CPU; ionization -> host |
 | BC | INLET_FLOW (BC_Inlet) | unsupported | not operational on the CPU (SU2_MPI::Error at entry) |

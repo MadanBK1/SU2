@@ -457,6 +457,10 @@ class CNEMOKokkosData {
     bool viscous = false;    /*!< FAR_FIELD: viscous contribution (CAvgGrad_NEMO with node_infty, reflected point) */
     double Twall = 0.0;      /*!< ISOTHERMAL: config Isothermal_Temperature (as the CPU, not non-dimensionalised) */
     bool catalytic = false, supercatalytic = false; /*!< ISOTHERMAL: CATALYTIC_WALL marker, SUPERCATALYTIC_WALL */
+    /*--- 6b.b coupling: ISOTHERMAL with MARKER_PYTHON_CUSTOM: host pointer to the marker's nVertex per-vertex wall
+     *    temperatures (geometry CustomBoundaryTemperature, iVertex order); nullptr -> uniform Twall. Only these
+     *    nVertex doubles move host->device per BC call. ---*/
+    const double* customTwall = nullptr;
     double Yst[su2kokkos::nemo::MAXNS] = {0.0}; /*!< ISOTHERMAL supercatalytic: wall composition */
     double catEff = 0.0;     /*!< ISOTHERMAL partially catalytic: CATALYTIC_EFFICIENCY */
     double heatFlux = 0.0;   /*!< HEAT_FLUX: non-dimensional (integrated: per area) wall heat flux */
@@ -775,6 +779,7 @@ class CNEMOKokkosData {
   unsigned long outletCalls = 0, outletSubsonicCalls = 0; /*!< device BC_Outlet calls / with a subsonic vertex */
   std::vector<double> bstateCache; /*!< host copy of st.BState */
   std::vector<unsigned long> h_markerPtr; /*!< host copy of geo.marker_ptr */
+  View1D<double> customTwall_;            /*!< 6b.b: per-vertex wall temperature (packed marker layout), lazy */
   void EnsureAccumulator(bool implicit);
   /*--- Step 6. ---*/
   bool resident = false, residentActive = false, poison = false;
