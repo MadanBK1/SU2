@@ -704,3 +704,5 @@ READY FOR REVIEW: MERGE: 4.6-MG1 — logs now committed: validation_logs/2026-11
   - NEXT: after build rc=0, run review-20 MG2 queue: G1 strict invwedge_mg, control MG_DEVICE=0, variants mgpost/mgw/mgcs, viscous super_cat (coarse OFF, bitwise), poison, noise floor, regressions default+targeted; archive under validation_logs/2026-11-26_4.6-MG2/ + INDEX rows; then `READY FOR REVIEW: MERGE: 4.6-MG2` (only after strict PASS + logs committed).
 
 - 2026-11-26T04:03:04-05:00 [loop] round 83 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_035018_83.log
+
+- 2026-11-26T04:15:04-05:00 [loop] round 84 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_040324_84.log
