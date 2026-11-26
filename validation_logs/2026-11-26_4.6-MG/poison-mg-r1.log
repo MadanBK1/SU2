@@ -1,0 +1,10 @@
+invwedge_mg NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=64.22s
+invwedge_mg YES exit=0 wall=53.72s
+  residual row NO : [-1.057766 -1.580043 -6.777495 -5.355051 -2.500215  2.272437  1.854181
+  5.322666  4.216248]
+  residual row YES: [-1.057766 -1.580043 -6.777495 -5.355051 -2.500215  2.272437  1.854181
+  5.322666  4.216248]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_mg_mgpoison: PASS
+OVERALL: PASS

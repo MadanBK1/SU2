@@ -1,0 +1,19 @@
+invwedge_mg NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=64.39s
+invwedge_mg YES exit=0 wall=54.03s
+  expected stage line missing: device-resident state (Step 6): ON
+  expected stage line missing: MG fine-level host transfers=
+    got: [KOKKOS_NEMO] stage upwind (AUSM + MUSCL, residual + Jacobian): device
+    got: [KOKKOS_NEMO] stage bc:FAR_FIELD (Inlet): device
+    got: [KOKKOS_NEMO] stage bc:OUTLET_FLOW (Exit): device
+    got: [KOKKOS_NEMO] stage bc:FAR_FIELD (Farfield): device
+    got: [KOKKOS_NEMO] stage bc:EULER_WALL (Wall): device
+    got: [KOKKOS_NEMO] stage bc:EULER_WALL (Euler): device
+    got: [KOKKOS_NEMO] device-resident state (Step 6): OFF (multigrid (SU2_KOKKOS_NEMO_MG_RESIDENT=0))
+  residual row NO : [-1.057766 -1.580043 -6.777495 -5.355051 -2.500215  2.272437  1.854181
+  5.322666  4.216248]
+  residual row YES: [-1.057766 -1.580043 -6.777495 -5.355051 -2.500215  2.272437  1.854181
+  5.322666  4.216248]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invwedge_mg_mgoff: PASS
+OVERALL: FAIL

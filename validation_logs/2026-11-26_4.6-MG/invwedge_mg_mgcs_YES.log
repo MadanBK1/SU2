@@ -1,0 +1,615 @@
+
+-------------------------------------------------------------------------
+|    ___ _   _ ___                                                      |
+|   / __| | | |_  )   Release 8.5.0 "Harrier"                           |
+|   \__ \ |_| |/ /                                                      |
+|   |___/\___//___|   Suite (Computational Fluid Dynamics Code)         |
+|                                                                       |
+-------------------------------------------------------------------------
+| SU2 Project Website: https://su2code.github.io                        |
+|                                                                       |
+| The SU2 Project is maintained by the SU2 Foundation                   |
+| (http://su2foundation.org)                                            |
+-------------------------------------------------------------------------
+| Copyright 2012-2026, SU2 Contributors                                 |
+|                                                                       |
+| SU2 is free software; you can redistribute it and/or                  |
+| modify it under the terms of the GNU Lesser General Public            |
+| License as published by the Free Software Foundation; either          |
+| version 2.1 of the License, or (at your option) any later version.    |
+|                                                                       |
+| SU2 is distributed in the hope that it will be useful,                |
+| but WITHOUT ANY WARRANTY; without even the implied warranty of        |
+| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU      |
+| Lesser General Public License for more details.                       |
+|                                                                       |
+| You should have received a copy of the GNU Lesser General Public      |
+| License along with SU2. If not, see <http://www.gnu.org/licenses/>.   |
+-------------------------------------------------------------------------
+
+Parsing config file for zone 0
+
+----------------- Physical Case Definition ( Zone 0 ) -------------------
+Compressible two-temperature thermochemical non-equilibrium Euler equations.
+Mach number: 5.
+Angle of attack (AoA): 0 deg, and angle of sideslip (AoS): 0 deg.
+No restart solution, use the values at infinity (freestream).
+Dimensional simulation.
+The reference area is 1 m^2.
+The semi-span will be computed using the max y(3D) value.
+The reference length is 1 m.
+Reference origin for moment evaluation is (0, 0, 0).
+Surface(s) where the force coefficients are evaluated: Wall.
+
+Input mesh file name: invwedge.su2
+
+--------------- Space Numerical Integration ( Zone 0 ) ------------------
+AUSM solver for the flow inviscid terms.
+Second order integration in space, with slope limiter.
+Venkatakrishnan slope-limiting method, with constant: 0.05.
+The reference element size is: 1. 
+Gradient for upwind reconstruction: inverse-distance weighted Least-Squares.
+Gradient for viscous and source terms: inverse-distance weighted Least-Squares.
+
+--------------- Time Numerical Integration  ( Zone 0 ) ------------------
+Local time stepping (steady state simulation).
+Euler implicit method for the flow equations.
+BCGSTAB is used for solving the linear system.
+Using a ILU(0) preconditioning.
+Convergence criteria of the linear solver: 1e-06.
+Max number of linear iterations: 5.
+V Multigrid Cycle, with 2 multigrid levels.
+Damping factor for the residual restriction: 0.75.
+Damping factor for the correction prolongation: 0.75.
+No CFL adaptation.
++-------------------------------------------+
+|  MG Level| Presmooth|PostSmooth|CorrectSmo|
++-------------------------------------------+
+|         0|         1|         0|         2|
+|         1|         2|         0|         2|
+|         2|         3|         0|         0|
++-------------------------------------------+
+Courant-Friedrichs-Lewy number:        3
+
+------------------ Convergence Criteria  ( Zone 0 ) ---------------------
+Maximum number of solver subiterations: 11.
+Begin convergence monitoring at iteration 10.
+Residual minimum value: 1e-50.
+Cauchy series min. value: 1e-10.
+Number of Cauchy elements: 100.
+Begin windowed time average at iteration 0.
+
+-------------------- Output Information ( Zone 0 ) ----------------------
+File writing frequency: 
++------------------------------------+
+|                     File| Frequency|
++------------------------------------+
+|            RESTART_ASCII|       100|
+|           PARAVIEW_ASCII|       100|
++------------------------------------+
+Writing the convergence history file every 1 inner iterations.
+Writing the screen convergence history every 1 inner iterations.
+The tabular file format is Tecplot (.dat).
+Convergence history file name: convergence.
+Forces breakdown file name: forces_breakdown.dat.
+Surface file name: soln_surface.
+Volume file name: soln_volume.
+Restart file name: restart_flow.
+
+------------- Config File Boundary Information ( Zone 0 ) ---------------
++-----------------------------------------------------------------------+
+|                        Marker Type|                        Marker Name|
++-----------------------------------------------------------------------+
+|                         Euler wall|                              Euler|
+|                                   |                               Wall|
++-----------------------------------------------------------------------+
+|                          Far-field|                           Farfield|
+|                                   |                              Inlet|
++-----------------------------------------------------------------------+
+|                    Outlet boundary|                               Exit|
++-----------------------------------------------------------------------+
+
+-------------------- Output Preprocessing ( Zone 0 ) --------------------
+
+WARNING: SURFACE_PRESSURE_DROP can only be computed for at least 2 surfaces (outlet, inlet, ...)
+
+Screen output fields: INNER_ITER, RMS_DENSITY_0, RMS_DENSITY_1, RMS_DENSITY_2, RMS_DENSITY_3, RMS_DENSITY_4, RMS_MOMENTUM-X, RMS_MOMENTUM-Y, RMS_ENERGY, RMS_ENERGY_VE
+History output group(s): ITER, RMS_RES
+Convergence field(s): RMS_DENSITY_0
+Warning: No (valid) fields chosen for time convergence monitoring. Time convergence monitoring inactive.
+Volume output fields: COORDINATES, SOLUTION, PRIMITIVE, AUXILIARY
+
+------------------- Geometry Preprocessing ( Zone 0 ) -------------------
+Two dimensional problem.
+25830 grid points.
+25392 volume elements.
+5 surface markers.
+69 boundary elements in index 0 (Marker = Inlet).
+349 boundary elements in index 1 (Marker = Wall).
+69 boundary elements in index 2 (Marker = Exit).
+368 boundary elements in index 3 (Marker = Farfield).
+19 boundary elements in index 4 (Marker = Euler).
+25392 quadrilaterals.
+Setting point connectivity.
+Renumbering points (Reverse Cuthill McKee Ordering).
+Recomputing point connectivity.
+Setting element connectivity.
+Checking the numerical grid orientation.
+All volume elements are correctly oriented.
+All surface elements are correctly oriented.
+Identifying edges and vertices.
+Setting the control volume structure.
+Area of the computational grid: 0.225251.
+Searching for the closest normal neighbors to the surfaces.
+Storing a mapping from global to local point index.
+Compute the surface curvature.
+Max K: 768.759. Mean K: 3.66666. Standard deviation K: 37.4822.
+Computing mesh quality statistics for the dual control volumes.
++--------------------------------------------------------------+
+|           Mesh Quality Metric|        Minimum|        Maximum|
++--------------------------------------------------------------+
+|    Orthogonality Angle (deg.)|         66.913|        89.9961|
+|     CV Face Area Aspect Ratio|        1.00187|        83.1257|
+|           CV Sub-Volume Ratio|        1.00007|        2.37912|
++--------------------------------------------------------------+
+Setting the multigrid structure. NMG=2
++-------------------------------------------+
+|  MG Level|       CVs|Aggl. Rate|       CFL|
++-------------------------------------------+
+|         0|     25830|    1/1.00|         3|
+|         1|      6696|    1/3.86|         2|
+
+Euler Wall Agglomeration Statistics (45° curvature threshold):
+----------------------------------------------------------------
+  Marker: Wall
+    Seeds agglomerated:       174 (100.0%)
+    Seeds rejected (>45° curv): 0 (0.0%)
+  Marker: Euler
+    Seeds agglomerated:       9 (100.0%)
+    Seeds rejected (>45° curv): 0 (0.0%)
+----------------------------------------------------------------
+|         2|      1812|     1/3.7|  1.333333|
++-------------------------------------------+
+
+Euler Wall Agglomeration Statistics (45° curvature threshold):
+----------------------------------------------------------------
+  Marker: Wall
+    Seeds agglomerated:       87 (100.0%)
+    Seeds rejected (>45° curv): 0 (0.0%)
+  Marker: Euler
+    Seeds agglomerated:       5 (100.0%)
+    Seeds rejected (>45° curv): 0 (0.0%)
+----------------------------------------------------------------
+Finding max control volume width.
+Wetted area = 1.0 m.
+Area projection in the x-plane = 0.2 m, y-plane = 0.0 m.
+Max. coordinate in the x-direction = 1.0 m, y-direction = 0.2 m.
+Min. coordinate in the x-direction = 0.0 m, y-direction = 0.0 m.
+Computing wall distances.
+
+-------------------- Solver Preprocessing ( Zone 0 ) --------------------
+Inviscid flow: Computing density based on free-stream
+and pressure using the the equation of state for multi-species and multi-temperatures.
+Force coefficients computed using free-stream values.
+
+-- Models:
++-----------------------------------------------------------------------------+
+|                  Mixture|              Fluid Model|          Transport Model|
++-----------------------------------------------------------------------------+
+|                    AIR-5|                SU2 NonEq|                        -|
++-----------------------------------------------------------------------------+
+-- Fluid properties:
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|          Gas Constant|       287.399|             1|  N.m/kg.K|       287.399|
+|      Spec. Heat Ratio|             -|             -|         -|           1.4|
++------------------------------------------------------------------------------+
+-- Initial and free-stream conditions:
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|       Static Pressure|        101325|             1|        Pa|        101325|
+|               Density|        1.2197|             1|    kg/m^3|        1.2197|
+|       T-R Temperature|        288.15|             1|         K|        288.15|
+|       V-E Temperature|        288.15|             1|         K|        288.15|
+|          Total Energy|   1.66154e+06|             1|   m^2/s^2|   1.66154e+06|
+|            Velocity-X|       1705.16|             1|       m/s|       1705.16|
+|            Velocity-Y|             0|             1|       m/s|             0|
+|    Velocity Magnitude|       1705.16|             1|       m/s|       1705.16|
++------------------------------------------------------------------------------+
+|           Mach Number|             -|             -|         -|             5|
++------------------------------------------------------------------------------+
+Initialize Jacobian structure (Euler). MG level: 0.
+[KOKKOS_NEMO] device Cons2Prim enabled (exec space Serial, nPoint 25830, nEdge 51221, nSpecies 5, implicit)
+[KOKKOS_NEMO] edge assembly (upwind, viscous): atomic (Kokkos atomics; SU2_KOKKOS_NEMO_EDGE=color|level for the deterministic coloured assembly)
+[KOKKOS_NEMO] stage Cons2Prim (SetPrimVar + non-physical reduce): device
+[KOKKOS_NEMO] stage gradient (WEIGHTED_LEAST_SQUARES, into Gradient_Reconstruction): device
+[KOKKOS_NEMO] stage limiter (VENKATAKRISHNAN): device
+[KOKKOS_NEMO] stage time step (spectral radii + local dt + min/max reduce): device
+[KOKKOS_NEMO] stage max eigenvalue (centered only): not used
+[KOKKOS_NEMO] stage upwind (AUSM + MUSCL, residual + Jacobian): device
+[KOKKOS_NEMO] stage source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+[KOKKOS_NEMO] stage bc:FAR_FIELD (Inlet): device
+[KOKKOS_NEMO] stage bc:OUTLET_FLOW (Exit): device
+[KOKKOS_NEMO] stage bc:FAR_FIELD (Farfield): device
+[KOKKOS_NEMO] stage bc:EULER_WALL (Wall): device
+[KOKKOS_NEMO] stage bc:EULER_WALL (Euler): device
+[KOKKOS_NEMO] residual sync: deferred, the device residual + Jacobian are downloaded once after the BCs (FinalizeSpaceIntegration), or before the first host stage
+[KOKKOS_NEMO] stage update (EULER_IMPLICIT): device
+[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, linear solve
+[KOKKOS_NEMO] sync: SetPrimVar HtoD U,U_old,V,secondaries + DtoH all; stages reuse device V, DtoH domain rows of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS); upwind reuses device V/secondaries/gradient/limiter (HtoD halo rows, Non_Physical, sensor); source/BCs reuse device U/V/secondaries (HtoD node_infty once); residual accumulator DtoH (see residual sync)
+[KOKKOS_NEMO] device-resident state (Step 6): ON (U, V, secondaries, gradient, limiter, dt, Non_Physical, residual, Jacobian, LinSysSol stay on the device; host copies on demand)
+Initialize Jacobian structure (Euler). MG level: 1.
+Initialize Jacobian structure (Euler). MG level: 2.
+
+------------------- Numerics Preprocessing ( Zone 0 ) -------------------
+
+----------------- Integration Preprocessing ( Zone 0 ) ------------------
+
+------------------- Iteration Preprocessing ( Zone 0 ) ------------------
+Euler/Navier-Stokes/RANS fluid iteration.
+
+------------------------------ Begin Solver -----------------------------
+
+Simulation Run using the Single-zone Driver
++---------------------------------------------------------------------------------------------------------------------------------+
+|  Inner_Iter|  rms[Rho_0]|  rms[Rho_1]|  rms[Rho_2]|  rms[Rho_3]|  rms[Rho_4]|   rms[RhoU]|   rms[RhoV]|   rms[RhoE]| rms[RhoEve]|
++---------------------------------------------------------------------------------------------------------------------------------+
+|           0|   -0.918169|   -1.442932|  -32.000000|  -32.000000|  -24.921797|    2.427107|  -13.266845|    5.437040|    0.990754|
+|           1|   -0.989528|   -1.514291|  -32.000000|  -32.000000|  -24.933718|    2.352221|    1.065839|    5.372541|    2.282992|
+Warning. The initial solution contains 2 points that are not physical.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    89
+Vib. Relax:  89
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    89
+Vib. Relax:  89
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    89
+Vib. Relax:  89
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    89
+Vib. Relax:  89
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning. The initial solution contains 348 points that are not physical.
+|           2|   -1.163998|   -1.688761|  -20.809701|  -22.074614|  -13.534667|    2.168738|    1.569555|    5.197331|    3.723217|
+Warning. The initial solution contains 31 points that are not physical.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    1
+Vib. Relax:  1
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    1
+Vib. Relax:  1
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    1
+Vib. Relax:  1
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    7
+Vib. Relax:  7
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    7
+Vib. Relax:  7
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    7
+Vib. Relax:  7
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    7
+Vib. Relax:  7
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning. The initial solution contains 18 points that are not physical.
+|           3|   -1.184930|   -1.709693|  -19.313385|  -17.848841|   -8.181736|    2.149313|    1.908980|    5.174918|    3.813940|
+Warning. The initial solution contains 2 points that are not physical.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    2
+Vib. Relax:  2
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    2
+Vib. Relax:  2
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    2
+Vib. Relax:  2
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    6
+Vib. Relax:  6
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    6
+Vib. Relax:  6
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    6
+Vib. Relax:  6
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    6
+Vib. Relax:  6
+CSysSolve::BCGSTAB(): system solved by initial guess.
+Warning. The initial solution contains 18 points that are not physical.
+|           4|   -1.143454|   -1.670503|   -7.276774|   -6.185992|   -3.052822|    2.150688|    1.675876|    5.182497|    3.812504|
+Warning. The initial solution contains 7 points that are not physical.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    1
+Vib. Relax:  1
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    1
+Vib. Relax:  1
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    1
+Vib. Relax:  1
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    5
+Vib. Relax:  5
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    5
+Vib. Relax:  5
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    5
+Vib. Relax:  5
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    5
+Vib. Relax:  5
+Warning. The initial solution contains 22 points that are not physical.
+|           5|   -1.161097|   -1.686467|  -13.191847|   -7.320396|   -3.519780|    2.131035|    1.562627|    5.167064|    3.776642|
+Warning. The initial solution contains 7 points that are not physical.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    2
+Vib. Relax:  2
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    2
+Vib. Relax:  2
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    2
+Vib. Relax:  2
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    2
+Vib. Relax:  2
+Warning. The initial solution contains 9 points that are not physical.
+|           6|   -1.205884|   -1.731897|   -4.747168|   -5.558495|   -2.976572|    2.096196|    1.633004|    5.136022|    3.793760|
+Warning. The initial solution contains 155 points that are not physical.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    5
+Vib. Relax:  5
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    5
+Vib. Relax:  5
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    5
+Vib. Relax:  5
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    4
+Vib. Relax:  4
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    4
+Vib. Relax:  4
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    4
+Vib. Relax:  4
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    4
+Vib. Relax:  4
+Warning. The initial solution contains 11 points that are not physical.
+|           7|   -1.157792|   -1.683441|   -4.213611|   -5.483546|   -3.422398|    2.153623|    1.795459|    5.198767|    3.765816|
+Warning. The initial solution contains 29 points that are not physical.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    9
+Vib. Relax:  9
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    9
+Vib. Relax:  9
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    9
+Vib. Relax:  9
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    7
+Vib. Relax:  7
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    7
+Vib. Relax:  7
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    7
+Vib. Relax:  7
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    7
+Vib. Relax:  7
+Warning. The initial solution contains 18 points that are not physical.
+|           8|   -1.056773|   -1.579223|   -4.213611|   -3.750806|   -2.685472|    2.257129|    1.936375|    5.317473|    4.166686|
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    14
+Vib. Relax:  14
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    14
+Vib. Relax:  14
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    14
+Vib. Relax:  14
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    14
+Vib. Relax:  14
+Warning. The initial solution contains 40 points that are not physical.
+|           9|   -1.082554|   -1.592145|   -4.141820|   -3.586326|   -2.199360|    2.235147|    1.860856|    5.273861|    4.284195|
+Warning. The initial solution contains 10 points that are not physical.
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    3
+Vib. Relax:  3
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    3
+Vib. Relax:  3
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    3
+Vib. Relax:  3
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    17
+Vib. Relax:  17
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    17
+Vib. Relax:  17
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    17
+Vib. Relax:  17
+Warning!! Instances of NaN in the following source terms: 
+Axisymmetry: 0
+Chemical:    17
+Vib. Relax:  17
+Warning. The initial solution contains 40 points that are not physical.
+|          10|   -1.058630|   -1.569494|   -3.691460|   -3.573857|   -2.194708|    2.252748|    1.916089|    5.312019|    4.321201|
+
+----------------------------- Solver Exit -------------------------------
+
+Maximum number of iterations reached (ITER = 11) before convergence.
++-----------------------------------------------------------------------+
+|      Convergence Field     |     Value    |   Criterion  |  Converged |
++-----------------------------------------------------------------------+
+|                  rms[Rho_0]|      -1.05863|         < -50|          No|
++-----------------------------------------------------------------------+
+-------------------------------------------------------------------------
++-----------------------------------------------------------------------+
+|        File Writing Summary       |              Filename             |
++-----------------------------------------------------------------------+
+|SU2 ASCII restart                  |restart_flow.csv                   |
+|Paraview ASCII                     |soln_volume.vtk                    |
++-----------------------------------------------------------------------+
+Warning: there are 40 non-physical points in the solution.
+Warning: 31804 reconstructed states for upwinding are non-physical.
+
+--------------------------- Finalizing Solver ---------------------------
+Deleted CNumerics container.
+Deleted CIntegration container.
+[KOKKOS_NEMO_PERF] device preconditioner builds=11 (0.719647 s incl. verification)
+[KOKKOS_NEMO_PERF] MG fine-level host transfers=11
+[KOKKOS_NEMO_PERF] MG 0 SetPrimVar calls=33 nPoint=25830 | h2d 4.211e-03 s (1.276e-04/call, 0.000e+00 MB/call) | kernel 1.290e+01 s (3.908e-01/call) | d2h 1.649e-05 s (4.998e-07/call, 0.000e+00 MB/call) | host post 3.211e-04 s (9.729e-06/call)
+[KOKKOS_NEMO_PERF] MG 0 Gradient calls=22 | h2d 1.620e-03 s (8.856e-02 MB/call) | kernel 7.567e-02 s (3.440e-03/call) | d2h 1.306e-03 s (8.856e-02 MB/call) | host 7.637e-04 s (3.471e-05/call)
+[KOKKOS_NEMO_PERF] MG 0 Limiter calls=22 | h2d 2.475e-03 s (0.000e+00 MB/call) | kernel 8.902e-02 s (4.046e-03/call) | d2h 4.096e-06 s (0.000e+00 MB/call) | host 8.449e-06 s (3.840e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 TimeStep calls=11 | h2d 3.289e-04 s (0.000e+00 MB/call) | kernel 9.260e-03 s (8.418e-04/call) | d2h 1.810e-06 s (0.000e+00 MB/call) | host 8.781e-06 s (7.983e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 Upwind calls=22 | h2d 1.335e-03 s (0.000e+00 MB/call) | kernel 2.608e+00 s (1.186e-01/call) | d2h 3.091e-05 s (1.200e-04 MB/call) | host 8.164e-05 s (3.711e-06/call)
+[KOKKOS_NEMO_PERF] MG 0 Source calls=22 | h2d 9.597e-06 s (0.000e+00 MB/call) | kernel 5.408e+00 s (2.458e-01/call) | d2h 0.000e+00 s (0.000e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 0 BC calls=110 | h2d 1.021e-04 s (4.800e-05 MB/call) | kernel 7.617e-03 s (6.924e-05/call) | d2h 4.309e-06 s (0.000e+00 MB/call) | host 2.066e-05 s (1.879e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 BC_Outlet calls=22, with subsonic outlet vertices=0
+[KOKKOS_NEMO] WARNING MG 0: 10 pending device residual accumulators were discarded (missing host sync)
+[KOKKOS_NEMO_PERF] MG 0 Update | prepare 4.488e-02 s (4.080e-03/call) | complete 6.320e-03 s (5.745e-04/call) | explicit 0.000e+00 s (0.000e+00/call) | old solution 2.493e-03 s | residual norm 6.581e-03 s (22 calls)
+[KOKKOS_NEMO_PERF] MG 0 sync Solution calls=24 | h2d 2.232e+01 MB (2.563e-03 s) | d2h 2.232e+01 MB (2.689e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Solution_Old calls=2 | h2d 1.860e+00 MB (2.362e-04 s) | d2h 1.860e+00 MB (2.639e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Primitive+secondaries calls=2 | h2d 1.095e+01 MB (1.390e-03 s) | d2h 1.096e+01 MB (1.690e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Gradient calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 6.199e+00 MB (7.522e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Limiter calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 9.299e+00 MB (1.122e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync TimeStep calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 4.133e-01 MB (5.461e-05 s)
+[KOKKOS_NEMO_PERF] MG 0 sync LocalCFL calls=1 | h2d 2.066e-01 MB (2.550e-05 s) | d2h 0.000e+00 MB (0.000e+00 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Non_Physical calls=2 | h2d 7.749e-02 MB (2.981e-05 s) | d2h 7.749e-02 MB (1.335e-05 s)
+[KOKKOS_NEMO_PERF] MG 0 sync UnderRelaxation calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 2.066e-01 MB (2.524e-05 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Res_TruncError calls=12 | h2d 1.860e+00 MB (2.326e-04 s) | d2h 2.046e+01 MB (2.568e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync LinSysRes+LinSysSol calls=11 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 4.091e+01 MB (4.208e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync boundary Primitive (+ viscous-wall gradient/transport) calls=11 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 1.154e+00 MB (6.663e-04 s)
+[KOKKOS_NEMO_LEDGER] MG 0 21 closed iterations (device-resident); non-output iterations >= 1: max HtoD 1.027e+08 B, max DtoH 8.728e+06 B; output iterations: 0, DtoH 0.000e+00 B in total
+[KOKKOS_NEMO_LEDGER] MG 0 steady iteration 20: HtoD 8.880e+04 B, DtoH 8.882e+04 B
+[KOKKOS_NEMO_LEDGER]     Gradient HtoD: 8.856e+04 B
+[KOKKOS_NEMO_LEDGER]     Gradient DtoH: 8.856e+04 B
+[KOKKOS_NEMO_LEDGER]     Upwind DtoH: 1.200e+02 B
+[KOKKOS_NEMO_LEDGER]     BC HtoD: 2.400e+02 B
+[KOKKOS_NEMO_LEDGER]     sync Primitive+secondaries DtoH: 1.450e+02 B
+[KOKKOS_NEMO_PERF] MG 1 SetPrimVar calls=34 nPoint=6696 | h2d 1.398e-02 s (4.111e-04/call, 3.803e+00 MB/call) | kernel 1.571e+01 s (4.621e-01/call) | d2h 1.088e-02 s (3.200e-04/call, 3.435e+00 MB/call) | host post 3.037e-03 s (8.932e-05/call)
+[KOKKOS_NEMO_PERF] MG 1 TimeStep calls=12 | h2d 1.323e-04 s (5.357e-02 MB/call) | kernel 2.741e-03 s (2.284e-04/call) | d2h 7.306e-05 s (1.071e-01 MB/call) | host 8.331e-06 s (6.943e-07/call)
+[KOKKOS_NEMO_PERF] MG 1 Upwind calls=34 | h2d 2.503e-04 s (0.000e+00 MB/call) | kernel 3.919e-01 s (1.153e-02/call) | d2h 3.198e-06 s (0.000e+00 MB/call) | host 1.995e-06 s (5.868e-08/call)
+[KOKKOS_NEMO_PERF] MG 1 Source calls=34 | h2d 1.123e-05 s (0.000e+00 MB/call) | kernel 1.751e+00 s (5.151e-02/call) | d2h 0.000e+00 s (0.000e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 1 BC calls=170 | h2d 1.117e-04 s (3.247e-05 MB/call) | kernel 2.687e-03 s (1.580e-05/call) | d2h 8.165e-06 s (0.000e+00 MB/call) | host 1.104e-05 s (6.492e-08/call)
+[KOKKOS_NEMO_PERF] MG 1 ResidualSync calls=34 | h2d 1.343e-02 s (0.000e+00 MB/call) | kernel 0.000e+00 s (0.000e+00/call) | d2h 2.770e-02 s (8.117e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 1 BC_Outlet calls=34, with subsonic outlet vertices=0
+[KOKKOS_NEMO_LEDGER] MG 1 33 closed iterations (host-authoritative); non-output iterations >= 1: max HtoD 4.808e+07 B, max DtoH 2.614e+07 B; output iterations: 0, DtoH 0.000e+00 B in total
+[KOKKOS_NEMO_LEDGER] MG 1 steady iteration 32: HtoD 4.808e+07 B, DtoH 2.614e+07 B
+[KOKKOS_NEMO_LEDGER]     SetPrimVar HtoD: 3.803e+06 B
+[KOKKOS_NEMO_LEDGER]     SetPrimVar DtoH: 3.435e+06 B
+[KOKKOS_NEMO_LEDGER]     TimeStep HtoD: 5.357e+04 B
+[KOKKOS_NEMO_LEDGER]     TimeStep DtoH: 1.071e+05 B
+[KOKKOS_NEMO_LEDGER]     BC HtoD: 2.400e+02 B
+[KOKKOS_NEMO_LEDGER]     ResidualSync DtoH: 2.211e+07 B
+[KOKKOS_NEMO_LEDGER]     linear algebra vector HtoD: 9.642e+05 B
+[KOKKOS_NEMO_LEDGER]     linear algebra vector DtoH: 4.821e+05 B
+[KOKKOS_NEMO_LEDGER]     linear algebra matrix HtoD: 2.163e+07 B
+[KOKKOS_NEMO_LEDGER]     linear algebra precond HtoD: 2.163e+07 B
+[KOKKOS_NEMO_PERF] MG 2 SetPrimVar calls=40 nPoint=1812 | h2d 4.404e-03 s (1.101e-04/call, 1.029e+00 MB/call) | kernel 6.453e+00 s (1.613e-01/call) | d2h 2.272e-03 s (5.680e-05/call, 9.296e-01 MB/call) | host post 9.842e-04 s (2.460e-05/call)
+[KOKKOS_NEMO_PERF] MG 2 TimeStep calls=29 | h2d 9.291e-05 s (1.450e-02 MB/call) | kernel 2.039e-03 s (7.031e-05/call) | d2h 6.443e-05 s (2.899e-02 MB/call) | host 1.530e-05 s (5.276e-07/call)
+[KOKKOS_NEMO_PERF] MG 2 Upwind calls=40 | h2d 1.239e-04 s (0.000e+00 MB/call) | kernel 2.342e-01 s (5.856e-03/call) | d2h 1.729e-06 s (0.000e+00 MB/call) | host 1.623e-06 s (4.057e-08/call)
+[KOKKOS_NEMO_PERF] MG 2 Source calls=40 | h2d 1.087e-05 s (0.000e+00 MB/call) | kernel 9.003e-01 s (2.251e-02/call) | d2h 0.000e+00 s (0.000e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 2 BC calls=200 | h2d 8.683e-05 s (2.640e-05 MB/call) | kernel 2.127e-03 s (1.064e-05/call) | d2h 2.123e-05 s (7.200e-06 MB/call) | host 4.068e-05 s (2.034e-07/call)
+[KOKKOS_NEMO_PERF] MG 2 ResidualSync calls=40 | h2d 8.341e-03 s (0.000e+00 MB/call) | kernel 0.000e+00 s (0.000e+00/call) | d2h 1.334e-02 s (4.507e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 2 BC_Outlet calls=40, with subsonic outlet vertices=12
+[KOKKOS_NEMO_LEDGER] MG 2 39 closed iterations (host-authoritative); non-output iterations >= 1: max HtoD 5.761e+07 B, max DtoH 7.738e+06 B; output iterations: 0, DtoH 0.000e+00 B in total
+[KOKKOS_NEMO_LEDGER] MG 2 steady iteration 38: HtoD 1.338e+07 B, DtoH 7.256e+06 B
+[KOKKOS_NEMO_LEDGER]     SetPrimVar HtoD: 1.029e+06 B
+[KOKKOS_NEMO_LEDGER]     SetPrimVar DtoH: 9.296e+05 B
+[KOKKOS_NEMO_LEDGER]     TimeStep HtoD: 1.450e+04 B
+[KOKKOS_NEMO_LEDGER]     TimeStep DtoH: 2.899e+04 B
+[KOKKOS_NEMO_LEDGER]     ResidualSync DtoH: 6.167e+06 B
+[KOKKOS_NEMO_LEDGER]     linear algebra vector HtoD: 2.609e+05 B
+[KOKKOS_NEMO_LEDGER]     linear algebra vector DtoH: 1.305e+05 B
+[KOKKOS_NEMO_LEDGER]     linear algebra matrix HtoD: 6.037e+06 B
+[KOKKOS_NEMO_LEDGER]     linear algebra precond HtoD: 6.037e+06 B
+Deleted CSolver container.
+Deleted CIteration container.
+Deleted CInterface container.
+Deleted CGeometry container.
+Deleted CFreeFormDefBox class.
+Deleted CSurfaceMovement class.
+Deleted CVolumetricMovement class.
+Deleted CConfig container.
+Deleted nInst container.
+Deleted COutput class.
+-------------------------------------------------------------------------
+
+------------------------- Exit Success (SU2_CFD) ------------------------
+
