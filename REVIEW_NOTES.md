@@ -48,6 +48,12 @@ on CSysMatrixKokkos.cpp, CSysMatrix.cpp, CSysSolve.cpp, CNEMOEulerSolver.cpp; NO
    `MERGE: 4.6-LUSGS`. Next heavy after that: `HEAVY: 4.6-MG` (multigrid coarse levels) — or periodic markers if
    you find a periodic NEMO cfg first. Item 6 (ionization) still waits for Madan.
 
+7. **Log archive (Madan, 2026-11-26), do this first, then keep doing it (see VALIDATION LOGS in LOCAL_AGENT_TASK.md):**
+   backfill: copy every existing `../kk/logs/*.log` into `validation_logs/backfill_2026-11-25/` (gzip > 1 MB), list each in
+   `validation_logs/INDEX.md` (item/gate/result as far as KOKKOS_PROGRESS.md says; "unknown" otherwise), commit.
+   From now on every run's log is committed with its progress note.
+8. Ionization with Roe/LAX/MSW: decided — stays on the host. Remove it from your queue.
+
 **Madan (V100, optional):** after the agent's strict PASS, time it on the GPU:
 `cd $RUN && BIN=<cuda SU2_CFD> bash TestCases/kokkos_nemo/check.sh invwedge_lusgs` and
 `nsys profile -o lusgs SU2_CFD run.cfg` (look at SU2::KokkosLUSGSForward/Backward).
