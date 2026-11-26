@@ -763,3 +763,8 @@ LOOP HINT: 2026-11-26T07:49:57-05:00 no progress for 3 rounds on the current ite
   - THIS SESSION: (a) run regressions default + invwedge_mg + invwedge_lusgs (g1-dynregress-r1.log), (b) bounded host-side localization of dynvisc (refresh call site / viscous path, read-only), (c) archive validation_logs/2026-11-26_6b.a-DynGrid/ + INDEX rows, (d) if not fixable within my role → `READY FOR REVIEW: HEAVY: 6b.a-DynGrid: dynvisc`.
 
 - 2026-11-26T08:31:36-05:00 [loop] round 94 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_080018_94.log
+
+- 2026-11-26T09:45:24-05:00 [loop] round 95 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_083157_95.log
+
+- 2026-11-26 (round 96, review-22 queue: dev fix bf2ff4ad8f — refresh moved to CommonPreprocessing, NOT built; queue steps 1-8):
+  - Queue (review 22): (1) build strict+serial r2, (2) G1 dynvisc r2, (3) inviscid regression r2, (4) poison viscous r2, (5) regressions default+targeted r2, (6) noise floor dyn, (7) archive r1+r2 logs + INDEX, (8) dyn1st EXPECT artifact note. Then MERGE: 6b.a-DynGrid.
