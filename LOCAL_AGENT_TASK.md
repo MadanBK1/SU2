@@ -133,7 +133,17 @@ for every compressible NEMO config). Items once marked "stays on host" are now i
 6. Ionization with Roe / LAX / MSW: **DECIDED (Madan, 2026-11-26): stays on the CPU (host).** The CPU ComputedPdU with
    ionization is undefined (review 13), so it is not ported and not patched. Do not work on it; the host fallback reason in
    Device_UpwindUnsupported / Device_CenteredUnsupported is the intended behaviour.
-7. 4.6 solver options: LU-SGS, ILU(n>0) / GPU preconditioners, multigrid coarse levels, periodic markers,
+6b. **COUPLING READINESS — TOP PRIORITY after the LU-SGS merge (Madan 2026-11-26; AFOSR aerothermoelasticity center
+   proposal, our part = GPU aerothermal solver coupled to other PIs' structures/experiments):**
+   a. Dynamic / deforming grids on the device (DYNAMIC_GRID / mesh deformation each coupling step): geometry re-upload
+      hook (normals, volumes, grid velocities) without leaving resident mode; gate: a deforming-wedge case, G1 strict.
+   b. Coupling interface in resident mode: per-vertex wall temperature IN and per-vertex heat flux / pressure / traction
+      OUT through the python wrapper (pysu2) without full-state host copies (only marker data moves); gate: a pysu2 script
+      that sets T_wall per vertex each step, G1 strict vs ENABLE_KOKKOS=NO.
+   c. NEMO conjugate heat transfer path (fluid–solid heat exchange, SU2 multizone CHT or preCICE-style exchange) —
+      design after a and b.
+   d. (Moved to PHASE 3 by Madan 2026-11-26: continuum-breakdown Kn_GLL output + hybrid CFD–DSMC. Do NOT start.)
+7. 4.6 solver options (remaining): LU-SGS, ILU(n>0) / GPU preconditioners, multigrid coarse levels, periodic markers,
    dynamic / deforming grids.
 8. Host-touch removal: device residual norms, output / restart every N iterations, CUDA-aware MPI halos.
 9. 4.7 turbulence coupling (SA / SST device kernels for NEMO).
