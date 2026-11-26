@@ -1,8 +1,4 @@
 #!/bin/bash
-# round 73 (review 16, step 4): control — old behaviour, MG fine level NOT resident.
-# EXPECT "ON" line will be missing (expected); report tolerances/diffs only.
-set -u
-export SU2_KOKKOS_NEMO_MG_RESIDENT=0
-export RUN_TAG=_mgoff
-export EXTRA_CFG=""
-bash "$(dirname "$0")/.g1run.sh" "$@"
+# G1 control: force old behaviour (MG resident OFF) per review-16 step 4.
+export EXTRA_CFG="" SU2_KOKKOS_NEMO_MG_RESIDENT=0 RUN_TAG=_mgoff
+exec timeout 1500 bash .g1run.sh ../kk/logs/g1-mgoff-r1.log invwedge_mg
