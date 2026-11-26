@@ -1,0 +1,54 @@
+super_cat NO exit=0 wall=11.50s
+super_cat YES exit=0 wall=6.49s
+  residual columns ignored as round-off (> 10 orders below max): ['rms[Rho_2]', 'rms[Rho_3]', 'rms[Rho_4]']
+  residual row NO : [-5.2325980e+00 -5.7578920e+00 -2.0647960e+01 -2.0637121e+01
+ -2.0515889e+01  1.2469520e+00 -3.2052830e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  residual row YES: [-5.2325980e+00 -5.7578920e+00 -2.0647960e+01 -2.0637121e+01
+ -2.0515889e+01  1.2469520e+00 -3.2052830e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  max |dres| = 0.00e+00 (tol 2e-06)
+  max field |diff|/phys scale = 2.26e-15 (tol 1e-09)
+  super_cat: PASS
+thermalbath NO exit=0 wall=0.11s
+thermalbath YES exit=0 wall=0.13s
+  residual columns ignored as round-off (> 10 orders below max): ['rms[RhoU]', 'rms[RhoV]', 'rms[RhoE]']
+  residual row NO : [  0.         0.945997   0.945997 -11.897761 -11.867806 -32.
+  10.013239]
+  residual row YES: [  0.         0.945997   0.945997 -11.97873  -12.018144 -32.
+  10.013239]
+  max |dres| = 0.00e+00 (tol 2e-06)
+  max field |diff|/phys scale = 4.38e-16 (tol 1e-09)
+  thermalbath: PASS
+invwedge_ausm NO exit=0 wall=10.99s
+invwedge_ausm YES exit=0 wall=7.33s
+  residual columns ignored as round-off (> 10 orders below max): ['rms[Rho_2]', 'rms[Rho_3]', 'rms[Rho_4]']
+  residual row NO : [ -1.073693  -1.598456 -18.298997 -18.626405 -18.572419   2.241766
+   1.868557   5.286079   0.843747]
+  residual row YES: [ -1.073709  -1.598472 -18.299934 -18.627345 -18.573357   2.241748
+   1.868575   5.286062   0.843732]
+  max |dres| = 1.80e-05 (tol 2e-06)
+  NO vs reference max |d| = 0.00e+00
+  max field |diff|/phys scale = 9.69e-02 (tol 1e-09)
+  invwedge_ausm: FAIL
+invwedge_roe NO exit=0 wall=12.22s
+invwedge_roe YES exit=0 wall=8.35s
+  residual columns ignored as round-off (> 10 orders below max): ['rms[Rho_2]', 'rms[Rho_3]', 'rms[Rho_4]']
+  residual row NO : [ -1.007865  -1.532627 -17.791228 -18.120032 -18.064336   2.309549
+   1.914883   5.35153    0.960044]
+  residual row YES: [ -0.984973  -1.509736 -17.314471 -17.643505 -17.587597   2.332537
+   1.931385   5.37631    1.321071]
+  max |dres| = 3.61e-01 (tol 2e-06)
+  max field |diff|/phys scale = 1.90e+00 (tol 1e-09)
+  invwedge_roe: FAIL
+invwedge_lusgs NO exit=0 wall=12.83s
+invwedge_lusgs YES exit=0 wall=11.49s
+  residual columns ignored as round-off (> 10 orders below max): ['rms[Rho_2]', 'rms[Rho_3]', 'rms[Rho_4]']
+  residual row NO : [ -1.079005  -1.603768 -18.299961 -18.627366 -18.573405   2.236473
+   1.863624   5.280528   0.838431]
+  residual row YES: [ -1.015351  -1.540114 -17.870636 -18.200231 -18.143736   2.303154
+   1.897523   5.350383   0.900781]
+  max |dres| = 6.99e-02 (tol 2e-06)
+  max field |diff|/phys scale = 5.08e-01 (tol 1e-09)
+  invwedge_lusgs: FAIL
+OVERALL: FAIL

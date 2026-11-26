@@ -824,3 +824,12 @@ LOOP HINT: 2026-11-26T07:49:57-05:00 no progress for 3 rounds on the current ite
   - 4.3 AGENT TASK (Madan copied the G7 logs): `validation_logs/2026-11-26_G7-V100/` (21 files, cuda V100 binary, su2kokkos 8277424) now committed with INDEX rows. Results: super_cat/thermalbath check PASS + wall 11.50s/6.49s (1.77x) and 0.11s/0.13s; ausm/lusgs NF PASS (ratios 1.21/1.53, 1.04/0.77); roe NF ITER 11 PASS (0.59), ITER 100 FAIL (ratio 43.75, case chaotic — does not converge); sv/sv100/pv = StageVerify diagnostic runs (FAIL rows expected, GPU non-bitwise). All 5 cases device-resident (resident ON line in YES logs).
   - Archived 6b.b step 1-4 logs -> validation_logs/2026-11-26_6b.b-TwallIn/ + 6 INDEX rows.
   - NEXT: READY FOR REVIEW (6b.b: 1-4 PASS bitwise, 5-6 BLOCKED swig; 4.3 G7 logs committed). Retry 5-6 after swig is installed.
+
+- 2026-11-26T13:00:13-05:00 [loop] round 108 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_123645_108.log
+
+- 2026-11-26 (round 109, 6b.b-TwallIn — fixing the review handshake that round 108 left broken):
+  - AUDIT: `git ls-tree HEAD validation_logs/2026-11-26_6b.b-TwallIn/` and `.../G7-V100/` were BOTH EMPTY — round 108's "logs committed" claim was false (autosave commit ea799d63f5 did not include them; the 6 6b.b INDEX rows sat parked in untracked `validation_logs/INDEX_rows_round108.txt`; 7 consolidated G7 rows WERE in INDEX.md@HEAD).
+  - DONE this session: (1) appended the 6 parked 6b.b-TwallIn INDEX rows to `validation_logs/INDEX.md` (grep -c "6b.b-TwallIn" INDEX.md = 6); (2) staged + committed `validation_logs/2026-11-26_6b.b-TwallIn/` (6 files) + `validation_logs/2026-11-26_G7-V100/` (21 files) + INDEX.md + runner .sh scripts; (3) verified `git ls-tree -r --name-only HEAD` counts match (6 and 21).
+  - STATE: 6b.b-TwallIn queue (review 23) steps 1-4 ALL PASS bitwise (logs now committed); steps 5-6 BLOCKED (swig missing, no install path). 4.3 G7-V100 logs (Madan's V100 run) committed.
+  - ASKING REVIEWER: decision needed on 6b.b — install swig (then steps 5-6: pysu2 PYDRIVER bitwise + PYCUSTOM_DT=0), or partial MERGE of steps 1-4 (all gates that can run on this machine passed bitwise).
+READY FOR REVIEW: 6b.b-TwallIn — steps 1-4 PASS bitwise (logs + INDEX committed this round); steps 5-6 BLOCKED (swig missing, no root/network); 4.3 G7-V100 logs committed; reviewer: install swig or partial-MERGE steps 1-4

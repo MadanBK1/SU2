@@ -1,0 +1,10 @@
+invwedge_lusgs NO exit=0 wall=12.65s
+invwedge_lusgs YES exit=0 wall=15.80s
+  residual row NO : [ -1.079005  -1.603768 -18.299961 -18.627366 -18.573405   2.236473
+   1.863624   5.280528   0.838431]
+  residual row YES: [ -1.077925  -1.602688 -18.29978  -18.627209 -18.573238   2.23779
+   1.860187   5.28156    0.839363]
+  max |dres| = 3.44e-03 (tol 2e-06)
+  max field |diff|/max|field| = 1.28e+00 (tol 1e-09)
+  invwedge_lusgs_pv: FAIL
+OVERALL: FAIL

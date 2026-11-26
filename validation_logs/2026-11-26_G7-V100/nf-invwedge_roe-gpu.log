@@ -1,0 +1,3 @@
+invwedge_roe ITER 11: field |YES-NO| = 5.185e-01, CPU strict-vs-prod |NO-NO| = 8.776e-01 (ratio 0.59, K 10); history 8.19e-02 vs 1.42e+00: PASS
+invwedge_roe ITER 100: field |YES-NO| = 1.666e+01, CPU strict-vs-prod |NO-NO| = 3.809e-01 (ratio 43.75, K 10); history 1.62e+00 vs 1.42e+00: FAIL
+NOISEFLOOR OVERALL: FAIL

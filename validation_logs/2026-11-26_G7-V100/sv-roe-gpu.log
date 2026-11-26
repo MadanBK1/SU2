@@ -1,0 +1,10 @@
+invwedge_roe NO exit=0 wall=12.24s
+invwedge_roe YES exit=0 wall=25.31s
+  residual row NO : [ -1.007865  -1.532627 -17.791228 -18.120032 -18.064336   2.309549
+   1.914883   5.35153    0.960044]
+  residual row YES: [ -1.094683  -1.619446 -17.196365 -17.525557 -17.469468   2.224608
+   1.793125   5.263871   0.842927]
+  max |dres| = 5.95e-01 (tol 2e-06)
+  max field |diff|/max|field| = 1.01e+00 (tol 1e-09)
+  invwedge_roe_sv: FAIL
+OVERALL: FAIL

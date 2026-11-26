@@ -1,0 +1,12 @@
+super_cat NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=16.53s
+super_cat YES exit=0 wall=16.02s
+  residual row NO : [-5.2325980e+00 -5.7578920e+00 -2.0647960e+01 -2.0637121e+01
+ -2.0515889e+01  1.2469520e+00 -3.2052830e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  residual row YES: [-5.2325980e+00 -5.7578920e+00 -2.0647960e+01 -2.0637121e+01
+ -2.0515889e+01  1.2469520e+00 -3.2052830e+00 -2.8369000e-02
+  2.5064100e-01  3.2444000e+04]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  super_cat_pycustom: PASS
+OVERALL: PASS

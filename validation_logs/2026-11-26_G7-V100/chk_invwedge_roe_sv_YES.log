@@ -1,0 +1,331 @@
+
+-------------------------------------------------------------------------
+|    ___ _   _ ___                                                      |
+|   / __| | | |_  )   Release 8.5.0 "Harrier"                           |
+|   \__ \ |_| |/ /                                                      |
+|   |___/\___//___|   Suite (Computational Fluid Dynamics Code)         |
+|                                                                       |
+-------------------------------------------------------------------------
+| SU2 Project Website: https://su2code.github.io                        |
+|                                                                       |
+| The SU2 Project is maintained by the SU2 Foundation                   |
+| (http://su2foundation.org)                                            |
+-------------------------------------------------------------------------
+| Copyright 2012-2026, SU2 Contributors                                 |
+|                                                                       |
+| SU2 is free software; you can redistribute it and/or                  |
+| modify it under the terms of the GNU Lesser General Public            |
+| License as published by the Free Software Foundation; either          |
+| version 2.1 of the License, or (at your option) any later version.    |
+|                                                                       |
+| SU2 is distributed in the hope that it will be useful,                |
+| but WITHOUT ANY WARRANTY; without even the implied warranty of        |
+| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU      |
+| Lesser General Public License for more details.                       |
+|                                                                       |
+| You should have received a copy of the GNU Lesser General Public      |
+| License along with SU2. If not, see <http://www.gnu.org/licenses/>.   |
+-------------------------------------------------------------------------
+
+Parsing config file for zone 0
+
+----------------- Physical Case Definition ( Zone 0 ) -------------------
+Compressible two-temperature thermochemical non-equilibrium Euler equations.
+Mach number: 5.
+Angle of attack (AoA): 0 deg, and angle of sideslip (AoS): 0 deg.
+No restart solution, use the values at infinity (freestream).
+Dimensional simulation.
+The reference area is 1 m^2.
+The semi-span will be computed using the max y(3D) value.
+The reference length is 1 m.
+Reference origin for moment evaluation is (0, 0, 0).
+Surface(s) where the force coefficients are evaluated: Wall.
+
+Input mesh file name: invwedge.su2
+
+--------------- Space Numerical Integration ( Zone 0 ) ------------------
+Roe (with entropy fix = 0.001) solver for the flow inviscid terms.
+Second order integration in space, with slope limiter.
+Venkatakrishnan slope-limiting method, with constant: 0.05.
+The reference element size is: 1. 
+Gradient for upwind reconstruction: inverse-distance weighted Least-Squares.
+Gradient for viscous and source terms: inverse-distance weighted Least-Squares.
+
+--------------- Time Numerical Integration  ( Zone 0 ) ------------------
+Local time stepping (steady state simulation).
+Euler implicit method for the flow equations.
+BCGSTAB is used for solving the linear system.
+Using a ILU(0) preconditioning.
+Convergence criteria of the linear solver: 1e-06.
+Max number of linear iterations: 5.
+No CFL adaptation.
+Courant-Friedrichs-Lewy number:        3
+
+------------------ Convergence Criteria  ( Zone 0 ) ---------------------
+Maximum number of solver subiterations: 11.
+Begin convergence monitoring at iteration 10.
+Residual minimum value: 1e-50.
+Cauchy series min. value: 1e-10.
+Number of Cauchy elements: 100.
+Begin windowed time average at iteration 0.
+
+-------------------- Output Information ( Zone 0 ) ----------------------
+File writing frequency: 
++------------------------------------+
+|                     File| Frequency|
++------------------------------------+
+|            RESTART_ASCII|       100|
+|           PARAVIEW_ASCII|       100|
++------------------------------------+
+Writing the convergence history file every 1 inner iterations.
+Writing the screen convergence history every 1 inner iterations.
+The tabular file format is Tecplot (.dat).
+Convergence history file name: convergence.
+Forces breakdown file name: forces_breakdown.dat.
+Surface file name: soln_surface.
+Volume file name: soln_volume.
+Restart file name: restart_flow.
+
+------------- Config File Boundary Information ( Zone 0 ) ---------------
++-----------------------------------------------------------------------+
+|                        Marker Type|                        Marker Name|
++-----------------------------------------------------------------------+
+|                         Euler wall|                              Euler|
+|                                   |                               Wall|
++-----------------------------------------------------------------------+
+|                          Far-field|                           Farfield|
+|                                   |                              Inlet|
++-----------------------------------------------------------------------+
+|                    Outlet boundary|                               Exit|
++-----------------------------------------------------------------------+
+
+-------------------- Output Preprocessing ( Zone 0 ) --------------------
+
+WARNING: SURFACE_PRESSURE_DROP can only be computed for at least 2 surfaces (outlet, inlet, ...)
+
+Screen output fields: INNER_ITER, RMS_DENSITY_0, RMS_DENSITY_1, RMS_DENSITY_2, RMS_DENSITY_3, RMS_DENSITY_4, RMS_MOMENTUM-X, RMS_MOMENTUM-Y, RMS_ENERGY, RMS_ENERGY_VE
+History output group(s): ITER, RMS_RES
+Convergence field(s): RMS_DENSITY_0
+Warning: No (valid) fields chosen for time convergence monitoring. Time convergence monitoring inactive.
+Volume output fields: COORDINATES, SOLUTION, PRIMITIVE, AUXILIARY
+
+------------------- Geometry Preprocessing ( Zone 0 ) -------------------
+Two dimensional problem.
+25830 grid points.
+25392 volume elements.
+5 surface markers.
+69 boundary elements in index 0 (Marker = Inlet).
+349 boundary elements in index 1 (Marker = Wall).
+69 boundary elements in index 2 (Marker = Exit).
+368 boundary elements in index 3 (Marker = Farfield).
+19 boundary elements in index 4 (Marker = Euler).
+25392 quadrilaterals.
+Setting point connectivity.
+Renumbering points (Reverse Cuthill McKee Ordering).
+Recomputing point connectivity.
+Setting element connectivity.
+Checking the numerical grid orientation.
+All volume elements are correctly oriented.
+All surface elements are correctly oriented.
+Identifying edges and vertices.
+Setting the control volume structure.
+Area of the computational grid: 0.225251.
+Searching for the closest normal neighbors to the surfaces.
+Storing a mapping from global to local point index.
+Compute the surface curvature.
+Max K: 768.759. Mean K: 3.66666. Standard deviation K: 37.4822.
+Computing mesh quality statistics for the dual control volumes.
++--------------------------------------------------------------+
+|           Mesh Quality Metric|        Minimum|        Maximum|
++--------------------------------------------------------------+
+|    Orthogonality Angle (deg.)|         66.913|        89.9961|
+|     CV Face Area Aspect Ratio|        1.00187|        83.1257|
+|           CV Sub-Volume Ratio|        1.00007|        2.37912|
++--------------------------------------------------------------+
+Finding max control volume width.
+Wetted area = 1 m.
+Area projection in the x-plane = 0.173648 m, y-plane = 0 m.
+Max. coordinate in the x-direction = 0.984808 m, y-direction = 0.173648 m.
+Min. coordinate in the x-direction = 0 m, y-direction = 0 m.
+Computing wall distances.
+
+-------------------- Solver Preprocessing ( Zone 0 ) --------------------
+Inviscid flow: Computing density based on free-stream
+and pressure using the the equation of state for multi-species and multi-temperatures.
+Force coefficients computed using free-stream values.
+
+-- Models:
++-----------------------------------------------------------------------------+
+|                  Mixture|              Fluid Model|          Transport Model|
++-----------------------------------------------------------------------------+
+|                    AIR-5|                SU2 NonEq|                        -|
++-----------------------------------------------------------------------------+
+-- Fluid properties:
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|          Gas Constant|       287.399|             1|  N.m/kg.K|       287.399|
+|      Spec. Heat Ratio|             -|             -|         -|           1.4|
++------------------------------------------------------------------------------+
+-- Initial and free-stream conditions:
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|       Static Pressure|        101325|             1|        Pa|        101325|
+|               Density|        1.2197|             1|    kg/m^3|        1.2197|
+|       T-R Temperature|        288.15|             1|         K|        288.15|
+|       V-E Temperature|        288.15|             1|         K|        288.15|
+|          Total Energy|   1.66154e+06|             1|   m^2/s^2|   1.66154e+06|
+|            Velocity-X|       1705.16|             1|       m/s|       1705.16|
+|            Velocity-Y|             0|             1|       m/s|             0|
+|    Velocity Magnitude|       1705.16|             1|       m/s|       1705.16|
++------------------------------------------------------------------------------+
+|           Mach Number|             -|             -|         -|             5|
++------------------------------------------------------------------------------+
+Initialize Jacobian structure (Euler). MG level: 0.
+[KOKKOS_NEMO] device Cons2Prim enabled (exec space Cuda, nPoint 25830, nEdge 51221, nSpecies 5, implicit)
+[KOKKOS_NEMO] edge assembly (upwind, viscous): atomic (Kokkos atomics; SU2_KOKKOS_NEMO_EDGE=color|level for the deterministic coloured assembly)
+[KOKKOS_NEMO] stage Cons2Prim (SetPrimVar + non-physical reduce): device
+[KOKKOS_NEMO] stage gradient (WEIGHTED_LEAST_SQUARES, into Gradient_Reconstruction): device
+[KOKKOS_NEMO] stage limiter (VENKATAKRISHNAN): device
+[KOKKOS_NEMO] stage time step (spectral radii + local dt + min/max reduce): device
+[KOKKOS_NEMO] stage max eigenvalue (centered only): not used
+[KOKKOS_NEMO] stage upwind (ROE + MUSCL, residual + Jacobian): device
+[KOKKOS_NEMO] stage source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device (eager download after the stage)
+[KOKKOS_NEMO] stage bc:FAR_FIELD (Inlet): device (eager download after the stage)
+[KOKKOS_NEMO] stage bc:OUTLET_FLOW (Exit): device (eager download after the stage)
+[KOKKOS_NEMO] stage bc:FAR_FIELD (Farfield): device (eager download after the stage)
+[KOKKOS_NEMO] stage bc:EULER_WALL (Wall): device (eager download after the stage)
+[KOKKOS_NEMO] stage bc:EULER_WALL (Euler): device (eager download after the stage)
+[KOKKOS_NEMO] residual sync: eager (SU2_KOKKOS_STAGE_VERIFY), download after every device stage
+[KOKKOS_NEMO] stage update (EULER_IMPLICIT): host
+[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, linear solve
+[KOKKOS_NEMO] sync: SetPrimVar HtoD U,U_old,V,secondaries + DtoH all; stages reuse device V, DtoH domain rows of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS); upwind reuses device V/secondaries/gradient/limiter (HtoD halo rows, Non_Physical, sensor); source/BCs reuse device U/V/secondaries (HtoD node_infty once); residual accumulator DtoH (see residual sync)
+[KOKKOS_NEMO] SU2_KOKKOS_STAGE_VERIFY=1: gradient/limiter/time step/upwind/source/BC A/B against the host code
+[KOKKOS_NEMO] device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)
+
+------------------- Numerics Preprocessing ( Zone 0 ) -------------------
+
+----------------- Integration Preprocessing ( Zone 0 ) ------------------
+
+------------------- Iteration Preprocessing ( Zone 0 ) ------------------
+Euler/Navier-Stokes/RANS fluid iteration.
+
+------------------------------ Begin Solver -----------------------------
+
+Simulation Run using the Single-zone Driver
+[KOKKOS_NEMO_VERIFY] MG 0 Max_Lambda_Inv: 9034/25830 non-bitwise, max per-column |diff|/max|cpu| 1.93023e-16 (column 0, max|cpu| 73.6227)
+[KOKKOS_NEMO_VERIFY] MG 0 Delta_Time: 8357/25830 non-bitwise, max per-column |diff|/max|cpu| 3.2624e-16 (column 0, max|cpu| 5.19271e-06)
+[KOKKOS_NEMO_VERIFY] MG 0 Min_Delta_Time: 1/1 non-bitwise, max per-column |diff|/max|cpu| 1.60859e-16 (column 0, max|cpu| 1.64553e-07)
+[KOKKOS_NEMO_VERIFY] MG 0 Global_Delta_Time: 1/1 non-bitwise, max per-column |diff|/max|cpu| 1.60859e-16 (column 0, max|cpu| 1.64553e-07)
+[KOKKOS_NEMO_VERIFY] MG 0 LinSysRes: 93602/232470 non-bitwise, max per-column |diff|/max|cpu| 1.10032e-15 (column 8, max|cpu| 1653.15)
+[KOKKOS_NEMO_VERIFY] MG 0 Jacobian: 5929629/10390032 non-bitwise, max per-column |diff|/max|cpu| 4.18782e-15 (column 52, max|cpu| 0.0140838)
+[KOKKOS_NEMO_VERIFY] MG 0 LinSysRes: 89767/232470 non-bitwise, max per-column |diff|/max|cpu| 8.77301e-15 (column 3, max|cpu| 4.86217e-53)
+[KOKKOS_NEMO_VERIFY] MG 0 Jacobian: 377098/10390032 non-bitwise, max per-column |diff|/max|cpu| 1.73933e-14 (column 38, max|cpu| 2.16478e-25)
+[KOKKOS_NEMO_VERIFY] MG 0 LinSysRes[FAR_FIELD]: 78/232470 non-bitwise, max per-column |diff|/max|cpu| 8.06422e-17 (column 7, max|cpu| 4.61953e+07)
+[KOKKOS_NEMO_VERIFY] MG 0 Jacobian: 1139/10390032 non-bitwise, max per-column |diff|/max|cpu| 6.15856e-16 (column 52, max|cpu| 0.0140838)
+[KOKKOS_NEMO_VERIFY] MG 0 LinSysRes[OUTLET_FLOW]: 83/232470 non-bitwise, max per-column |diff|/max|cpu| 5.13792e-16 (column 0, max|cpu| 6.91469)
+[KOKKOS_NEMO_VERIFY] MG 0 Jacobian: 1824/10390032 non-bitwise, max per-column |diff|/max|cpu| 1.43594e-15 (column 0, max|cpu| 9.89653)
+[KOKKOS_NEMO_VERIFY] MG 0 LinSysRes[FAR_FIELD]: 398/232470 non-bitwise, max per-column |diff|/max|cpu| 5.75663e-16 (column 1, max|cpu| 0.771439)
+Warning. The initial solution contains 171 points that are not physical.
++---------------------------------------------------------------------------------------------------------------------------------+
+|  Inner_Iter|  rms[Rho_0]|  rms[Rho_1]|  rms[Rho_2]|  rms[Rho_3]|  rms[Rho_4]|   rms[RhoU]|   rms[RhoV]|   rms[RhoE]| rms[RhoEve]|
++---------------------------------------------------------------------------------------------------------------------------------+
+|           0|   -0.918169|   -1.442932|  -32.000000|  -32.000000|  -24.921797|    2.427107|  -13.466074|    5.437040|    0.990754|
+[KOKKOS_NEMO_VERIFY] MG 0 Gradient_Reconstruction: 202897/774900 non-bitwise, max per-column |diff|/max|cpu| 8.7977e-16 (column 10, max|cpu| 19759.3)
+[KOKKOS_NEMO_VERIFY] MG 0 Limiter_Primitive: 3545/387450 non-bitwise, max per-column |diff|/max|cpu| 1.97591e-13 (column 8, max|cpu| 1.05015)
+[KOKKOS_NEMO_VERIFY] MG 0 Max_Lambda_Inv: 8962/25830 non-bitwise, max per-column |diff|/max|cpu| 1.93023e-16 (column 0, max|cpu| 73.6227)
+[KOKKOS_NEMO_VERIFY] MG 0 LinSysRes: 154034/232470 non-bitwise, max per-column |diff|/max|cpu| 1.3754e-15 (column 8, max|cpu| 1653.15)
+[KOKKOS_NEMO_VERIFY] MG 0 LinSysRes: 92765/232470 non-bitwise, max per-column |diff|/max|cpu| 5.1828e-16 (column 3, max|cpu| 6.39152e-17)
+[KOKKOS_NEMO_VERIFY] MG 0 Jacobian: 461345/10390032 non-bitwise, max per-column |diff|/max|cpu| 9.1802e-15 (column 29, max|cpu| 3.09351e-15)
+Warning. The initial solution contains 158 points that are not physical.
+|           1|   -0.528776|   -1.053539|  -17.219462|  -17.549494|  -17.492874|    2.834754|    2.243433|    5.854407|    1.380157|
+[KOKKOS_NEMO_VERIFY] MG 0 Gradient_Reconstruction: 462306/774900 non-bitwise, max per-column |diff|/max|cpu| 9.72886e-16 (column 10, max|cpu| 65650.7)
+[KOKKOS_NEMO_VERIFY] MG 0 LinSysRes: 37741/232470 non-bitwise, max per-column |diff|/max|cpu| 7.93175e-16 (column 2, max|cpu| 1.3209e-16)
+[KOKKOS_NEMO_VERIFY] MG 0 Jacobian: 415690/10390032 non-bitwise, max per-column |diff|/max|cpu| 9.26994e-15 (column 29, max|cpu| 2.97846e-15)
+|           2|   -0.437856|   -0.962620|  -16.953694|  -17.283839|  -17.226762|    2.926995|    2.362037|    5.953597|    1.471581|
+[KOKKOS_NEMO_VERIFY] MG 0 Gradient_Reconstruction: 476989/774900 non-bitwise, max per-column |diff|/max|cpu| 9.34933e-16 (column 10, max|cpu| 68338.6)
+|           3|   -0.609273|   -1.134037|  -17.116123|  -17.445737|  -17.389323|    2.750144|    2.105017|    5.779256|    1.300165|
+[KOKKOS_NEMO_VERIFY] MG 0 Gradient_Reconstruction: 482450/774900 non-bitwise, max per-column |diff|/max|cpu| 7.38888e-16 (column 2, max|cpu| 153.862)
+|           4|   -0.842928|   -1.367691|  -17.256935|  -17.586674|  -17.530048|    2.505736|    1.892945|    5.549638|    1.068383|
+[KOKKOS_NEMO_VERIFY] MG 0 Gradient_Reconstruction: 484353/774900 non-bitwise, max per-column |diff|/max|cpu| 1.16842e-15 (column 16, max|cpu| 273995)
+|           5|   -0.985419|   -1.510183|  -17.306356|  -17.636524|  -17.579478|    2.341363|    1.954922|    5.392151|    0.933672|
+|           6|   -0.869177|   -1.393940|  -17.541553|  -17.870961|  -17.814661|    2.446763|    2.094769|    5.495301|    1.050310|
+|           7|   -0.759328|   -1.284091|  -17.594883|  -17.923715|  -17.868004|    2.555439|    2.197418|    5.619100|    1.166199|
+|           8|   -0.921604|   -1.446369|  -17.284168|  -17.613537|  -17.557278|    2.394471|    2.016563|    5.448416|    1.029818|
+|           9|   -1.059296|   -1.584059|  -17.205161|  -17.534384|  -17.478265|    2.259361|    1.838503|    5.298154|    0.883097|
+|          10|   -1.094683|   -1.619446|  -17.196365|  -17.525557|  -17.469468|    2.224608|    1.793125|    5.263871|    0.842927|
+
+----------------------------- Solver Exit -------------------------------
+
+Maximum number of iterations reached (ITER = 11) before convergence.
++-----------------------------------------------------------------------+
+|      Convergence Field     |     Value    |   Criterion  |  Converged |
++-----------------------------------------------------------------------+
+|                  rms[Rho_0]|      -1.09468|         < -50|          No|
++-----------------------------------------------------------------------+
+-------------------------------------------------------------------------
++-----------------------------------------------------------------------+
+|        File Writing Summary       |              Filename             |
++-----------------------------------------------------------------------+
+|SU2 ASCII restart                  |restart_flow.csv                   |
+|Paraview ASCII                     |soln_volume.vtk                    |
++-----------------------------------------------------------------------+
+Warning: 88541 reconstructed states for upwinding are non-physical.
+
+--------------------------- Finalizing Solver ---------------------------
+Deleted CNumerics container.
+Deleted CIntegration container.
+[KOKKOS_NEMO_PERF] MG 0 SetPrimVar calls=22 nPoint=25830 | h2d 5.515e-02 s (2.507e-03/call, 5.848e+01 MB/call) | kernel 9.835e-03 s (4.470e-04/call) | d2h 4.210e-02 s (1.914e-03/call, 1.325e+01 MB/call) | host post 1.228e-02 s (5.580e-04/call)
+[KOKKOS_NEMO_PERF] MG 0 Gradient calls=11 | h2d 1.095e-03 s (8.856e-02 MB/call) | kernel 4.629e-03 s (4.208e-04/call) | d2h 7.463e-03 s (6.199e+00 MB/call) | host 7.908e-04 s (7.190e-05/call)
+[KOKKOS_NEMO_VERIFY] MG 0 Gradient compares=11 entries=8523900 non-bitwise=4541577 max rel diff=1.168e-15
+[KOKKOS_NEMO_PERF] MG 0 Limiter calls=11 | h2d 3.891e-04 s (6.199e+00 MB/call) | kernel 1.189e-02 s (1.080e-03/call) | d2h 1.231e-02 s (9.299e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_VERIFY] MG 0 Limiter compares=33 entries=12785850 non-bitwise=91774 max rel diff=1.805e-12
+[KOKKOS_NEMO_PERF] MG 0 TimeStep calls=11 | h2d 5.753e-04 s (2.066e-01 MB/call) | kernel 6.638e-04 s (6.035e-05/call) | d2h 1.020e-03 s (4.133e-01 MB/call) | host 7.282e-06 s (6.620e-07/call)
+[KOKKOS_NEMO_VERIFY] MG 0 TimeStep compares=55 entries=568293 non-bitwise=188988 max rel diff=3.860e-16
+[KOKKOS_NEMO_PERF] MG 0 Upwind calls=11 | h2d 6.378e-02 s (2.219e+01 MB/call) | kernel 4.826e-02 s (4.387e-03/call) | d2h 8.426e-04 s (7.761e-02 MB/call) | host 8.065e-05 s (7.332e-06/call)
+[KOKKOS_NEMO_VERIFY] MG 0 Upwind compares=55 entries=117415793 non-bitwise=92713274 max rel diff=1.250e-01
+[KOKKOS_NEMO_PERF] MG 0 Upwind host reference (A/B rerun) 1.392e+00 s (1.266e-01/call)
+[KOKKOS_NEMO_PERF] MG 0 Source calls=11 | h2d 2.165e-02 s (0.000e+00 MB/call) | kernel 4.009e-02 s (3.645e-03/call) | d2h 0.000e+00 s (0.000e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_VERIFY] MG 0 Source compares=22 entries=116847522 non-bitwise=4370211 max rel diff=1.739e-14
+[KOKKOS_NEMO_PERF] MG 0 Source host reference (A/B rerun) 5.340e+00 s (4.854e-01/call)
+[KOKKOS_NEMO_PERF] MG 0 BC calls=55 | h2d 1.263e-01 s (1.872e-04 MB/call) | kernel 1.173e-02 s (2.132e-04/call) | d2h 2.164e-04 s (1.680e-03 MB/call) | host 5.267e-05 s (9.577e-07/call)
+[KOKKOS_NEMO_VERIFY] MG 0 BC compares=121 entries=584249160 non-bitwise=173076 max rel diff=2.500e-01
+[KOKKOS_NEMO_PERF] MG 0 BC host reference (A/B rerun) 1.590e-02 s (2.891e-04/call)
+[KOKKOS_NEMO_PERF] MG 0 ResidualSync calls=77 | h2d 7.092e-01 s (7.284e+01 MB/call) | kernel 0.000e+00 s (0.000e+00/call) | d2h 6.059e-01 s (8.498e+01 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 0 BC_Outlet calls=11, with subsonic outlet vertices=0
+[KOKKOS_NEMO_VERIFY] MG 0 device-resident Primitive checks=33 mismatching entries=0
+[KOKKOS_NEMO_LEDGER] MG 0 10 closed iterations (host-authoritative); non-output iterations >= 1: max HtoD 8.255e+08 B, max DtoH 6.392e+08 B; output iterations: 0, DtoH 0.000e+00 B in total
+[KOKKOS_NEMO_LEDGER] MG 0 steady iteration 9: HtoD 8.255e+08 B, DtoH 6.392e+08 B
+[KOKKOS_NEMO_LEDGER]     SetPrimVar HtoD: 1.170e+08 B
+[KOKKOS_NEMO_LEDGER]     SetPrimVar DtoH: 2.650e+07 B
+[KOKKOS_NEMO_LEDGER]     Gradient HtoD: 8.856e+04 B
+[KOKKOS_NEMO_LEDGER]     Gradient DtoH: 6.199e+06 B
+[KOKKOS_NEMO_LEDGER]     Limiter HtoD: 6.199e+06 B
+[KOKKOS_NEMO_LEDGER]     Limiter DtoH: 9.299e+06 B
+[KOKKOS_NEMO_LEDGER]     TimeStep HtoD: 2.066e+05 B
+[KOKKOS_NEMO_LEDGER]     TimeStep DtoH: 4.133e+05 B
+[KOKKOS_NEMO_LEDGER]     Upwind HtoD: 2.219e+07 B
+[KOKKOS_NEMO_LEDGER]     Upwind DtoH: 7.761e+04 B
+[KOKKOS_NEMO_LEDGER]     BC HtoD: 9.360e+02 B
+[KOKKOS_NEMO_LEDGER]     BC DtoH: 8.400e+03 B
+[KOKKOS_NEMO_LEDGER]     ResidualSync HtoD: 5.099e+08 B
+[KOKKOS_NEMO_LEDGER]     ResidualSync DtoH: 5.949e+08 B
+[KOKKOS_NEMO_LEDGER]     linear algebra vector HtoD: 3.720e+06 B
+[KOKKOS_NEMO_LEDGER]     linear algebra vector DtoH: 1.860e+06 B
+[KOKKOS_NEMO_LEDGER]     linear algebra matrix HtoD: 8.312e+07 B
+[KOKKOS_NEMO_LEDGER]     linear algebra precond HtoD: 8.312e+07 B
+Deleted CSolver container.
+Deleted CIteration container.
+Deleted CInterface container.
+Deleted CGeometry container.
+Deleted CFreeFormDefBox class.
+Deleted CSurfaceMovement class.
+Deleted CVolumetricMovement class.
+Deleted CConfig container.
+Deleted nInst container.
+Deleted COutput class.
+-------------------------------------------------------------------------
+
+------------------------- Exit Success (SU2_CFD) ------------------------
+
