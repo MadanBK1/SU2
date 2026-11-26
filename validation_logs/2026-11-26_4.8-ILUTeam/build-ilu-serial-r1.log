@@ -1,0 +1,5 @@
+ninja: Entering directory `build-kokkos-serial'
+[1/4] Compiling C++ object Common/src/libSU2Common.a.p/linear_algebra_CSysMatrixKokkos.cpp.o
+[2/4] Linking static target Common/src/libSU2Common.a
+[3/4] Linking target UnitTests/nemo_gas_kokkos_validation
+[4/4] Linking target SU2_CFD/src/SU2_CFD
