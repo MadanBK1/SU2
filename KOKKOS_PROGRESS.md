@@ -695,3 +695,10 @@ READY FOR REVIEW: MERGE: 4.6-MG1 — logs now committed: validation_logs/2026-11
 - 2026-11-26T02:43:56-05:00 [loop] round 80 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_015927_80.log
 
 - 2026-11-26T03:43:03-05:00 [loop] round 81 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_024416_81.log
+
+- 2026-11-26T03:49:58-05:00 [loop] round 82 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_034324_82.log
+
+- 2026-11-26 (round 83, review-20 queue: 4.6-MG2 test — step 1 build starting):
+  - State check: MG2 dev code bbcbd98 confirmed IN HEAD (c5fb224 "MG2 dev code (bbcbd98) confirmed in HEAD"); `CNEMOKokkosMG.cpp` present (13348 B, Nov 26 01:59), registered in `SU2_CFD/src/meson.build:26`. Existing SU2_CFD binaries are Nov 25 21:55/21:57 = predate MG2 code -> rebuild required. `build.ninja` does not yet list the new file (meson will auto-regenerate on ninja run).
+  - Step 1 (review-18/20): rebuild strict + serial via `.buildmg2.sh` (ninja -C build-kokkos-{strict,serial} -j4 SU2_CFD/src/SU2_CFD). Logs -> kk/logs/build-mg2-r1.log, build-mg2-serial-r1.log.
+  - NEXT: after build rc=0, run review-20 MG2 queue: G1 strict invwedge_mg, control MG_DEVICE=0, variants mgpost/mgw/mgcs, viscous super_cat (coarse OFF, bitwise), poison, noise floor, regressions default+targeted; archive under validation_logs/2026-11-26_4.6-MG2/ + INDEX rows; then `READY FOR REVIEW: MERGE: 4.6-MG2` (only after strict PASS + logs committed).
