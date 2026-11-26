@@ -35,6 +35,11 @@ Steps 5–10 and Batch A were validated by earlier reviewer sessions; results ar
 | 2026-11-26 | 91f8df0 | 4.6 device LU_SGS preconditioner apply | 02676f8 (reviewed head 065f855) | G1 invwedge_lusgs bitwise, super_cat+LU_SGS bitwise, default + invall 4/4 bitwise, A/B compares=106 non-bitwise=0, NF 0.71/0.95 (backfill_2026-11-25/g1-lusgs-r64.log, g1-lusgs-visc-r64.log, g1-regress-r68.log, g1-invall-r68.log, sv-lusgs-r68.log, nf-lusgs-r68.log) |
 | 2026-11-26 | 800d75f | 4.6-MG1 multigrid: fine level device-resident, coarse levels host | 413b3a0 (reviewed head db03759) | G1 strict invwedge_mg bitwise (wall NO 63.84s / YES 53.86s, MG transfers=11), MG_RESIDENT=0 control bitwise, mgpost/mgw/mgcs + super_cat MGLEVEL=1 bitwise, poison bitwise, NF 0.71/1.00, default + lusgs/roe regressions bitwise (validation_logs/2026-11-26_4.6-MG/g1-mg-r1.log, g1-mgoff-r1.log, g1-mgpost-r1.log, g1-mgw-r1.log, g1-mgcs-r1.log, g1-mgvisc-r1.log, poison-mg-r1.log, nf-mg-r1.log, g1-regress-r1.log, g1-regress2-r1.log) |
 
+## GPU runs (G7, CUDA V100, run by Madan)
+| date | su2kokkos commit | cases | result | logs |
+|---|---|---|---|---|
+| 2026-11-26 | 8277424 (+ d9e0b2a noise-floor cases) | super_cat, thermalbath, invwedge_ausm, invwedge_roe, invwedge_lusgs | device-resident ON for all. super_cat 2.3e-15 / thermalbath 4.4e-16 vs CPU. Noise floor (K=10): invwedge_ausm 1.21 / 1.53 PASS; invwedge_lusgs 1.04 / 0.77 PASS; invwedge_roe ITER 11 0.59 PASS, ITER 100 43.8 FAIL, judged chaotic: the case does not converge (rms stalls ~-1.2, ~92k non-physical reconstructed states; CPU strict-vs-prod also O(1) apart in 82% of points). STAGE_VERIFY over all 100 iterations: every per-column stage diff <= 2e-13 (the "max rel diff" 0.125 / 0.25 come from entries near zero). Wall (11 it, 25.8k points, incl. start-up): super_cat 11.50 -> 6.49 s, invwedge_ausm 10.99 -> 7.33 s, invwedge_roe 12.22 -> 8.35 s, invwedge_lusgs 12.83 -> 11.49 s (LU_SGS apply ~0.1 s each: perf item). | ~/gpu_runs on roam148-045 -> agent branch validation_logs/2026-11-26_G7-V100/ |
+
 ## Decisions
 - 2026-11-26 (Madan): IONIZATION= YES with Roe / LAX / MSW stays on the CPU (host). The CPU `CNEMOGas::ComputedPdU`
   with ionization reads stale members and an uninitialised dPdU entry, so its result is undefined; not ported, not patched.
