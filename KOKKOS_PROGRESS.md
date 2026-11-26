@@ -706,3 +706,9 @@ READY FOR REVIEW: MERGE: 4.6-MG1 — logs now committed: validation_logs/2026-11
 - 2026-11-26T04:03:04-05:00 [loop] round 83 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_035018_83.log
 
 - 2026-11-26T04:15:04-05:00 [loop] round 84 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_040324_84.log
+
+- 2026-11-26T04:31:50-05:00 [loop] round 85 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_041524_85.log
+
+- 2026-11-26 (round 86, review-20 queue: 4.6-MG2 test — step 1 build):
+  - State check: MG2 dev code in HEAD; CNEMOKokkosMG.cpp registered in SU2_CFD/src/meson.build; prior binaries Nov 25 21:55/21:57 predate MG2 -> rebuild required (kk/logs had no build-mg2 logs = round-83 "starting" never completed).
+  - RUNNING: `bash .buildmg2.sh` (ninja -j4 strict then serial, logs -> ../kk/logs/build-mg2-r1.log, build-mg2-serial-r1.log). Will check rc + tail, then queue G1 strict invwedge_mg (`.g1run.sh`), control MG_DEVICE=0, variants, viscous, poison, noisefloor, regressions; archive validation_logs/2026-11-26_4.6-MG2/ + INDEX rows; `READY FOR REVIEW: MERGE: 4.6-MG2` only after strict PASS + logs committed.
