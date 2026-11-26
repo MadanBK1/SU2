@@ -357,6 +357,12 @@ void CMultiGridIntegration::MultiGrid_Iteration(CGeometry ****geometry,
     const passivedouble CFL_coarse_new = SU2_TYPE::GetValue(config[iZone]->GetCFL(iMesh+1));
     CGeometry* geo_c = geometry[iZone][iInst][iMesh+1];
     CSolver* sol_c = solver_container[iZone][iInst][iMesh+1][Solver_Position];
+    if (sol_c->MG_DeviceTransfer(nullptr)) {
+      /*--- 4.6-MG2: device-resident coarse level, LocalCFL lives on the device. ---*/
+      SU2_OMP_SAFE_GLOBAL_ACCESS(sol_c->MG_DeviceOp(CSolver::MGDeviceOp::LOCAL_CFL, nullptr, geo_c, nullptr,
+                                                    config[iZone], CFL_coarse_new);)
+      continue;
+    }
     SU2_OMP_FOR_STAT(roundUpDiv(geo_c->GetnPoint(), omp_get_num_threads()))
     for (auto iPoint = 0ul; iPoint < geo_c->GetnPoint(); iPoint++)
       sol_c->GetNodes()->SetLocalCFL(iPoint, CFL_coarse_new);
@@ -502,11 +508,15 @@ void CMultiGridIntegration::MultiGrid_Cycle(CGeometry ****geometry,
 
     Space_Integration(geometry_fine, solver_container_fine, numerics_fine, config, iMesh, NO_RK_ITER, RunTime_EqSystem);
 
-    /*--- Device-resident fine level (Kokkos NEMO, 4.6-MG): the transfer operators below and the prolongation after the
-     *    recursion run on the host; hand them current host data (no-op for every other solver). ---*/
-    SU2_OMP_SAFE_GLOBAL_ACCESS(solver_fine->SyncHostData(geometry_fine, CSolver::HostSyncScope::MG_TRANSFER);)
+    /*--- 4.6-MG2 (Kokkos NEMO): fine and coarse level device-resident -> the transfer operators run on the device
+     *    (each operator below dispatches). Otherwise (4.6-MG step 1) a device-resident fine level hands the host
+     *    operators current host data (no-op for every other solver). ---*/
+    const bool deviceMG = solver_fine->MG_DeviceTransfer(solver_coarse);
+    if (!deviceMG) {
+      SU2_OMP_SAFE_GLOBAL_ACCESS(solver_fine->SyncHostData(geometry_fine, CSolver::HostSyncScope::MG_TRANSFER);)
+    }
 
-    SetResidual_Term(geometry_fine, solver_fine);
+    SetResidual_Term(geometry_fine, solver_fine, deviceMG);
 
     /*--- Compute $r_(k+1) = F_(k+1)(I^(k+1)_k u_k)$ ---*/
 
@@ -545,9 +555,31 @@ void CMultiGridIntegration::MultiGrid_Cycle(CGeometry ****geometry,
     GetProlongated_Correction(RunTime_EqSystem, solver_fine, solver_coarse, geometry_fine, geometry_coarse, config);
 
     const auto& mgOpts = config->GetMGOptions();
-    SmoothProlongated_Correction(RunTime_EqSystem, solver_fine, geometry_fine, mgOpts.MG_CorrecSmooth[iMesh], mgOpts.MG_Smooth_Coeff, config, iMesh);
-
-    SetProlongated_Correction(solver_fine, geometry_fine, config, iMesh);
+    if (deviceMG) {
+      /*--- 4.6-MG2: SmoothProlongated_Correction + SetProlongated_Correction on the device (same statements, the
+       *    RMS bookkeeping through the device LinSysResSquaredNorm; serial: the SOLUTION comms are a no-op). ---*/
+      const unsigned short nSmooth = mgOpts.MG_CorrecSmooth[iMesh];
+      if (nSmooth > 0) {
+        SU2_OMP_SAFE_GLOBAL_ACCESS(solver_fine->MG_DeviceOp(CSolver::MGDeviceOp::SMOOTH_SAVE, nullptr, geometry_fine,
+                                                            nullptr, config, 0.0);)
+        const passivedouble initial_corr_rms = ComputeLinSysResRMS(solver_fine);
+        SU2_OMP_SAFE_GLOBAL_ACCESS(lastCorrecSmoothRMS[iMesh][0] = initial_corr_rms;)
+        for (auto iSmooth = 0u; iSmooth < nSmooth; iSmooth++) {
+          SU2_OMP_SAFE_GLOBAL_ACCESS(solver_fine->MG_DeviceOp(CSolver::MGDeviceOp::SMOOTH_ITERATION, nullptr,
+                                                              geometry_fine, nullptr, config, mgOpts.MG_Smooth_Coeff);)
+        }
+        const passivedouble final_corr_rms = ComputeLinSysResRMS(solver_fine);
+        SU2_OMP_SAFE_GLOBAL_ACCESS(lastCorrecSmoothRMS[iMesh][1] = final_corr_rms;)
+      }
+      const su2double base_damp = config->GetDamp_Correc_Prolong();
+      const su2double level_factor = pow(0.75, static_cast<su2double>(iMesh));
+      const su2double factor = base_damp * level_factor;
+      SU2_OMP_SAFE_GLOBAL_ACCESS(solver_fine->MG_DeviceOp(CSolver::MGDeviceOp::SET_CORRECTION, nullptr, geometry_fine,
+                                                          nullptr, config, factor);)
+    } else {
+      SmoothProlongated_Correction(RunTime_EqSystem, solver_fine, geometry_fine, mgOpts.MG_CorrecSmooth[iMesh], mgOpts.MG_Smooth_Coeff, config, iMesh);
+      SetProlongated_Correction(solver_fine, geometry_fine, config, iMesh);
+    }
 
     /*--- Solution post-smoothing in the prolongated grid. ---*/
 
@@ -751,6 +783,18 @@ void CMultiGridIntegration::PostSmoothing(unsigned short RunTime_EqSystem,
 void CMultiGridIntegration::GetProlongated_Correction(unsigned short RunTime_EqSystem, CSolver *sol_fine, CSolver *sol_coarse,
                                                       CGeometry *geo_fine, CGeometry *geo_coarse, CConfig *config) {
   SU2_ZONE_SCOPED
+
+  if (sol_fine->MG_DeviceTransfer(sol_coarse)) {
+    /*--- 4.6-MG2: device loops (no viscous walls); the SOLUTION_OLD comms as below (serial: no-op). ---*/
+    SU2_OMP_SAFE_GLOBAL_ACCESS(sol_fine->MG_DeviceOp(CSolver::MGDeviceOp::PROLONG_CORRECTION, sol_coarse, geo_fine,
+                                                     geo_coarse, config, 0.0);)
+    sol_coarse->InitiateComms(geo_coarse, config, MPI_QUANTITIES::SOLUTION_OLD);
+    sol_coarse->CompleteComms(geo_coarse, config, MPI_QUANTITIES::SOLUTION_OLD);
+    SU2_OMP_SAFE_GLOBAL_ACCESS(sol_fine->MG_DeviceOp(CSolver::MGDeviceOp::PROLONG_SCATTER, sol_coarse, geo_fine,
+                                                     geo_coarse, config, 0.0);)
+    return;
+  }
+
   const su2double *Solution_Fine = nullptr, *Solution_Coarse = nullptr;
 
   const unsigned short nVar = sol_coarse->GetnVar();
@@ -971,6 +1015,13 @@ void CMultiGridIntegration::SetForcing_Term(CSolver *sol_fine, CSolver *sol_coar
                                             CGeometry *geo_coarse, CConfig *config, unsigned short iMesh) {
   SU2_ZONE_SCOPED
 
+  if (sol_fine->MG_DeviceTransfer(sol_coarse)) {
+    /*--- 4.6-MG2: device loop (no viscous walls). ---*/
+    SU2_OMP_SAFE_GLOBAL_ACCESS(sol_fine->MG_DeviceOp(CSolver::MGDeviceOp::FORCING_TERM, sol_coarse, geo_fine, geo_coarse,
+                                                     config, config->GetDamp_Res_Restric());)
+    return;
+  }
+
   const su2double *Residual_Fine;
 
   const unsigned short nVar = sol_coarse->GetnVar();
@@ -1015,8 +1066,15 @@ void CMultiGridIntegration::SetForcing_Term(CSolver *sol_fine, CSolver *sol_coar
 
 }
 
-void CMultiGridIntegration::SetResidual_Term(CGeometry *geometry, CSolver *solver) {
+void CMultiGridIntegration::SetResidual_Term(CGeometry *geometry, CSolver *solver, bool device) {
   SU2_ZONE_SCOPED
+
+  if (device) {
+    /*--- 4.6-MG2: device loop. ---*/
+    SU2_OMP_SAFE_GLOBAL_ACCESS(solver->MG_DeviceOp(CSolver::MGDeviceOp::RESIDUAL_TERM, nullptr, geometry, nullptr,
+                                                   nullptr, 0.0);)
+    return;
+  }
 
   AD::StartNoSharedReading();
   SU2_OMP_FOR_STAT(roundUpDiv(geometry->GetnPointDomain(), omp_get_num_threads()))
@@ -1033,6 +1091,16 @@ void CMultiGridIntegration::SetRestricted_Solution(unsigned short RunTime_EqSyst
 
   const unsigned short Solver_Position = config->GetContainerPosition(RunTime_EqSystem);
   const bool grid_movement = config->GetGrid_Movement();
+
+  if (sol_fine->MG_DeviceTransfer(sol_coarse)) {
+    /*--- 4.6-MG2: device restriction + MultigridProjectEulerWall (no viscous walls, static grid); comms as below
+     *    (serial: no-op). ---*/
+    SU2_OMP_SAFE_GLOBAL_ACCESS(sol_fine->MG_DeviceOp(CSolver::MGDeviceOp::RESTRICT_SOLUTION, sol_coarse, geo_fine,
+                                                     geo_coarse, config, 0.0);)
+    sol_coarse->InitiateComms(geo_coarse, config, MPI_QUANTITIES::SOLUTION);
+    sol_coarse->CompleteComms(geo_coarse, config, MPI_QUANTITIES::SOLUTION);
+    return;
+  }
 
   /*--- Compute coarse solution from fine solution ---*/
 

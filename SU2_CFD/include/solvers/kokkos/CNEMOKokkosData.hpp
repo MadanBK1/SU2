@@ -709,7 +709,37 @@ class CNEMOKokkosData {
 
   void PrintPerf() const;
 
- private:
+  /*====================== 4.6-MG2: multigrid transfer operators on the device ======================*/
+  /*--- Verbatim CMultiGridIntegration loops; `this` is the fine level, `c` the coarse level (both device-resident,
+   *    serial). Each op activates the resident mode of both levels (a coarse level's first device access may
+   *    precede its first Preprocessing), EnsureDevice()s its inputs and MarkDeviceWritten()s its outputs.
+   *    Halo comms: caller. Public: they enclose KOKKOS_LAMBDAs. ---*/
+  /*! \brief Static MG data of a coarse level: children CSR over its domain points (GetChildren_CV order), EULER_WALL
+   *         projection list (marker / vertex order, grouped per point keeping that order), once. */
+  void MGSetupCoarse(CGeometry* geoCoarse, const CConfig* config);
+  /*! \brief Static smoothing data of a level: unique points of the markers SmoothProlongated_Correction resets. */
+  void MGSetupSmoothing(CGeometry* geometry, const CConfig* config);
+  /*! \brief SetResidual_Term: LinSysRes += Res_TruncError (domain points). */
+  void MGResidualTerm();
+  /*! \brief SetRestricted_Solution (no viscous walls, static grid): MultigridRestriction of Solution +
+   *         MultigridProjectEulerWall(coarse, Solution). iVel = prim_idx.Velocity() of the solver (CPU index). */
+  void MGRestrictSolution(CNEMOKokkosData& c, int iVel);
+  /*! \brief SetForcing_Term (no viscous walls): coarse TruncErr = sum_children factor * fine LinSysRes - coarse LinSysRes. */
+  void MGForcingTerm(CNEMOKokkosData& c, double factor);
+  /*! \brief GetProlongated_Correction, first part: coarse Solution_Old = Solution - restricted fine Solution,
+   *         MultigridProjectEulerWall(coarse, Solution_Old). */
+  void MGProlongCorrection(CNEMOKokkosData& c, int iVel);
+  /*! \brief GetProlongated_Correction, second part (after the SOLUTION_OLD comms): fine LinSysRes(child) = coarse Solution_Old. */
+  void MGProlongScatter(CNEMOKokkosData& c);
+  /*! \brief SmoothProlongated_Correction: Residual_Old = LinSysRes (all points). */
+  void MGSmoothSave();
+  /*! \brief One Jacobi pass of SmoothProlongated_Correction (all points) + boundary reset to Residual_Old. */
+  void MGSmoothIteration(double coeff);
+  /*! \brief SetProlongated_Correction: NaN entries of LinSysRes -> 0, Solution += factor * LinSysRes (domain points). */
+  void MGSetCorrection(double factor);
+  /*! \brief MultiGrid_Iteration: LocalCFL = cfl on every point of a coarse level. */
+  void MGFillLocalCFL(double cfl);
+  unsigned long mgDeviceOps = 0; /*!< number of device MG transfer ops (perf line) */
   CNEMOEulerVariable* nodes;
   CSU2TCLib* gasModel;
   unsigned short iMesh;
@@ -737,6 +767,13 @@ class CNEMOKokkosData {
   double* hostLinSysRes = nullptr;      /*!< host storage of LinSysRes / LinSysSol (resident mode) */
   double* hostLinSysSol = nullptr;
   std::vector<unsigned long> h_bndPoints;
+  /*--- 4.6-MG2 (MGSetupCoarse / MGSetupSmoothing). ---*/
+  bool mgCoarseReady = false, mgSmoothReady = false;
+  View1D<unsigned long> mgChildPtr, mgChildIdx;  /*!< coarse domain point -> fine children */
+  View1D<unsigned long> mgWallPts, mgWallPtr;    /*!< unique EULER_WALL domain points -> projection entries */
+  View2D<double> mgWallNormal;                   /*!< (nEntries, nDim) unit normal of each entry */
+  View1D<unsigned long> mgSmoothBnd;             /*!< unique points reset by the correction smoothing */
+  View2D<double> mgResOld, mgResSum;             /*!< Residual_Old / Residual_Sum of the correction smoothing */
   /*--- Step 8. ---*/
   bool deviceTransport = false, transportDeviceValid = false, bndViscHost = false;
   /*--- Batch A. ---*/

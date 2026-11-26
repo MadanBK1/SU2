@@ -1314,6 +1314,23 @@ public:
   inline virtual su2double LinSysResSquaredNorm() const { return LinSysRes.squaredNorm(); }
 
   /*!
+   * \brief Multigrid transfer operators of CMultiGridIntegration that a device-resident solver runs on the device
+   *        (4.6-MG2, Kokkos NEMO). The host loops are skipped when MG_DeviceTransfer is true.
+   */
+  enum class MGDeviceOp { RESIDUAL_TERM, RESTRICT_SOLUTION, FORCING_TERM, PROLONG_CORRECTION, PROLONG_SCATTER,
+                          SMOOTH_SAVE, SMOOTH_ITERATION, SET_CORRECTION, LOCAL_CFL };
+  /*!
+   * \brief True if the transfer operators between this (fine) level and coarse run on the device; coarse == nullptr:
+   *        this level's point data (LocalCFL) is device-resident. Side-effect free, every thread may call it.
+   */
+  inline virtual bool MG_DeviceTransfer(const CSolver *coarse) const { return false; }
+  /*!
+   * \brief Run one device transfer operator (master thread). value: damping factor / smoothing coefficient / CFL.
+   */
+  inline virtual void MG_DeviceOp(MGDeviceOp op, CSolver *coarse, CGeometry *geometry, CGeometry *geoCoarse,
+                                  const CConfig *config, su2double value) { }
+
+  /*!
    * \brief Per-point part of AdaptCFLNumber for this (flow) solver, done where the solver keeps LocalCFL /
    *        UnderRelaxation (device-resident Kokkos NEMO solver). Same update and statistics as the host loop:
    *        LocalCFL from the UnderRelaxation and the global flags, min / max / sum of the new CFL (if stats).
