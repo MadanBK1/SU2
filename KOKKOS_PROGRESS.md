@@ -848,3 +848,11 @@ READY FOR REVIEW: 6b.b-TwallIn — steps 1-4 PASS bitwise (logs + INDEX committe
   - RUNNING step 5: regressions default list + invwedge_mg invwedge_dyn supin_visc (strict bitwise) via `.g1iluregress.sh` -> g1-ilu-regress-r1.log.
   - NEXT: step 6 noise floor `CASE=super_cat BIN=$PROD BIN_STRICT=$STRICT K=10 check_noisefloor.sh` -> nf-ilu-r1.log; archive validation_logs/2026-11-26_4.8-ILUTeam/ (build-ilu-r1.log, build-ilu-serial-r1.log, g1-ilu-team-r1.log, ab-ilu-team-r1.log, g1-ilu-row-r1.log, g1-ilu-regress-r1.log, nf-ilu-r1.log + chk log.txt pairs) + INDEX rows (record step-2/step-4 `builds=` lines per review-24 item 7); then `READY FOR REVIEW: MERGE: 4.8-ILUTeam`.
   - New runner scripts: TestCases/kokkos_nemo/.g1iluteam.sh, .abiluteam.sh, .g1ilurow.sh, .g1iluregress.sh.
+
+- 2026-11-26T14:07:27-05:00 [loop] round 111 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_135244_111.log
+
+- 2026-11-26 (round 112, review-24 queue 4.8-ILUTeam — step 5 VERIFIED, step 6 running):
+  - Step 5 (regressions strict: default list + invwedge_mg invwedge_dyn supin_visc): **OVERALL PASS bitwise** (g1-ilu-regress-r1.log, completed 14:05 during round 111; max|dres|=0.00e+00 on axi_visccone/invwedge_mg/invwedge_dyn/supin_visc; default list cases earlier in log all PASS).
+  - Steps 1-4 (already logged): build strict+serial rc=0; G1 super_cat _iluteam PASS bitwise (team-per-row; builds=11 2.03283 s); A/B verify PASS bitwise (compares=11 non-bitwise=0); row fallback PASS bitwise (builds=11 0.722925 s).
+  - RUNNING: step 6 noise floor `bash TestCases/kokkos_nemo/.nfilu.sh` -> nf-ilu-r1.log (serial prod vs strict, K=10, super_cat).
+  - NEXT: step 7 archive validation_logs/2026-11-26_4.8-ILUTeam/ (7 logs + chk log.txt pairs) + INDEX rows (record step-2/step-4 builds= lines per review-24 item 7) + `READY FOR REVIEW: MERGE: 4.8-ILUTeam`.
