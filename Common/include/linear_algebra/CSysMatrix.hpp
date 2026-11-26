@@ -200,6 +200,10 @@ class CSysMatrix {
   mutable const unsigned long* d_lusgs_lb = nullptr;
   mutable const unsigned long* d_lusgs_ub = nullptr;
   mutable unsigned long lusgs_n_fwd = 0, lusgs_n_bwd = 0;
+  /*--- 4.8 perf (LU_SGS hybrid apply): host copies of the level CSR pointers and the launch segments,
+   *    3 entries per segment {first level, end level, wide (1: one RangePolicy launch per level, 0: one single-team
+   *    launch looping over the levels with team barriers)}. ---*/
+  mutable std::vector<unsigned long> lusgs_fwd_ptr_h, lusgs_bwd_ptr_h, lusgs_fwd_seg, lusgs_bwd_seg;
   mutable unsigned long kokkos_lusgs_applies = 0, kokkos_lusgs_verify = 0, kokkos_lusgs_verify_nonbitwise = 0;
   mutable double kokkos_lusgs_seconds = 0.0;
 #endif
