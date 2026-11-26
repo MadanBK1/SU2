@@ -658,3 +658,12 @@ READY FOR REVIEW: MERGE: 4.6-LUSGS (round-68 gates, unchanged) + log archive com
   - (5) variants all PASS bitwise: mgpost (MG_POST_SMOOTH= (1,1,1)) g1-mgpost-r1.log; mgw (MGCYCLE= W_CYCLE) g1-mgw-r1.log; mgcs (MG_CORRECTION_SMOOTH= (2,2,2)) g1-mgcs-r1.log; viscous super_cat MGLEVEL=1 g1-mgvisc-r1.log. All max|dres|=0, field diff=0, OVERALL: PASS (EXPECT lines present).
 
 - 2026-11-25T22:20:14-05:00 [loop] round 74 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_220326_74.log
+
+- 2026-11-25T23:17:55-05:00 [loop] round 75 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261125_222034_75.log
+
+- 2026-11-26 (round 76, review-16 queue 4.6-MG — closing steps 6–9):
+  - (6) poison (verified from round-75 log): `poison-mg-r1.log` — `invwedge_mg_mgpoison: PASS` (max field diff 0.00e+00, tol 0.0; OVERALL: PASS; SU2_KOKKOS_NEMO_POISON=1 identical to step-3 YES).
+  - (8a) noise floor (verified from round-75 log): `nf-mg-r1.log` — NOISEFLOOR OVERALL: PASS (ITER 11 ratio 0.71, ITER 100 ratio 1.00, K=10, both <= 10).
+  - (8b) regressions (this session): `timeout 2400 bash .g1run.sh ../kk/logs/g1-regress-r1.log` (default list) — IN FLIGHT, then `invwedge_lusgs invwedge_roe` targeted.
+  - (9) thermalbath wall=0.01s — VERIFIED NOT EMPTY: case = TestCases/nonequilibrium/thermalbath/finitechemistry/thermalbath.cfg, 5x5 mesh (25 points), TIME_ITER=11. chk_thermalbath_YES/log.txt ends "Exit Success (SU2_CFD)"; restart_flow_00010.csv present. wall=0.01s is genuine for a 25-point case; PASS is valid (real residual rows, max|dres|=0, field diff=0).
+  - NEXT: finish (8b), (10) PERF + bookkeeping (plan matrix row "multigrid (MGLEVEL>0)" -> fine level device-resident/coarse host; LOCAL_AGENT_TASK 4.6 note), archive logs to validation_logs/2026-11-26_4.6-MG/ + INDEX rows, commit, then `READY FOR REVIEW: MERGE: 4.6-MG1`.
