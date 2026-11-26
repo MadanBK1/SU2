@@ -441,6 +441,11 @@ void CNEMOEulerSolver::Preprocessing(CGeometry *geometry, CSolver **solver_conta
   const bool center      = config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED;
   const bool van_albada  = config->GetKind_SlopeLimit_Flow() == LIMITER::VAN_ALBADA_EDGE;
 
+#ifdef HAVE_KOKKOS
+  /*--- 6b.a: the host grid movement / deformation ran before this call: refresh the device metric arrays. ---*/
+  if (dynamic_grid && iMesh == MESH_0) Device_RefreshDynamicGeometry(geometry, config);
+#endif
+
   /*--- Common preprocessing steps ---*/
   CommonPreprocessing(geometry, solver_container, config, iMesh, iRKStep, RunTime_EqSystem, Output);
 
@@ -2932,7 +2937,7 @@ std::string CNEMOEulerSolver::Device_TimeStepUnsupported(const CConfig *config) 
 #ifdef HAVE_KOKKOS
   if (!kokkosData) return "no device data";
   if (!kokkosData->geo.domain_first) return "domain points not first";
-  if (dynamic_grid) return "dynamic grid";
+  if (dynamic_grid) { auto whyDyn = Device_DynamicGridUnsupported(config); if (!whyDyn.empty()) return whyDyn; }
   if (ForcedHost("dt")) return "SU2_KOKKOS_NEMO_HOST";
   if (config->GetViscous() && dynamic_cast<const CNEMONSVariable*>(nodes) == nullptr) return "viscous without NS variables";
   return "";
@@ -2983,6 +2988,9 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
        << where(Device_TimeStepUnsupported(config)) << endl;
   cout << "[KOKKOS_NEMO] stage max eigenvalue (centered only): "
        << (center ? where(Device_TimeStepUnsupported(config)) : std::string("not used")) << endl;
+  if (dynamic_grid)
+    cout << "[KOKKOS_NEMO] stage dynamic grid (grid-velocity dt/eigenvalue terms + GCL, metric re-upload per time step): "
+         << where(Device_DynamicGridUnsupported(config)) << endl;
   if (!center) {
     const auto up = config->GetKind_Upwind_Flow();
     const char* uname = up == UPWIND::AUSM ? "AUSM" : up == UPWIND::AUSMPLUSM ? "AUSM+M"
@@ -3273,7 +3281,7 @@ std::string CNEMOEulerSolver::Device_UpwindUnsupported(const CConfig *config, un
   if (!kokkosData) return "no device data";
   if (!kokkosData->geo.domain_first) return "domain points not first";
   if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
-  if (dynamic_grid) return "dynamic grid";
+  if (dynamic_grid) { auto whyDyn = Device_DynamicGridUnsupported(config); if (!whyDyn.empty()) return whyDyn; }
   if (ReducerStrategy) return "reducer strategy";
   if (ForcedHost("upwind")) return "SU2_KOKKOS_NEMO_HOST";
   const auto kind = config->GetKind_Upwind_Flow();
@@ -3408,7 +3416,7 @@ std::string CNEMOEulerSolver::Device_CenteredUnsupported(const CConfig *config) 
   if (!kokkosData) return "no device data";
   if (!kokkosData->geo.domain_first) return "domain points not first";
   if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
-  if (dynamic_grid) return "dynamic grid";
+  if (dynamic_grid) { auto whyDyn = Device_DynamicGridUnsupported(config); if (!whyDyn.empty()) return whyDyn; }
   if (ReducerStrategy) return "reducer strategy";
   if (ForcedHost("centered")) return "SU2_KOKKOS_NEMO_HOST";
   if (config->GetKind_Centered_Flow() != CENTERED::LAX) return "centered scheme not ported";
@@ -3553,7 +3561,7 @@ std::string CNEMOEulerSolver::Device_BCUnsupported(const CConfig *config, int ki
   if (!kokkosData) return "no device data";
   if (!kokkosData->geo.domain_first) return "domain points not first";
   if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
-  if (dynamic_grid) return "dynamic grid";
+  if (dynamic_grid) { auto whyDyn = Device_DynamicGridUnsupported(config); if (!whyDyn.empty()) return whyDyn; }
   if (ForcedHost("bc")) return "SU2_KOKKOS_NEMO_HOST";
   if (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   const auto k = static_cast<K>(kind);
@@ -4179,7 +4187,7 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
     }
   }
   if (config->GetDiscrete_Adjoint() || config->GetContinuous_Adjoint()) return "adjoint";
-  if (dynamic_grid) return "dynamic grid";
+  if (dynamic_grid) { auto whyDyn = Device_DynamicGridUnsupported(config); if (!whyDyn.empty()) return whyDyn; }
   if (config->GetViscous()) {
     /*--- Step 8: laminar NEMO NS (device transport, viscous residual, walls, viscous far field). ---*/
     if (config->GetKind_Turb_Model() != TURB_MODEL::NONE) return "turbulence model (eddy viscosity from the host turbulence solver)";
@@ -4470,12 +4478,44 @@ void CNEMOEulerSolver::Device_AxisymAuxGradients(CGeometry *geometry, const CCon
 #endif
 }
 
+std::string CNEMOEulerSolver::Device_DynamicGridUnsupported(const CConfig *config) const {
+#ifdef HAVE_KOKKOS
+  if (!dynamic_grid) return "";
+  if (!kokkosData) return "no device data";
+  if (const char* e = std::getenv("SU2_KOKKOS_NEMO_DYNGRID")) {
+    if (std::atoi(e) == 0) return "dynamic grid (SU2_KOKKOS_NEMO_DYNGRID=0)";
+  }
+  if (!kokkosData->geo.dynamic) return "dynamic grid (device geometry not uploaded)";
+  if (config->GetnMGLevels() > 0) return "dynamic grid with multigrid";
+  if (config->GetnMarker_Periodic() > 0) return "dynamic grid with periodic markers";
+  if (config->GetDiscrete_Adjoint()) return "dynamic grid with discrete adjoint";
+  return "";
+#else
+  (void)config;
+  return "no Kokkos";
+#endif
+}
+
+void CNEMOEulerSolver::Device_RefreshDynamicGeometry(CGeometry *geometry, const CConfig *config) {
+#ifdef HAVE_KOKKOS
+  if (!kokkosData || !kokkosData->geo.dynamic) return;
+  const unsigned long t = config->GetTimeIter(), o = config->GetOuterIter();
+  if (t == dynGeoTimeIter && o == dynGeoOuterIter) return;
+  dynGeoTimeIter = t;
+  dynGeoOuterIter = o;
+  kokkosData->RefreshDynamicGeometry(geometry);
+#else
+  (void)geometry;
+  (void)config;
+#endif
+}
+
 std::string CNEMOEulerSolver::Device_DualTimeUnsupported(const CConfig *config) const {
 #ifdef HAVE_KOKKOS
   if (!kokkosData) return "no device data";
   if (!kokkosData->geo.domain_first) return "domain points not first";
   if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
-  if (dynamic_grid) return "dynamic grid (GCL terms)";
+  if (dynamic_grid) { auto whyDyn = Device_DynamicGridUnsupported(config); if (!whyDyn.empty()) return whyDyn; }
   if (ForcedHost("dualtime")) return "SU2_KOKKOS_NEMO_HOST";
   if (config->GetKind_TimeIntScheme() == EULER_IMPLICIT && !kokkosData->geo.has_pattern) return "no sparse pattern";
   if (size_t(nodes->GetSolution_time_n().size()) < size_t(nPoint) * nVar) return "Solution_time_n not allocated";

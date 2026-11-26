@@ -457,7 +457,7 @@ struct DtFn {
 };
 
 /*!
- * \brief SetTime_Step_impl (no dynamic grid): point/edge pass, boundary pass, dt pass with MinMax reduction.
+ * \brief SetTime_Step_impl (grid-velocity terms when geo.dynamic): point/edge pass, boundary pass, dt pass with MinMax reduction.
  */
 template <int ND>
 void KernelTimeStep(const Geo& geo, const DtArgs a, double& minDt, double& maxDt) {
@@ -473,6 +473,8 @@ void KernelTimeStep(const Geo& geo, const DtArgs a, double& minDt, double& maxDt
 
   const DtFn<ND> fn{a, pidx.VEL(), pidx.A(), pidx.RHO(), pidx.RHOCVTR(), pidx.RHOCVVE()};
   const bool viscous = a.viscous;
+  const bool dyn = geo.dynamic;
+  const auto gvel = geo.grid_vel;
 
   Kokkos::parallel_for(
       "NEMO::TimeStepEdges", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
@@ -489,9 +491,15 @@ void KernelTimeStep(const Geo& geo, const DtArgs a, double& minDt, double& maxDt
           for (int iDim = 0; iDim < ND; ++iDim) Area2 += Normal[iDim] * Normal[iDim];
 
           /*--- Mean Values ---*/
-          const double Mean_ProjVel = 0.5 * (fn.ProjVel(iPoint, Normal) + fn.ProjVel(jPoint, Normal));
+          double Mean_ProjVel = 0.5 * (fn.ProjVel(iPoint, Normal) + fn.ProjVel(jPoint, Normal));
           const double Mean_SoundSpeed =
               0.5 * (fn.a.V(iPoint, fn.sos) + fn.a.V(jPoint, fn.sos)) * Kokkos::sqrt(Area2);
+
+          /*--- Adjustment for grid movement ---*/
+          if (dyn) {
+            for (int iDim = 0; iDim < ND; iDim++)
+              Mean_ProjVel -= 0.5 * (gvel(iPoint, iDim) + gvel(jPoint, iDim)) * Normal[iDim];
+          }
 
           /*--- Inviscid contribution ---*/
           double Lambda = Kokkos::fabs(Mean_ProjVel) + Mean_SoundSpeed;
@@ -517,8 +525,15 @@ void KernelTimeStep(const Geo& geo, const DtArgs a, double& minDt, double& maxDt
           for (int iDim = 0; iDim < ND; ++iDim) Area2 += Normal[iDim] * Normal[iDim];
 
           /*--- Mean Values ---*/
-          const double ProjVel = fn.ProjVel(iPoint, Normal);
+          double ProjVel = fn.ProjVel(iPoint, Normal);
           const double SoundSpeed = fn.a.V(iPoint, fn.sos) * Kokkos::sqrt(Area2);
+
+          /*--- Adjustment for grid movement (GeometryToolbox::DotProduct, then one subtraction) ---*/
+          if (dyn) {
+            double dot = 0.0;
+            for (int iDim = 0; iDim < ND; ++iDim) dot += Normal[iDim] * gvel(iPoint, iDim);
+            ProjVel -= dot;
+          }
 
           /*--- Inviscid contribution ---*/
           double Lambda = Kokkos::fabs(ProjVel) + SoundSpeed;
@@ -562,7 +577,7 @@ void KernelTimeStep(const Geo& geo, const DtArgs a, double& minDt, double& maxDt
   maxDt = kmax(0.0, red.max_val);
 }
 
-/*! \brief SetMax_Eigenvalue_impl (no dynamic grid): point/edge pass, boundary pass. */
+/*! \brief SetMax_Eigenvalue_impl (grid-velocity terms when geo.dynamic): point/edge pass, boundary pass. */
 template <int ND>
 void KernelMaxEigenvalue(const Geo& geo, const View2D<double>& V, int ns, const View1D<double>& lambda) {
   const auto ptr = geo.point_ptr, idx = geo.point_idx;
@@ -574,6 +589,8 @@ void KernelMaxEigenvalue(const Geo& geo, const View2D<double>& V, int ns, const 
   const auto vnrm = geo.vtx_normal;
   const su2kokkos::nemo::NEMOPrimIndices pidx(ns, ND);
   const int vel = pidx.VEL(), sos = pidx.A();
+  const bool dyn = geo.dynamic;
+  const auto gvel = geo.grid_vel;
 
   Kokkos::parallel_for(
       "NEMO::MaxEigenvalueEdges", Kokkos::RangePolicy<exec_space>(0, geo.nPointDomain),
@@ -592,8 +609,14 @@ void KernelMaxEigenvalue(const Geo& geo, const View2D<double>& V, int ns, const 
           for (int iDim = 0; iDim < ND; ++iDim) Area2 += Normal[iDim] * Normal[iDim];
           const double Area = Kokkos::sqrt(Area2);
 
-          const double Mean_ProjVel = 0.5 * (projVel(iPoint, Normal) + projVel(jPoint, Normal));
+          double Mean_ProjVel = 0.5 * (projVel(iPoint, Normal) + projVel(jPoint, Normal));
           const double Mean_SoundSpeed = 0.5 * (V(iPoint, sos) + V(jPoint, sos)) * Area;
+
+          /*--- Adjustment for grid movement ---*/
+          if (dyn) {
+            for (int iDim = 0; iDim < ND; iDim++)
+              Mean_ProjVel -= 0.5 * (gvel(iPoint, iDim) + gvel(jPoint, iDim)) * Normal[iDim];
+          }
 
           lambda(iPoint) += Kokkos::fabs(Mean_ProjVel) + Mean_SoundSpeed;
         }
@@ -613,6 +636,13 @@ void KernelMaxEigenvalue(const Geo& geo, const View2D<double>& V, int ns, const 
           double Mean_ProjVel = 0.0;
           for (int iDim = 0; iDim < ND; iDim++) Mean_ProjVel += V(iPoint, vel + iDim) * Normal[iDim];
           const double Mean_SoundSpeed = V(iPoint, sos) * Area;
+
+          /*--- Adjustment for grid movement (GeometryToolbox::DotProduct, then one subtraction) ---*/
+          if (dyn) {
+            double dot = 0.0;
+            for (int iDim = 0; iDim < ND; ++iDim) dot += Normal[iDim] * gvel(iPoint, iDim);
+            Mean_ProjVel -= dot;
+          }
 
           lambda(iPoint) += Kokkos::fabs(Mean_ProjVel) + Mean_SoundSpeed;
         }
@@ -704,6 +734,82 @@ void CNEMOKokkosData::UploadBoundaryInfo(CGeometry* geometry, const CConfig* con
   Kokkos::deep_copy(geo.vtx_sym_normal, hs);
   Kokkos::deep_copy(geo.pvtx_ptr, hp);
   Kokkos::deep_copy(geo.pvtx_idx, hi);
+}
+
+void CNEMOKokkosData::RefreshDynamicGeometry(CGeometry* geometry) {
+  const auto np = geo.nPoint, ne = geo.nEdge;
+  const int nd = geo.nDim, nm = geo.nMarker;
+  auto* pts = geometry->nodes; /*--- GetGridVel is non-const ---*/
+  const auto* edg = geometry->edges;
+  if (geometry->GetnPoint() != np || geometry->GetnEdge() != ne || geometry->GetnMarker() != nm)
+    SU2_MPI::Error("CNEMOKokkosData: dynamic grid changed the topology.", CURRENT_FUNCTION);
+
+  if (geo.grid_vel.size() == 0) {
+    geo.grid_vel = View2D<double>("NEMO::grid_vel", np, nd);
+    geo.volume_nm1 = View1D<double>("NEMO::volume_nm1", np);
+  }
+
+  /*--- Edge normals (same element-wise copy as UploadGeometry). ---*/
+  {
+    auto hN = Kokkos::create_mirror_view(geo.edge_normal);
+    for (auto e = 0ul; e < ne; ++e) {
+      const su2double* n = edg->GetNormal(e);
+      for (int d = 0; d < nd; ++d) hN(e, d) = n[d];
+    }
+    Kokkos::deep_copy(geo.edge_normal, hN);
+  }
+
+  /*--- Points: coordinates, volumes, periodic volumes, Volume_nM1, grid velocity. ---*/
+  {
+    auto hc = Kokkos::create_mirror_view(geo.coord);
+    auto hv = Kokkos::create_mirror_view(geo.volume);
+    auto hpv = Kokkos::create_mirror_view(geo.periodic_volume);
+    auto hvm1 = Kokkos::create_mirror_view(geo.volume_nm1);
+    auto hgv = Kokkos::create_mirror_view(geo.grid_vel);
+    for (auto i = 0ul; i < np; ++i) {
+      for (int d = 0; d < nd; ++d) hc(i, d) = pts->GetCoord(i, d);
+      hv(i) = pts->GetVolume(i);
+      hpv(i) = pts->GetPeriodicVolume(i);
+      hvm1(i) = pts->GetVolume_nM1(i);
+      const su2double* gv = pts->GetGridVel(i);
+      for (int d = 0; d < nd; ++d) hgv(i, d) = gv[d];
+    }
+    Kokkos::deep_copy(geo.coord, hc);
+    Kokkos::deep_copy(geo.volume, hv);
+    Kokkos::deep_copy(geo.periodic_volume, hpv);
+    Kokkos::deep_copy(geo.volume_nm1, hvm1);
+    Kokkos::deep_copy(geo.grid_vel, hgv);
+  }
+
+  /*--- Vertex normals and the symmetry unit normals (same statements as UploadGeometry / UploadBoundaryInfo). ---*/
+  {
+    auto hN = Kokkos::create_mirror_view(geo.vtx_normal);
+    auto hs = Kokkos::create_mirror_view(geo.vtx_sym_normal);
+    auto hf = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), geo.marker_flags);
+    unsigned long k = 0;
+    for (int m = 0; m < nm; ++m) {
+      for (auto v = 0ul; v < geometry->GetnVertex(m); ++v, ++k) {
+        for (int d = 0; d < nd; ++d) hN(k, d) = geometry->vertex[m][v]->GetNormal(d);
+        for (int d = 0; d < nd; ++d) hs(k, d) = 0.0;
+        if (!(hf(m) & MARKER_SYMMETRY)) continue;
+        su2double unitNormal[3] = {};
+        const auto it = geometry->symmetryNormals[m].find(v);
+        if (it != geometry->symmetryNormals[m].end()) {
+          for (int d = 0; d < nd; d++) unitNormal[d] = it->second[d];
+        } else {
+          geometry->vertex[m][v]->GetNormal(unitNormal);
+          const su2double area = GeometryToolbox::Norm(nd, unitNormal);
+          for (int d = 0; d < nd; d++) unitNormal[d] /= area;
+        }
+        for (int d = 0; d < nd; ++d) hs(k, d) = unitNormal[d];
+      }
+    }
+    Kokkos::deep_copy(geo.vtx_normal, hN);
+    Kokkos::deep_copy(geo.vtx_sym_normal, hs);
+  }
+  Kokkos::fence();
+  geo.dynamic = true;
+  dynGeoRefreshes++;
 }
 
 void CNEMOKokkosData::AllocateGradients() {
