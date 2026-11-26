@@ -712,3 +712,10 @@ READY FOR REVIEW: MERGE: 4.6-MG1 — logs now committed: validation_logs/2026-11
 - 2026-11-26 (round 86, review-20 queue: 4.6-MG2 test — step 1 build):
   - State check: MG2 dev code in HEAD; CNEMOKokkosMG.cpp registered in SU2_CFD/src/meson.build; prior binaries Nov 25 21:55/21:57 predate MG2 -> rebuild required (kk/logs had no build-mg2 logs = round-83 "starting" never completed).
   - RUNNING: `bash .buildmg2.sh` (ninja -j4 strict then serial, logs -> ../kk/logs/build-mg2-r1.log, build-mg2-serial-r1.log). Will check rc + tail, then queue G1 strict invwedge_mg (`.g1run.sh`), control MG_DEVICE=0, variants, viscous, poison, noisefloor, regressions; archive validation_logs/2026-11-26_4.6-MG2/ + INDEX rows; `READY FOR REVIEW: MERGE: 4.6-MG2` only after strict PASS + logs committed.
+
+- 2026-11-26T04:40:02-05:00 [loop] round 86 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_043210_86.log
+
+- 2026-11-26 (round 87, review-20 queue: 4.6-MG2 test — step 1 build):
+  - ROOT CAUSE of rounds 83/85/86 build failures: `ninja: regenerate build.ninja` runs bare `python3 -m mesonbuild.mesonmain`, and the shell no longer exports `PYTHONPATH=/home/mpr7366/SU2/externals/meson` (old repo path). Fix: `.buildmg2.sh` now exports `PYTHONPATH="$PWD/externals/meson"` (in-repo vendored meson 1.8.2; verified importable).
+  - RUNNING: strict rebuild in background (35/90 at ~04:50), then serial. Logs -> ../kk/logs/build-mg2-r1.log, build-mg2-serial-r1.log.
+  - NEXT after rc=0: G1 strict `timeout 1500 bash .g1run.sh ../kk/logs/g1-mg2-r1.log invwedge_mg` (expect `MG level 1 device-resident state: ON` + `MG device transfers=`), control `SU2_KOKKOS_NEMO_MG_DEVICE=0` (g1-mg2off-r1.log), variants mgpost/mgw/mgcs, viscous super_cat MGLEVEL=1 coarse OFF bitwise (g1-mg2visc-r1.log), poison, noisefloor (nf-mg2-r1.log), regressions default + targeted (g1-mg2regress{,2}-r1.log); archive validation_logs/2026-11-26_4.6-MG2/ + INDEX rows + ls-tree count; `READY FOR REVIEW: MERGE: 4.6-MG2`.
