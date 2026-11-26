@@ -1,0 +1,382 @@
+
+-------------------------------------------------------------------------
+|    ___ _   _ ___                                                      |
+|   / __| | | |_  )   Release 8.5.0 "Harrier"                           |
+|   \__ \ |_| |/ /                                                      |
+|   |___/\___//___|   Suite (Computational Fluid Dynamics Code)         |
+|                                                                       |
+-------------------------------------------------------------------------
+| SU2 Project Website: https://su2code.github.io                        |
+|                                                                       |
+| The SU2 Project is maintained by the SU2 Foundation                   |
+| (http://su2foundation.org)                                            |
+-------------------------------------------------------------------------
+| Copyright 2012-2026, SU2 Contributors                                 |
+|                                                                       |
+| SU2 is free software; you can redistribute it and/or                  |
+| modify it under the terms of the GNU Lesser General Public            |
+| License as published by the Free Software Foundation; either          |
+| version 2.1 of the License, or (at your option) any later version.    |
+|                                                                       |
+| SU2 is distributed in the hope that it will be useful,                |
+| but WITHOUT ANY WARRANTY; without even the implied warranty of        |
+| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU      |
+| Lesser General Public License for more details.                       |
+|                                                                       |
+| You should have received a copy of the GNU Lesser General Public      |
+| License along with SU2. If not, see <http://www.gnu.org/licenses/>.   |
+-------------------------------------------------------------------------
+
+Parsing config file for zone 0
+
+----------------- Physical Case Definition ( Zone 0 ) -------------------
+Compressible two-temperature thermochemical non-equilibrium Euler equations.
+Mach number: 5.
+Angle of attack (AoA): 0 deg, and angle of sideslip (AoS): 0 deg.
+No restart solution, use the values at infinity (freestream).
+Dimensional simulation.
+The reference area is 1 m^2.
+The semi-span will be computed using the max y(3D) value.
+The reference length is 1 m.
+Reference origin for moment evaluation is (0, 0, 0).
+Surface(s) where the force coefficients are evaluated: Wall.
+
+Input mesh file name: invwedge.su2
+
+--------------- Space Numerical Integration ( Zone 0 ) ------------------
+AUSM solver for the flow inviscid terms.
+Second order integration in space, with slope limiter.
+Venkatakrishnan slope-limiting method, with constant: 0.05.
+The reference element size is: 1. 
+Gradient for upwind reconstruction: inverse-distance weighted Least-Squares.
+Gradient for viscous and source terms: inverse-distance weighted Least-Squares.
+
+--------------- Time Numerical Integration  ( Zone 0 ) ------------------
+Local time stepping (steady state simulation).
+Euler implicit method for the flow equations.
+BCGSTAB is used for solving the linear system.
+Using a LU-SGS preconditioning.
+Convergence criteria of the linear solver: 1e-06.
+Max number of linear iterations: 5.
+No CFL adaptation.
+Courant-Friedrichs-Lewy number:        3
+
+------------------ Convergence Criteria  ( Zone 0 ) ---------------------
+Maximum number of solver subiterations: 100.
+Begin convergence monitoring at iteration 10.
+Residual minimum value: 1e-50.
+Cauchy series min. value: 1e-10.
+Number of Cauchy elements: 100.
+Begin windowed time average at iteration 0.
+
+-------------------- Output Information ( Zone 0 ) ----------------------
+File writing frequency: 
++------------------------------------+
+|                     File| Frequency|
++------------------------------------+
+|            RESTART_ASCII|       100|
++------------------------------------+
+Writing the convergence history file every 1 inner iterations.
+Writing the screen convergence history every 1 inner iterations.
+The tabular file format is Tecplot (.dat).
+Convergence history file name: convergence.
+Forces breakdown file name: forces_breakdown.dat.
+Surface file name: soln_surface.
+Volume file name: soln_volume.
+Restart file name: restart_flow.
+
+------------- Config File Boundary Information ( Zone 0 ) ---------------
++-----------------------------------------------------------------------+
+|                        Marker Type|                        Marker Name|
++-----------------------------------------------------------------------+
+|                         Euler wall|                              Euler|
+|                                   |                               Wall|
++-----------------------------------------------------------------------+
+|                          Far-field|                           Farfield|
+|                                   |                              Inlet|
++-----------------------------------------------------------------------+
+|                    Outlet boundary|                               Exit|
++-----------------------------------------------------------------------+
+
+-------------------- Output Preprocessing ( Zone 0 ) --------------------
+
+WARNING: SURFACE_PRESSURE_DROP can only be computed for at least 2 surfaces (outlet, inlet, ...)
+
+Screen output fields: INNER_ITER, RMS_DENSITY_0, RMS_DENSITY_1, RMS_DENSITY_2, RMS_DENSITY_3, RMS_DENSITY_4, RMS_MOMENTUM-X, RMS_MOMENTUM-Y, RMS_ENERGY, RMS_ENERGY_VE
+History output group(s): ITER, RMS_RES
+Convergence field(s): RMS_DENSITY_0
+Warning: No (valid) fields chosen for time convergence monitoring. Time convergence monitoring inactive.
+Volume output fields: COORDINATES, SOLUTION, PRIMITIVE, AUXILIARY
+
+------------------- Geometry Preprocessing ( Zone 0 ) -------------------
+Two dimensional problem.
+25830 grid points.
+25392 volume elements.
+5 surface markers.
+69 boundary elements in index 0 (Marker = Inlet).
+349 boundary elements in index 1 (Marker = Wall).
+69 boundary elements in index 2 (Marker = Exit).
+368 boundary elements in index 3 (Marker = Farfield).
+19 boundary elements in index 4 (Marker = Euler).
+25392 quadrilaterals.
+Setting point connectivity.
+Renumbering points (Reverse Cuthill McKee Ordering).
+Recomputing point connectivity.
+Setting element connectivity.
+Checking the numerical grid orientation.
+All volume elements are correctly oriented.
+All surface elements are correctly oriented.
+Identifying edges and vertices.
+Setting the control volume structure.
+Area of the computational grid: 0.225251.
+Searching for the closest normal neighbors to the surfaces.
+Storing a mapping from global to local point index.
+Compute the surface curvature.
+Max K: 768.759. Mean K: 3.66666. Standard deviation K: 37.4822.
+Computing mesh quality statistics for the dual control volumes.
++--------------------------------------------------------------+
+|           Mesh Quality Metric|        Minimum|        Maximum|
++--------------------------------------------------------------+
+|    Orthogonality Angle (deg.)|        89.0427|        89.9961|
+|     CV Face Area Aspect Ratio|        1.00187|        83.1257|
+|           CV Sub-Volume Ratio|        1.00007|        2.37912|
++--------------------------------------------------------------+
+Finding max control volume width.
+Wetted area = 1 m.
+Area projection in the x-plane = 0.173648 m, y-plane = 0 m.
+Max. coordinate in the x-direction = 0.984808 m, y-direction = 0.173648 m.
+Min. coordinate in the x-direction = 0 m, y-direction = 0 m.
+Computing wall distances.
+
+-------------------- Solver Preprocessing ( Zone 0 ) --------------------
+Inviscid flow: Computing density based on free-stream
+and pressure using the the equation of state for multi-species and multi-temperatures.
+Force coefficients computed using free-stream values.
+
+-- Models:
++-----------------------------------------------------------------------------+
+|                  Mixture|              Fluid Model|          Transport Model|
++-----------------------------------------------------------------------------+
+|                    AIR-5|                SU2 NonEq|                        -|
++-----------------------------------------------------------------------------+
+-- Fluid properties:
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|          Gas Constant|       287.399|             1|  N.m/kg.K|       287.399|
+|      Spec. Heat Ratio|             -|             -|         -|           1.4|
++------------------------------------------------------------------------------+
+-- Initial and free-stream conditions:
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|       Static Pressure|        101325|             1|        Pa|        101325|
+|               Density|        1.2197|             1|    kg/m^3|        1.2197|
+|       T-R Temperature|        288.15|             1|         K|        288.15|
+|       V-E Temperature|        288.15|             1|         K|        288.15|
+|          Total Energy|   1.66154e+06|             1|   m^2/s^2|   1.66154e+06|
+|            Velocity-X|       1705.16|             1|       m/s|       1705.16|
+|            Velocity-Y|             0|             1|       m/s|             0|
+|    Velocity Magnitude|       1705.16|             1|       m/s|       1705.16|
++------------------------------------------------------------------------------+
+|           Mach Number|             -|             -|         -|             5|
++------------------------------------------------------------------------------+
+Initialize Jacobian structure (Euler). MG level: 0.
+[KOKKOS_NEMO] device Cons2Prim enabled (exec space Serial, nPoint 25830, nEdge 51221, nSpecies 5, implicit)
+[KOKKOS_NEMO] edge assembly (upwind, viscous): atomic (Kokkos atomics; SU2_KOKKOS_NEMO_EDGE=color|level for the deterministic coloured assembly)
+[KOKKOS_NEMO] stage Cons2Prim (SetPrimVar + non-physical reduce): device
+[KOKKOS_NEMO] stage gradient (WEIGHTED_LEAST_SQUARES, into Gradient_Reconstruction): device
+[KOKKOS_NEMO] stage limiter (VENKATAKRISHNAN): device
+[KOKKOS_NEMO] stage time step (spectral radii + local dt + min/max reduce): device
+[KOKKOS_NEMO] stage max eigenvalue (centered only): not used
+[KOKKOS_NEMO] stage upwind (AUSM + MUSCL, residual + Jacobian): device
+[KOKKOS_NEMO] stage source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+[KOKKOS_NEMO] stage bc:FAR_FIELD (Inlet): device
+[KOKKOS_NEMO] stage bc:OUTLET_FLOW (Exit): device
+[KOKKOS_NEMO] stage bc:FAR_FIELD (Farfield): device
+[KOKKOS_NEMO] stage bc:EULER_WALL (Wall): device
+[KOKKOS_NEMO] stage bc:EULER_WALL (Euler): device
+[KOKKOS_NEMO] residual sync: deferred, the device residual + Jacobian are downloaded once after the BCs (FinalizeSpaceIntegration), or before the first host stage
+[KOKKOS_NEMO] stage update (EULER_IMPLICIT): device
+[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, linear solve
+[KOKKOS_NEMO] sync: SetPrimVar HtoD U,U_old,V,secondaries + DtoH all; stages reuse device V, DtoH domain rows of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS); upwind reuses device V/secondaries/gradient/limiter (HtoD halo rows, Non_Physical, sensor); source/BCs reuse device U/V/secondaries (HtoD node_infty once); residual accumulator DtoH (see residual sync)
+[KOKKOS_NEMO] stage linear preconditioner (LU_SGS apply): device
+[KOKKOS_NEMO] device-resident state (Step 6): ON (U, V, secondaries, gradient, limiter, dt, Non_Physical, residual, Jacobian, LinSysSol stay on the device; host copies on demand)
+
+------------------- Numerics Preprocessing ( Zone 0 ) -------------------
+
+----------------- Integration Preprocessing ( Zone 0 ) ------------------
+
+------------------- Iteration Preprocessing ( Zone 0 ) ------------------
+Euler/Navier-Stokes/RANS fluid iteration.
+
+------------------------------ Begin Solver -----------------------------
+
+Simulation Run using the Single-zone Driver
+[KOKKOS] LU_SGS device apply: hybrid (wide >= 256 rows; fwd levels=438 wide=0 segments=1; bwd levels=438 wide=0 segments=1)
++---------------------------------------------------------------------------------------------------------------------------------+
+|  Inner_Iter|  rms[Rho_0]|  rms[Rho_1]|  rms[Rho_2]|  rms[Rho_3]|  rms[Rho_4]|   rms[RhoU]|   rms[RhoV]|   rms[RhoE]| rms[RhoEve]|
++---------------------------------------------------------------------------------------------------------------------------------+
+|           0|   -0.918169|   -1.442932|  -32.000000|  -32.000000|  -24.921797|    2.427107|  -13.275296|    5.437040|    0.990754|
+|           1|   -0.958153|   -1.482916|  -32.000000|  -32.000000|  -24.926482|    2.384136|    1.042032|    5.403057|    0.950846|
+|           2|   -1.030085|   -1.554848|  -32.000000|  -32.000000|  -24.931025|    2.309201|    1.341823|    5.334636|    0.879613|
+|           3|   -1.136758|   -1.661521|  -20.928268|  -32.000000|  -24.935238|    2.195869|    1.581781|    5.225940|    0.777065|
+|           4|   -1.162473|   -1.687235|  -21.021664|  -32.000000|  -24.938317|    2.150232|    1.827685|    5.193416|    0.761702|
+|           5|   -1.107330|   -1.632093|  -21.106869|  -32.000000|  -24.945408|    2.217783|    1.707578|    5.254935|    0.805606|
+|           6|   -1.190167|   -1.714930|  -18.461927|  -18.790032|  -18.736474|    2.128611|    1.702519|    5.165947|    0.726524|
+|           7|   -1.091758|   -1.616521|  -17.880548|  -18.211435|  -18.153485|    2.224027|    1.829973|    5.270553|    0.825383|
+|           8|   -1.110525|   -1.635288|  -18.244945|  -18.574162|  -18.518451|    2.206997|    1.824169|    5.248096|    0.805737|
+|           9|   -1.107609|   -1.632371|  -18.138748|  -18.468284|  -18.411721|    2.209723|    1.802994|    5.251139|    0.809987|
+|          10|   -1.075100|   -1.599863|  -18.300885|  -18.628293|  -18.574314|    2.240441|    1.866697|    5.284555|    0.842349|
+|          11|   -1.089325|   -1.614088|  -17.632646|  -17.962757|  -17.906022|    2.226634|    1.844286|    5.269494|    0.828204|
+|          12|   -1.071573|   -1.596336|  -17.014592|  -17.345396|  -17.287689|    2.244460|    1.854934|    5.288094|    0.846017|
+|          13|   -1.071820|   -1.596583|  -17.195893|  -17.526413|  -17.469028|    2.243502|    1.872482|    5.287849|    0.847219|
+|          14|   -1.062318|   -1.587081|  -17.044922|  -17.375637|  -17.318020|    2.253431|    1.868763|    5.297438|    0.855780|
+|          15|   -1.068594|   -1.593357|  -17.229957|  -17.560273|  -17.503140|    2.246924|    1.870430|    5.291255|    0.851194|
+|          16|   -1.064425|   -1.589188|  -17.070264|  -17.400899|  -17.343383|    2.251218|    1.864340|    5.295060|    0.853830|
+|          17|   -1.061955|   -1.586718|  -17.215980|  -17.546117|  -17.489162|    2.253888|    1.867596|    5.298172|    0.857918|
+|          18|   -1.063639|   -1.588402|  -17.172075|  -17.502333|  -17.445236|    2.251665|    1.871356|    5.295899|    0.856349|
+|          19|   -1.057779|   -1.582542|  -17.240340|  -17.570396|  -17.513518|    2.257822|    1.869201|    5.302402|    0.862008|
+|          20|   -1.063402|   -1.588165|  -17.080881|  -17.411305|  -17.354005|    2.251474|    1.879103|    5.296137|    0.857645|
+|          21|   -1.067118|   -1.591881|  -17.259172|  -17.589038|  -17.532309|    2.248188|    1.863116|    5.291969|    0.852715|
+|          22|   -1.071470|   -1.596232|  -17.197183|  -17.527124|  -17.470312|    2.243506|    1.865184|    5.287538|    0.849386|
+|          23|   -1.086478|   -1.611241|  -17.272834|  -17.602533|  -17.545990|    2.228389|    1.844553|    5.271605|    0.833978|
+|          24|   -1.091859|   -1.616622|  -17.097160|  -17.427371|  -17.370262|    2.222864|    1.839610|    5.265958|    0.828367|
+|          25|   -1.110164|   -1.634927|  -17.273732|  -17.603445|  -17.546883|    2.204019|    1.829396|    5.246849|    0.811352|
+|          26|   -1.125717|   -1.650480|  -17.172741|  -17.502729|  -17.445857|    2.188130|    1.810242|    5.230782|    0.795711|
+|          27|   -1.135293|   -1.660055|  -17.298925|  -17.628485|  -17.572077|    2.178403|    1.794526|    5.220981|    0.786084|
+|          28|   -1.138992|   -1.663755|  -17.132892|  -17.462915|  -17.405993|    2.174401|    1.802253|    5.217569|    0.783155|
+|          29|   -1.139231|   -1.663994|  -17.341756|  -17.671341|  -17.614881|    2.174415|    1.789248|    5.217074|    0.782273|
+|          30|   -1.138223|   -1.662986|  -17.278540|  -17.608357|  -17.551689|    2.175152|    1.802389|    5.218481|    0.783762|
+|          31|   -1.144330|   -1.669093|  -17.330743|  -17.660319|  -17.603900|    2.168772|    1.798926|    5.211791|    0.778459|
+|          32|   -1.132675|   -1.657438|  -17.150546|  -17.480539|  -17.423650|    2.180549|    1.799260|    5.223811|    0.788899|
+|          33|   -1.139835|   -1.664598|  -17.314671|  -17.644498|  -17.587801|    2.172951|    1.810354|    5.216288|    0.783440|
+|          34|   -1.141852|   -1.666615|  -17.315685|  -17.645502|  -17.588825|    2.170721|    1.797973|    5.213702|    0.781111|
+|          35|   -1.134617|   -1.659380|  -17.392037|  -17.721778|  -17.665193|    2.178134|    1.799535|    5.220843|    0.788075|
+|          36|   -1.141736|   -1.666499|  -17.221213|  -17.550984|  -17.494320|    2.170445|    1.810784|    5.213586|    0.782551|
+|          37|   -1.143552|   -1.668315|  -17.360256|  -17.689999|  -17.633380|    2.168461|    1.798144|    5.211221|    0.780333|
+|          38|   -1.138942|   -1.663705|  -17.269403|  -17.599191|  -17.542530|    2.173288|    1.799081|    5.215800|    0.784719|
+|          39|   -1.146140|   -1.670903|  -17.350921|  -17.680714|  -17.624053|    2.165516|    1.802981|    5.208245|    0.778824|
+|          40|   -1.148990|   -1.673753|  -17.243559|  -17.573176|  -17.516675|    2.162780|    1.791664|    5.204953|    0.775556|
+|          41|   -1.143504|   -1.668267|  -17.349168|  -17.678849|  -17.622287|    2.168316|    1.795714|    5.210836|    0.781052|
+|          42|   -1.145925|   -1.670688|  -17.326993|  -17.656824|  -17.600116|    2.165680|    1.799077|    5.208217|    0.779587|
+|          43|   -1.151606|   -1.676369|  -17.313423|  -17.643405|  -17.586528|    2.159972|    1.785397|    5.202076|    0.773746|
+|          44|   -1.148514|   -1.673277|  -17.303500|  -17.633168|  -17.576628|    2.163128|    1.786080|    5.205279|    0.776503|
+|          45|   -1.151874|   -1.676637|  -17.381246|  -17.711175|  -17.654367|    2.159546|    1.791289|    5.201700|    0.774263|
+|          46|   -1.155036|   -1.679799|  -17.340084|  -17.669869|  -17.613200|    2.156345|    1.780205|    5.198133|    0.770699|
+|          47|   -1.151252|   -1.676015|  -17.369794|  -17.699694|  -17.642906|    2.160286|    1.777937|    5.201836|    0.773933|
+|          48|   -1.154252|   -1.679015|  -17.282300|  -17.611972|  -17.555419|    2.157040|    1.787519|    5.198550|    0.772215|
+|          49|   -1.163747|   -1.688510|  -17.365342|  -17.695312|  -17.638457|    2.147065|    1.774599|    5.188272|    0.763177|
+|          50|   -1.164079|   -1.688842|  -17.319013|  -17.648835|  -17.592124|    2.146725|    1.767918|    5.187934|    0.762035|
+|          51|   -1.162378|   -1.687141|  -17.350171|  -17.680087|  -17.623286|    2.148372|    1.778173|    5.189623|    0.764489|
+|          52|   -1.165310|   -1.690073|  -17.294144|  -17.623984|  -17.567259|    2.145553|    1.766926|    5.186184|    0.761636|
+|          53|   -1.167790|   -1.692553|  -17.318596|  -17.648619|  -17.591705|    2.143160|    1.759251|    5.183540|    0.759220|
+|          54|   -1.166790|   -1.691553|  -17.339121|  -17.668934|  -17.612236|    2.143987|    1.766485|    5.184928|    0.761117|
+|          55|   -1.171764|   -1.696527|  -17.360555|  -17.690577|  -17.633664|    2.138927|    1.762017|    5.179107|    0.756323|
+|          56|   -1.176075|   -1.700837|  -17.331177|  -17.660954|  -17.604295|    2.134434|    1.753599|    5.174603|    0.752656|
+|          57|   -1.177485|   -1.702248|  -17.350958|  -17.680921|  -17.624073|    2.133045|    1.747321|    5.172867|    0.750620|
+|          58|   -1.175956|   -1.700718|  -17.307445|  -17.637457|  -17.580563|    2.134327|    1.760272|    5.175073|    0.754451|
+|          59|   -1.184688|   -1.709451|  -17.296275|  -17.626306|  -17.569392|    2.125701|    1.742394|    5.164953|    0.744018|
+|          60|   -1.192839|   -1.717602|  -17.295027|  -17.625004|  -17.568143|    2.117357|    1.730656|    5.156574|    0.736101|
+|          61|   -1.190946|   -1.715709|  -17.365907|  -17.695842|  -17.639035|    2.119269|    1.731125|    5.158704|    0.737882|
+|          62|   -1.190299|   -1.715062|  -17.320100|  -17.650035|  -17.593217|    2.119907|    1.735513|    5.159460|    0.739003|
+|          63|   -1.192776|   -1.717539|  -17.338680|  -17.668816|  -17.611797|    2.117836|    1.724898|    5.156304|    0.736297|
+|          64|   -1.197351|   -1.722114|  -17.369847|  -17.699788|  -17.642973|    2.113085|    1.716401|    5.151579|    0.731765|
+|          65|   -1.197992|   -1.722755|  -17.345186|  -17.675329|  -17.618298|    2.112199|    1.721499|    5.150953|    0.731814|
+|          66|   -1.199694|   -1.724457|  -17.360332|  -17.690356|  -17.633454|    2.110318|    1.722283|    5.148900|    0.730231|
+|          67|   -1.201413|   -1.726176|  -17.327332|  -17.657414|  -17.600448|    2.108900|    1.714019|    5.146592|    0.728727|
+|          68|   -1.201079|   -1.725842|  -17.315073|  -17.644962|  -17.588191|    2.109174|    1.710047|    5.146983|    0.729012|
+|          69|   -1.201934|   -1.726697|  -17.344351|  -17.674409|  -17.617462|    2.107851|    1.720706|    5.146286|    0.729489|
+|          70|   -1.203924|   -1.728686|  -17.301551|  -17.631395|  -17.574659|    2.105637|    1.720047|    5.144220|    0.728708|
+|          71|   -1.205458|   -1.730221|  -17.300967|  -17.630968|  -17.574079|    2.104175|    1.713630|    5.141700|    0.726155|
+|          72|   -1.199167|   -1.723930|  -17.293392|  -17.623030|  -17.566509|    2.110942|    1.709783|    5.148235|    0.733197|
+|          73|   -1.203800|   -1.728563|  -17.252166|  -17.582208|  -17.525273|    2.105723|    1.717024|    5.143321|    0.728810|
+|          74|   -1.211673|   -1.736436|  -17.316875|  -17.646943|  -17.589986|    2.097423|    1.711494|    5.135368|    0.722129|
+|          75|   -1.214938|   -1.739701|  -17.325828|  -17.655773|  -17.598948|    2.094121|    1.704806|    5.131113|    0.718037|
+|          76|   -1.211360|   -1.736123|  -17.359435|  -17.689232|  -17.632563|    2.098235|    1.698199|    5.134793|    0.721279|
+|          77|   -1.208411|   -1.733174|  -17.315011|  -17.644981|  -17.588129|    2.100884|    1.706256|    5.137797|    0.724354|
+|          78|   -1.215610|   -1.740373|  -17.239048|  -17.569021|  -17.512165|    2.093400|    1.702601|    5.130514|    0.718036|
+|          79|   -1.220227|   -1.744990|  -17.245819|  -17.575642|  -17.518949|    2.088649|    1.697167|    5.125024|    0.713840|
+|          80|   -1.224255|   -1.749017|  -17.288119|  -17.617993|  -17.561231|    2.084689|    1.687996|    5.120750|    0.709655|
+|          81|   -1.219963|   -1.744726|  -17.342311|  -17.672104|  -17.615412|    2.089473|    1.683319|    5.124810|    0.713903|
+|          82|   -1.226093|   -1.750856|  -17.343362|  -17.673307|  -17.616480|    2.082733|    1.684734|    5.119046|    0.707524|
+|          83|   -1.230925|   -1.755688|  -17.267182|  -17.597201|  -17.540281|    2.077697|    1.680942|    5.113779|    0.703581|
+|          84|   -1.232799|   -1.757561|  -17.298781|  -17.628642|  -17.571890|    2.075886|    1.676903|    5.111655|    0.701263|
+|          85|   -1.231864|   -1.756627|  -17.308489|  -17.638522|  -17.581590|    2.077335|    1.670082|    5.112332|    0.703773|
+|          86|   -1.232601|   -1.757364|  -17.330188|  -17.660134|  -17.603297|    2.076667|    1.666365|    5.111519|    0.701187|
+|          87|   -1.238669|   -1.763432|  -17.330365|  -17.660378|  -17.603470|    2.070005|    1.666846|    5.105490|    0.696367|
+|          88|   -1.242548|   -1.767311|  -17.309199|  -17.639279|  -17.582304|    2.065889|    1.664933|    5.101289|    0.691895|
+|          89|   -1.241591|   -1.766354|  -17.325988|  -17.656144|  -17.599088|    2.067057|    1.662157|    5.102183|    0.695002|
+|          90|   -1.239553|   -1.764316|  -17.348567|  -17.678601|  -17.621693|    2.069328|    1.657742|    5.103628|    0.694227|
+|          91|   -1.238886|   -1.763649|  -17.170895|  -17.501083|  -17.443992|    2.069924|    1.663523|    5.104443|    0.697130|
+|          92|   -1.245732|   -1.770494|  -17.268458|  -17.598516|  -17.541569|    2.062394|    1.664138|    5.097208|    0.690009|
+|          93|   -1.251477|   -1.776240|  -17.262240|  -17.592229|  -17.535344|    2.056010|    1.662589|    5.091455|    0.687436|
+|          94|   -1.252564|   -1.777327|  -17.302196|  -17.632205|  -17.575303|    2.055096|    1.655670|    5.089590|    0.683083|
+|          95|   -1.248781|   -1.773544|  -17.317620|  -17.647560|  -17.590730|    2.059165|    1.653559|    5.093438|    0.688305|
+|          96|   -1.246152|   -1.770914|  -17.269535|  -17.599280|  -17.542644|    2.061895|    1.657697|    5.095760|    0.689391|
+|          97|   -1.250790|   -1.775553|  -17.247921|  -17.577915|  -17.521026|    2.057015|    1.655566|    5.091129|    0.688124|
+|          98|   -1.259235|   -1.783998|  -17.261723|  -17.591773|  -17.534831|    2.047873|    1.652209|    5.082089|    0.678230|
+|          99|   -1.264640|   -1.789403|  -17.295238|  -17.625252|  -17.568346|    2.042175|    1.645890|    5.076623|    0.674764|
+
+----------------------------- Solver Exit -------------------------------
+
+Maximum number of iterations reached (ITER = 100) before convergence.
++-----------------------------------------------------------------------+
+|      Convergence Field     |     Value    |   Criterion  |  Converged |
++-----------------------------------------------------------------------+
+|                  rms[Rho_0]|      -1.26464|         < -50|          No|
++-----------------------------------------------------------------------+
+-------------------------------------------------------------------------
++-----------------------------------------------------------------------+
+|        File Writing Summary       |              Filename             |
++-----------------------------------------------------------------------+
+|SU2 ASCII restart                  |restart_flow.csv                   |
++-----------------------------------------------------------------------+
+Warning: 89432 reconstructed states for upwinding are non-physical.
+
+--------------------------- Finalizing Solver ---------------------------
+Deleted CNumerics container.
+Deleted CIntegration container.
+[KOKKOS_NEMO_PERF] device LU_SGS applies=990 (30.2998 s incl. verification)
+[KOKKOS_NEMO_PERF] MG 0 SetPrimVar calls=200 nPoint=25830 | h2d 1.800e-03 s (9.000e-06/call, 0.000e+00 MB/call) | kernel 1.090e+01 s (5.448e-02/call) | d2h 3.286e-05 s (1.643e-07/call, 0.000e+00 MB/call) | host post 1.627e-03 s (8.136e-06/call)
+[KOKKOS_NEMO_PERF] MG 0 Gradient calls=100 | h2d 3.048e-03 s (8.856e-02 MB/call) | kernel 2.518e-01 s (2.518e-03/call) | d2h 5.744e-03 s (8.856e-02 MB/call) | host 3.329e-03 s (3.329e-05/call)
+[KOKKOS_NEMO_PERF] MG 0 Limiter calls=100 | h2d 3.193e-03 s (0.000e+00 MB/call) | kernel 3.646e-01 s (3.646e-03/call) | d2h 2.293e-05 s (0.000e+00 MB/call) | host 3.816e-05 s (3.816e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 TimeStep calls=100 | h2d 3.460e-04 s (0.000e+00 MB/call) | kernel 7.870e-02 s (7.870e-04/call) | d2h 6.613e-06 s (0.000e+00 MB/call) | host 5.464e-05 s (5.464e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 Upwind calls=100 | h2d 1.429e-03 s (0.000e+00 MB/call) | kernel 1.185e+01 s (1.185e-01/call) | d2h 1.190e-04 s (1.200e-04 MB/call) | host 3.493e-04 s (3.493e-06/call)
+[KOKKOS_NEMO_PERF] MG 0 Source calls=100 | h2d 2.209e-05 s (0.000e+00 MB/call) | kernel 3.579e+01 s (3.579e-01/call) | d2h 0.000e+00 s (0.000e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 0 BC calls=500 | h2d 2.519e-04 s (4.800e-07 MB/call) | kernel 5.293e-02 s (1.059e-04/call) | d2h 3.305e-05 s (0.000e+00 MB/call) | host 1.095e-04 s (2.190e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 BC_Outlet calls=100, with subsonic outlet vertices=0
+[KOKKOS_NEMO_PERF] MG 0 Update | prepare 3.752e-01 s (3.752e-03/call) | complete 5.562e-02 s (5.562e-04/call) | explicit 0.000e+00 s (0.000e+00/call) | old solution 1.799e-02 s | residual norm 5.846e-02 s (200 calls)
+[KOKKOS_NEMO_PERF] MG 0 sync Solution calls=2 | h2d 1.860e+00 MB (1.786e-04 s) | d2h 1.860e+00 MB (1.574e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Solution_Old calls=2 | h2d 1.860e+00 MB (2.155e-04 s) | d2h 1.860e+00 MB (2.101e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Primitive+secondaries calls=2 | h2d 1.095e+01 MB (1.340e-03 s) | d2h 1.098e+01 MB (1.675e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Gradient calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 6.199e+00 MB (7.353e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Limiter calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 9.299e+00 MB (1.076e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync TimeStep calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 4.133e-01 MB (5.353e-05 s)
+[KOKKOS_NEMO_PERF] MG 0 sync LocalCFL calls=1 | h2d 2.066e-01 MB (2.504e-05 s) | d2h 0.000e+00 MB (0.000e+00 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Non_Physical calls=2 | h2d 7.749e-02 MB (3.073e-05 s) | d2h 7.749e-02 MB (1.242e-05 s)
+[KOKKOS_NEMO_PERF] MG 0 sync UnderRelaxation calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 2.066e-01 MB (2.650e-05 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Res_TruncError calls=2 | h2d 1.860e+00 MB (2.290e-04 s) | d2h 1.860e+00 MB (2.208e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync LinSysRes+LinSysSol calls=1 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 3.720e+00 MB (4.638e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync boundary Primitive (+ viscous-wall gradient/transport) calls=100 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 1.049e+01 MB (6.235e-03 s)
+[KOKKOS_NEMO_LEDGER] MG 0 99 closed iterations (device-resident); non-output iterations >= 1: max HtoD 8.856e+04 B, max DtoH 1.938e+05 B; output iterations: 0, DtoH 0.000e+00 B in total
+[KOKKOS_NEMO_LEDGER] MG 0 steady iteration 98: HtoD 8.856e+04 B, DtoH 1.938e+05 B
+[KOKKOS_NEMO_LEDGER]     Gradient HtoD: 8.856e+04 B
+[KOKKOS_NEMO_LEDGER]     Gradient DtoH: 8.856e+04 B
+[KOKKOS_NEMO_LEDGER]     Upwind DtoH: 1.200e+02 B
+[KOKKOS_NEMO_LEDGER]     sync Primitive+secondaries DtoH: 2.820e+02 B
+[KOKKOS_NEMO_LEDGER]     sync boundary Primitive (+ viscous-wall gradient/transport) DtoH: 1.049e+05 B
+Deleted CSolver container.
+Deleted CIteration container.
+Deleted CInterface container.
+Deleted CGeometry container.
+Deleted CFreeFormDefBox class.
+Deleted CSurfaceMovement class.
+Deleted CVolumetricMovement class.
+Deleted CConfig container.
+Deleted nInst container.
+Deleted COutput class.
+-------------------------------------------------------------------------
+
+------------------------- Exit Success (SU2_CFD) ------------------------
+

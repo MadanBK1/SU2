@@ -891,3 +891,11 @@ READY FOR REVIEW: MERGE: 4.8-ILUTeam — steps 1-7 all PASS: G1 super_cat team d
 - 2026-11-26T16:29:40-05:00 [loop] round 117 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_162155_117.log
 
 - 2026-11-26T16:44:38-05:00 [loop] round 118 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_163000_118.log
+
+- 2026-11-26T16:51:41-05:00 [loop] round 119 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_164458_119.log
+
+- 2026-11-26 (round 120, review-25 queue 4.8-LUSGSHyb — step 8 VERIFIED + step 9 DONE; ALL 9 STEPS COMPLETE):
+  - Step 8 (noise floor serial+strict, invwedge_lusgs K=10; ran in round 117, log present): **NOISEFLOOR OVERALL: PASS** (kk/logs/nf-lusgs-r1.log; ITER 11 ratio 0.78, ITER 100 ratio 0.86 — both <= 10).
+  - Step 9 (archive + INDEX): steps 3-8 logs + chk log.txt pairs all present under validation_logs/2026-11-26_4.8-LUSGSHyb/ (36 files); 6 new INDEX rows added (steps 3-8, incl. `device LU_SGS applies=` perf lines: w1 3.73177 s, single 3.62565 s, ab 9.18663 s incl. verification, visc-w1 2.22723 s; A/B `compares=106 non-bitwise=0`); INDEX.md now has 9 rows for this item (steps 1-8 + builds).
+  - STATUS: review-25 queue 4.8-LUSGSHyb steps 1-9 ALL DONE. Gates: G1 strict bitwise x5 (hyb/w1/single/visc/regress 7 cases) + A/B non-bitwise=0 + noise floor PASS. All 4.8 serial timings informational — the real 4.8 test is Madan's V100 G7 (hyb vs single vs WIDE=64/1024, commands in review 25).
+READY FOR REVIEW: MERGE: 4.8-LUSGSHyb — steps 1-9 all PASS: build strict+serial rc=0; G1 invwedge_lusgs hybrid-default/WIDE=1/single-team all bitwise (strict); A/B PRECOND_VERIFY compares=106 non-bitwise=0; viscous super_cat LU_SGS WIDE=1 bitwise; 7-case regressions bitwise; noise floor K=10 ratios 0.78/0.86 <= 10; serial applies=106 hyb 3.61801s / w1 3.73177s / single 3.62565s (informational); 36 logs committed under validation_logs/2026-11-26_4.8-LUSGSHyb/ + 9 INDEX rows; V100 G7 timing still OPEN for Madan

@@ -1,0 +1,354 @@
+WARNING: Setting WINDOW_START_ITER = RESTART_ITER for meaningful running average.
+
+-------------------------------------------------------------------------
+|    ___ _   _ ___                                                      |
+|   / __| | | |_  )   Release 8.5.0 "Harrier"                           |
+|   \__ \ |_| |/ /                                                      |
+|   |___/\___//___|   Suite (Computational Fluid Dynamics Code)         |
+|                                                                       |
+-------------------------------------------------------------------------
+| SU2 Project Website: https://su2code.github.io                        |
+|                                                                       |
+| The SU2 Project is maintained by the SU2 Foundation                   |
+| (http://su2foundation.org)                                            |
+-------------------------------------------------------------------------
+| Copyright 2012-2026, SU2 Contributors                                 |
+|                                                                       |
+| SU2 is free software; you can redistribute it and/or                  |
+| modify it under the terms of the GNU Lesser General Public            |
+| License as published by the Free Software Foundation; either          |
+| version 2.1 of the License, or (at your option) any later version.    |
+|                                                                       |
+| SU2 is distributed in the hope that it will be useful,                |
+| but WITHOUT ANY WARRANTY; without even the implied warranty of        |
+| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU      |
+| Lesser General Public License for more details.                       |
+|                                                                       |
+| You should have received a copy of the GNU Lesser General Public      |
+| License along with SU2. If not, see <http://www.gnu.org/licenses/>.   |
+-------------------------------------------------------------------------
+WARNING: Setting WINDOW_START_ITER = RESTART_ITER for meaningful running average.
+
+Parsing config file for zone 0
+WARNING: Setting WINDOW_START_ITER = RESTART_ITER for meaningful running average.
+
+----------------- Physical Case Definition ( Zone 0 ) -------------------
+Compressible two-temperature thermochemical non-equilibrium Euler equations.
+Mach number: 5.
+Angle of attack (AoA): 0 deg, and angle of sideslip (AoS): 0 deg.
+Performing a dynamic mesh simulation: rigid mesh motion.
+No restart solution, use the values at infinity (freestream).
+Dimensional simulation.
+The reference area is 1 m^2.
+The semi-span will be computed using the max y(3D) value.
+The reference length is 1 m.
+Reference origin for moment evaluation is (0, 0, 0).
+Surface(s) where the force coefficients are evaluated: Wall.
+
+Input mesh file name: invwedge.su2
+
+--------------- Space Numerical Integration ( Zone 0 ) ------------------
+AUSM solver for the flow inviscid terms.
+Second order integration in space, with slope limiter.
+Venkatakrishnan slope-limiting method, with constant: 0.05.
+The reference element size is: 1. 
+Gradient for upwind reconstruction: inverse-distance weighted Least-Squares.
+Gradient for viscous and source terms: inverse-distance weighted Least-Squares.
+
+--------------- Time Numerical Integration  ( Zone 0 ) ------------------
+Unsteady simulation, dual time stepping strategy (second order in time).
+Unsteady time step provided by the user (s): 1e-06.
+Euler implicit method for the flow equations.
+BCGSTAB is used for solving the linear system.
+Using a ILU(0) preconditioning.
+Convergence criteria of the linear solver: 1e-06.
+Max number of linear iterations: 5.
+No CFL adaptation.
+Courant-Friedrichs-Lewy number:        3
+
+------------------ Convergence Criteria  ( Zone 0 ) ---------------------
+Maximum number of solver subiterations: 4.
+Maximum number of physical time-steps: 4.
+Begin convergence monitoring at iteration 10.
+Residual minimum value: 1e-50.
+Cauchy series min. value: 1e-10.
+Number of Cauchy elements: 100.
+Begin windowed time average at iteration 0.
+
+-------------------- Output Information ( Zone 0 ) ----------------------
+File writing frequency: 
++------------------------------------+
+|                     File| Frequency|
++------------------------------------+
+|            RESTART_ASCII|       100|
+|           PARAVIEW_ASCII|       100|
++------------------------------------+
+Writing the convergence history file every 0 inner iterations.
+Writing the convergence history file every 1 time iterations.
+Writing the screen convergence history every 1 inner iterations.
+Writing the screen convergence history every 1 time iterations.
+The tabular file format is Tecplot (.dat).
+Convergence history file name: convergence.
+Forces breakdown file name: forces_breakdown.dat.
+Surface file name: soln_surface.
+Volume file name: soln_volume.
+Restart file name: restart_flow.
+
+------------- Config File Boundary Information ( Zone 0 ) ---------------
++-----------------------------------------------------------------------+
+|                        Marker Type|                        Marker Name|
++-----------------------------------------------------------------------+
+|                         Euler wall|                              Euler|
+|                                   |                               Wall|
++-----------------------------------------------------------------------+
+|                          Far-field|                           Farfield|
+|                                   |                              Inlet|
++-----------------------------------------------------------------------+
+|                    Outlet boundary|                               Exit|
++-----------------------------------------------------------------------+
+
+-------------------- Output Preprocessing ( Zone 0 ) --------------------
+
+WARNING: SURFACE_PRESSURE_DROP can only be computed for at least 2 surfaces (outlet, inlet, ...)
+
+Screen output fields: TIME_ITER, INNER_ITER, RMS_DENSITY_0, RMS_DENSITY_1, RMS_DENSITY_2, RMS_DENSITY_3, RMS_DENSITY_4, RMS_MOMENTUM-X, RMS_MOMENTUM-Y, RMS_ENERGY, RMS_ENERGY_VE
+History output group(s): ITER, CUR_TIME, RMS_RES
+Convergence field(s): RMS_DENSITY_0
+Warning: No (valid) fields chosen for time convergence monitoring. Time convergence monitoring inactive.
+Volume output fields: COORDINATES, SOLUTION, PRIMITIVE, AUXILIARY, GRID_VELOCITY
+
+------------------- Geometry Preprocessing ( Zone 0 ) -------------------
+Two dimensional problem.
+25830 grid points.
+25392 volume elements.
+5 surface markers.
+69 boundary elements in index 0 (Marker = Inlet).
+349 boundary elements in index 1 (Marker = Wall).
+69 boundary elements in index 2 (Marker = Exit).
+368 boundary elements in index 3 (Marker = Farfield).
+19 boundary elements in index 4 (Marker = Euler).
+25392 quadrilaterals.
+Setting point connectivity.
+Renumbering points (Reverse Cuthill McKee Ordering).
+Recomputing point connectivity.
+Setting element connectivity.
+Checking the numerical grid orientation.
+All volume elements are correctly oriented.
+All surface elements are correctly oriented.
+Identifying edges and vertices.
+Setting the control volume structure.
+Area of the computational grid: 0.225251.
+Searching for the closest normal neighbors to the surfaces.
+Storing a mapping from global to local point index.
+Compute the surface curvature.
+Max K: 768.759. Mean K: 3.66666. Standard deviation K: 37.4822.
+Computing mesh quality statistics for the dual control volumes.
++--------------------------------------------------------------+
+|           Mesh Quality Metric|        Minimum|        Maximum|
++--------------------------------------------------------------+
+|    Orthogonality Angle (deg.)|         66.913|        89.9961|
+|     CV Face Area Aspect Ratio|        1.00187|        83.1257|
+|           CV Sub-Volume Ratio|        1.00007|        2.37912|
++--------------------------------------------------------------+
+Finding max control volume width.
+Wetted area = 1 m.
+Area projection in the x-plane = 0.173648 m, y-plane = 0 m.
+Max. coordinate in the x-direction = 0.984808 m, y-direction = 0.173648 m.
+Min. coordinate in the x-direction = 0 m, y-direction = 0 m.
+Computing wall distances.
+
+-------------------- Solver Preprocessing ( Zone 0 ) --------------------
+Inviscid flow: Computing density based on free-stream
+and pressure using the the equation of state for multi-species and multi-temperatures.
+Force coefficients computed using MACH_MOTION.
+
+-- Models:
++-----------------------------------------------------------------------------+
+|                  Mixture|              Fluid Model|          Transport Model|
++-----------------------------------------------------------------------------+
+|                    AIR-5|                SU2 NonEq|                        -|
++-----------------------------------------------------------------------------+
+-- Fluid properties:
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|          Gas Constant|       287.399|             1|  N.m/kg.K|       287.399|
+|      Spec. Heat Ratio|             -|             -|         -|           1.4|
++------------------------------------------------------------------------------+
+-- Initial and free-stream conditions:
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|       Static Pressure|        101325|             1|        Pa|        101325|
+|               Density|        1.2197|             1|    kg/m^3|        1.2197|
+|       T-R Temperature|        288.15|             1|         K|        288.15|
+|       V-E Temperature|        288.15|             1|         K|        288.15|
+|          Total Energy|   1.66154e+06|             1|   m^2/s^2|   1.66154e+06|
+|            Velocity-X|       1705.16|             1|       m/s|       1705.16|
+|            Velocity-Y|             0|             1|       m/s|             0|
+|    Velocity Magnitude|       1705.16|             1|       m/s|       1705.16|
++------------------------------------------------------------------------------+
+|           Mach Number|             -|             -|         -|             5|
++------------------------------------------------------------------------------+
+-- Unsteady conditions
++------------------------------------------------------------------------------+
+|                  Name|    Dim. value|    Ref. value|      Unit|Non-dim. value|
++------------------------------------------------------------------------------+
+|            Total Time|             1|             1|         s|             1|
+|             Time Step|         1e-06|             1|         s|         1e-06|
++------------------------------------------------------------------------------+
+Initialize Jacobian structure (Euler). MG level: 0.
+[KOKKOS_NEMO] device Cons2Prim enabled (exec space Serial, nPoint 25830, nEdge 51221, nSpecies 5, implicit)
+[KOKKOS_NEMO] edge assembly (upwind, viscous): atomic (Kokkos atomics; SU2_KOKKOS_NEMO_EDGE=color|level for the deterministic coloured assembly)
+[KOKKOS_NEMO] stage Cons2Prim (SetPrimVar + non-physical reduce): device
+[KOKKOS_NEMO] stage gradient (WEIGHTED_LEAST_SQUARES, into Gradient_Reconstruction): device
+[KOKKOS_NEMO] stage limiter (VENKATAKRISHNAN): device
+[KOKKOS_NEMO] stage time step (spectral radii + local dt + min/max reduce): device
+[KOKKOS_NEMO] stage max eigenvalue (centered only): not used
+[KOKKOS_NEMO] stage dynamic grid (grid-velocity dt/eigenvalue terms + GCL, metric re-upload per time step): device
+[KOKKOS_NEMO] stage upwind (AUSM + MUSCL, residual + Jacobian): device
+[KOKKOS_NEMO] stage source (finite-rate chemistry + V-T relaxation, residual + Jacobian): device
+[KOKKOS_NEMO] stage dual-time source (2nd order): device
+[KOKKOS_NEMO] stage bc:FAR_FIELD (Inlet): device
+[KOKKOS_NEMO] stage bc:OUTLET_FLOW (Exit): device
+[KOKKOS_NEMO] stage bc:FAR_FIELD (Farfield): device
+[KOKKOS_NEMO] stage bc:EULER_WALL (Wall): device
+[KOKKOS_NEMO] stage bc:EULER_WALL (Euler): device
+[KOKKOS_NEMO] residual sync: deferred, the device residual + Jacobian are downloaded once after the BCs (FinalizeSpaceIntegration), or before the first host stage
+[KOKKOS_NEMO] stage update (EULER_IMPLICIT): device
+[KOKKOS_NEMO] host: MPI/periodic comms, Velocity2, linear solve
+[KOKKOS_NEMO] sync: SetPrimVar HtoD U,U_old,V,secondaries + DtoH all; stages reuse device V, DtoH domain rows of gradient/limiter/min/max/dt/lambda; dt HtoD LocalCFL (+mu,k,k_ve for NS); upwind reuses device V/secondaries/gradient/limiter (HtoD halo rows, Non_Physical, sensor); source/BCs reuse device U/V/secondaries (HtoD node_infty once); residual accumulator DtoH (see residual sync)
+[KOKKOS_NEMO] device-resident state (Step 6): ON (U, V, secondaries, gradient, limiter, dt, Non_Physical, residual, Jacobian, LinSysSol stay on the device; host copies on demand)
+
+------------------- Numerics Preprocessing ( Zone 0 ) -------------------
+WARNING: Grid velocities are NOT yet considered in AUSM-type schemes.
+WARNING: Grid velocities are NOT yet considered in AUSM-type schemes.
+
+----------------- Integration Preprocessing ( Zone 0 ) ------------------
+
+------------------- Iteration Preprocessing ( Zone 0 ) ------------------
+Euler/Navier-Stokes/RANS fluid iteration.
+Setting dynamic mesh structure for zone 1.
+
+------------------------------ Begin Solver -----------------------------
+
+Simulation Run using the Single-zone Driver
+The simulation will run for 4 time steps.
+
+ Performing rigid mesh transformation.
+ New physical time: 0 seconds.
+ Translational velocity: (20, 0, 0) m/s.
+ Plunging frequency: (0, 0, 0) rad/s.
+ Plunging amplitude: (0, 0, 0) m.
+ Pitching frequency: (0, 0, 0) rad/s.
+ Pitching amplitude: (0, 0, 0) degrees.
+ Pitching phase lag: (0, 0, 0) degrees.
+ Angular velocity: (0, 0, 100) rad/s.
+[KOKKOS] ILU(0) device build: team-per-row
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|   Time_Iter|  Inner_Iter|  rms[Rho_0]|  rms[Rho_1]|  rms[Rho_2]|  rms[Rho_3]|  rms[Rho_4]|   rms[RhoU]|   rms[RhoV]|   rms[RhoE]| rms[RhoEve]|
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|           0|           0|   -0.918169|   -1.442932|  -32.000000|  -32.000000|  -24.921797|    2.427107|  -13.266845|    5.437040|    0.990754|
+|           0|           1|   -1.154518|   -1.679281|  -32.000000|  -32.000000|  -25.674478|    2.188978|    0.590107|    5.200858|    0.754426|
+|           0|           2|   -1.455268|   -1.980031|  -32.000000|  -32.000000|  -26.310272|    1.885386|    0.738553|    4.901610|    0.453784|
+|           0|           3|   -1.794757|   -2.319520|  -32.000000|  -32.000000|  -26.758357|    1.541131|    0.763074|    4.564308|    0.114748|
++-----------------------------------------------------------------------+
+|        File Writing Summary       |              Filename             |
++-----------------------------------------------------------------------+
+|SU2 ASCII restart                  |restart_flow_00000.csv             |
+|Paraview ASCII                     |soln_volume_00000.vtk              |
++-----------------------------------------------------------------------+
+
+ Performing rigid mesh transformation.
+ New physical time: 1e-06 seconds.
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|   Time_Iter|  Inner_Iter|  rms[Rho_0]|  rms[Rho_1]|  rms[Rho_2]|  rms[Rho_3]|  rms[Rho_4]|   rms[RhoU]|   rms[RhoV]|   rms[RhoE]| rms[RhoEve]|
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|           1|           0|   -0.818970|   -1.343732|  -32.000000|  -32.000000|  -24.797714|    2.517976|    1.593924|    5.536824|    1.090110|
+|           1|           1|   -1.145445|   -1.670208|  -32.000000|  -32.000000|  -25.549445|    2.189387|    1.403623|    5.211443|    0.764445|
+|           1|           2|   -1.681343|   -2.206106|  -32.000000|  -32.000000|  -26.183126|    1.644405|    1.260390|    4.675973|    0.229606|
+|           1|           3|   -1.934632|   -2.459394|  -32.000000|  -32.000000|  -26.640003|    1.386876|    0.984260|    4.433945|   -0.027254|
+
+ Performing rigid mesh transformation.
+ New physical time: 2e-06 seconds.
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|   Time_Iter|  Inner_Iter|  rms[Rho_0]|  rms[Rho_1]|  rms[Rho_2]|  rms[Rho_3]|  rms[Rho_4]|   rms[RhoU]|   rms[RhoV]|   rms[RhoE]| rms[RhoEve]|
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|           2|           0|   -0.833181|   -1.357944|  -32.000000|  -32.000000|  -24.763642|    2.494399|    1.897642|    5.523507|    1.077212|
+|           2|           1|   -1.334873|   -1.859635|  -32.000000|  -32.000000|  -25.514590|    1.983664|    1.614349|    5.030873|    0.577175|
+|           2|           2|   -1.738127|   -2.262890|  -32.000000|  -32.000000|  -26.152050|    1.586144|    1.217618|    4.628308|    0.169958|
+|           2|           3|   -2.043602|   -2.568365|  -32.000000|  -32.000000|  -26.612265|    1.283353|    0.860724|    4.319687|   -0.131537|
++-----------------------------------------------------------------------+
+|        File Writing Summary       |              Filename             |
++-----------------------------------------------------------------------+
+|SU2 ASCII restart                  |restart_flow_00002.csv             |
++-----------------------------------------------------------------------+
+
+ Performing rigid mesh transformation.
+ New physical time: 3e-06 seconds.
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|   Time_Iter|  Inner_Iter|  rms[Rho_0]|  rms[Rho_1]|  rms[Rho_2]|  rms[Rho_3]|  rms[Rho_4]|   rms[RhoU]|   rms[RhoV]|   rms[RhoE]| rms[RhoEve]|
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|           3|           0|   -0.873197|   -1.397960|  -32.000000|  -32.000000|  -24.753073|    2.445253|    2.022074|    5.484587|    1.040135|
+|           3|           1|   -1.300182|   -1.824945|  -32.000000|  -32.000000|  -25.504129|    2.017571|    1.667684|    5.071915|    0.607011|
+|           3|           2|   -1.742858|   -2.267621|  -32.000000|  -32.000000|  -26.141399|    1.583778|    1.192418|    4.620725|    0.167745|
+|           3|           3|   -2.053991|   -2.578753|  -32.000000|  -32.000000|  -26.598650|    1.271622|    0.856185|    4.309325|   -0.138994|
+
+----------------------------- Solver Exit -------------------------------
+Maximum number of time iterations reached (TIME_ITER = 4).
+-------------------------------------------------------------------------
++-----------------------------------------------------------------------+
+|        File Writing Summary       |              Filename             |
++-----------------------------------------------------------------------+
+|SU2 ASCII restart                  |restart_flow_00003.csv             |
+|Paraview ASCII                     |soln_volume_00003.vtk              |
++-----------------------------------------------------------------------+
+
+--------------------------- Finalizing Solver ---------------------------
+Deleted CNumerics container.
+Deleted CIntegration container.
+[KOKKOS_NEMO_PERF] device preconditioner builds=16 (2.99018 s incl. verification)
+[KOKKOS_NEMO_PERF] MG 0 SetPrimVar calls=32 nPoint=25830 | h2d 1.763e-03 s (5.508e-05/call, 0.000e+00 MB/call) | kernel 2.064e+00 s (6.451e-02/call) | d2h 9.942e-06 s (3.107e-07/call, 0.000e+00 MB/call) | host post 2.729e-04 s (8.528e-06/call)
+[KOKKOS_NEMO_PERF] MG 0 Gradient calls=16 | h2d 1.500e-03 s (8.856e-02 MB/call) | kernel 5.426e-02 s (3.392e-03/call) | d2h 9.405e-04 s (8.856e-02 MB/call) | host 4.915e-04 s (3.072e-05/call)
+[KOKKOS_NEMO_PERF] MG 0 Limiter calls=16 | h2d 3.118e-03 s (0.000e+00 MB/call) | kernel 6.520e-02 s (4.075e-03/call) | d2h 3.140e-06 s (0.000e+00 MB/call) | host 5.675e-06 s (3.547e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 TimeStep calls=16 | h2d 3.234e-04 s (0.000e+00 MB/call) | kernel 1.518e-02 s (9.487e-04/call) | d2h 2.497e-06 s (0.000e+00 MB/call) | host 1.269e-05 s (7.930e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 Upwind calls=16 | h2d 1.172e-03 s (0.000e+00 MB/call) | kernel 2.907e+00 s (1.817e-01/call) | d2h 1.800e-05 s (1.200e-04 MB/call) | host 6.614e-05 s (4.134e-06/call)
+[KOKKOS_NEMO_PERF] MG 0 Source calls=16 | h2d 5.170e-06 s (0.000e+00 MB/call) | kernel 6.618e+00 s (4.136e-01/call) | d2h 0.000e+00 s (0.000e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 0 BC calls=80 | h2d 3.402e-05 s (3.000e-06 MB/call) | kernel 8.722e-03 s (1.090e-04/call) | d2h 3.640e-06 s (0.000e+00 MB/call) | host 1.821e-05 s (2.277e-07/call)
+[KOKKOS_NEMO_PERF] MG 0 DualTimeSource calls=16 | h2d 2.004e-03 s (0.000e+00 MB/call) | kernel 8.744e-02 s (5.465e-03/call) | d2h 0.000e+00 s (0.000e+00 MB/call) | host 0.000e+00 s (0.000e+00/call)
+[KOKKOS_NEMO_PERF] MG 0 BC_Outlet calls=16, with subsonic outlet vertices=0
+[KOKKOS_NEMO_PERF] MG 0 Update | prepare 6.118e-02 s (3.824e-03/call) | complete 9.651e-03 s (6.032e-04/call) | explicit 0.000e+00 s (0.000e+00/call) | old solution 3.092e-03 s | residual norm 9.362e-03 s (32 calls)
+[KOKKOS_NEMO_PERF] MG 0 sync Solution calls=5 | h2d 1.860e+00 MB (1.850e-04 s) | d2h 7.439e+00 MB (6.495e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Solution_Old calls=5 | h2d 1.860e+00 MB (2.252e-04 s) | d2h 7.439e+00 MB (9.072e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Primitive+secondaries calls=5 | h2d 1.095e+01 MB (1.338e-03 s) | d2h 4.381e+01 MB (6.509e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Gradient calls=4 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 2.480e+01 MB (2.972e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Limiter calls=4 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 3.720e+01 MB (4.338e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync TimeStep calls=4 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 1.653e+00 MB (2.113e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync LocalCFL calls=5 | h2d 2.066e-01 MB (2.392e-05 s) | d2h 8.266e-01 MB (1.003e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Non_Physical calls=5 | h2d 7.749e-02 MB (3.042e-05 s) | d2h 3.100e-01 MB (5.519e-05 s)
+[KOKKOS_NEMO_PERF] MG 0 sync UnderRelaxation calls=4 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 8.266e-01 MB (1.001e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Res_TruncError calls=5 | h2d 1.860e+00 MB (2.400e-04 s) | d2h 7.439e+00 MB (8.801e-04 s)
+[KOKKOS_NEMO_PERF] MG 0 sync LinSysRes+LinSysSol calls=4 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 1.488e+01 MB (1.784e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync Solution_time_n+n1 calls=5 | h2d 3.720e+00 MB (1.988e-03 s) | d2h 1.488e+01 MB (1.796e-03 s)
+[KOKKOS_NEMO_PERF] MG 0 sync boundary Primitive (+ viscous-wall gradient/transport) calls=16 | h2d 0.000e+00 MB (0.000e+00 s) | d2h 1.678e+00 MB (8.367e-04 s)
+[KOKKOS_NEMO_LEDGER] MG 0 15 closed iterations (device-resident); non-output iterations >= 1: max HtoD 8.856e+04 B, max DtoH 1.938e+05 B; output iterations: 3, DtoH 1.217e+08 B in total
+[KOKKOS_NEMO_LEDGER] MG 0 steady iteration 14: HtoD 8.856e+04 B, DtoH 1.938e+05 B
+[KOKKOS_NEMO_LEDGER]     Gradient HtoD: 8.856e+04 B
+[KOKKOS_NEMO_LEDGER]     Gradient DtoH: 8.856e+04 B
+[KOKKOS_NEMO_LEDGER]     Upwind DtoH: 1.200e+02 B
+[KOKKOS_NEMO_LEDGER]     sync Primitive+secondaries DtoH: 2.820e+02 B
+[KOKKOS_NEMO_LEDGER]     sync boundary Primitive (+ viscous-wall gradient/transport) DtoH: 1.049e+05 B
+Deleted CSolver container.
+Deleted CIteration container.
+Deleted CInterface container.
+Deleted CGeometry container.
+Deleted CFreeFormDefBox class.
+Deleted CSurfaceMovement class.
+Deleted CVolumetricMovement class.
+Deleted CConfig container.
+Deleted nInst container.
+Deleted COutput class.
+-------------------------------------------------------------------------
+
+------------------------- Exit Success (SU2_CFD) ------------------------
+
