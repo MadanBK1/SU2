@@ -673,6 +673,9 @@ class CNEMOKokkosData {
   enum class HaloQuantity : int { SOLUTION = 0, GRADIENT_PRIMITIVE, GRADIENT_RECONSTRUCTION, LIMITER,
                                   SENSOR,           /*!< batch A: Sensor (1 per point) */
                                   AUXVAR_GRADIENT,  /*!< batch A: Grad_AuxVar (3*nDim per point) */
+                                  SOLUTION_OLD,     /*!< 4.6-Periodic: Solution_Old (PERIODIC_IMPLICIT), periodic rows only */
+                                  LAMBDA,           /*!< 4.6-Periodic: Lambda (PERIODIC_MAX_EIG), no residency group */
+                                  DELTA_TIME,       /*!< 4.6-Periodic: Delta_Time (PERIODIC_RESIDUAL), periodic rows only */
                                   N };
   /*!
    * \brief Device halo exchange with the SU2 point-to-point layout (CGeometry nP2PSend / nPoint_P2PSend /
@@ -687,6 +690,17 @@ class CNEMOKokkosData {
    *         comms by the caller, upload the receive rows. */
   void DownloadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n);
   void UploadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n);
+  /*! \brief 4.6-Periodic: the same row gather (device -> host container) / scatter (host container -> device) for an
+   *         arbitrary point list, in resident and non-resident mode (residency bookkeeping only when resident).
+   *         Used around the host periodic comms (InitiatePeriodicComms / CompletePeriodicComms), which read and write
+   *         only the rows of the periodic-marker points. */
+  void GatherRowsToHost(HaloQuantity q, const unsigned long* rows, unsigned long n);
+  void ScatterRowsFromHost(HaloQuantity q, const unsigned long* rows, unsigned long n);
+  /*! \brief 4.6-Periodic, resident mode: rows of the device residual accumulator (st.Res, and the whole block rows of
+   *         st.JacVal if hostJac != nullptr; CSysMatrix layout, hostRowPtr = FV pattern outerPtr) to the host LinSysRes /
+   *         Jacobian values (toHost) or back. Called around the host PERIODIC_RESIDUAL comms in BC_Periodic. */
+  void AccumulatorRows(bool toHost, const unsigned long* rows, unsigned long n, double* hostRes, double* hostJac,
+                       const unsigned long* hostRowPtr);
   struct HaloPerf {
     unsigned long calls = 0;
     double time = 0, bytesMsg = 0; /*!< wall time, MPI message bytes sent (both paths) */

@@ -53,7 +53,8 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [supin_visc]=$TC/visc_wedge/supin_visc.cfg
                  [invwedge_lusgs]=$TC/invwedge/invwedge_lusgs.cfg
                  [invwedge_mg]=$TC/invwedge/invwedge_mg.cfg
-                 [invwedge_dyn]=$TC/invwedge/invwedge_dyn.cfg )
+                 [invwedge_dyn]=$TC/invwedge/invwedge_dyn.cfg
+                 [invper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/invper_ausm.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
@@ -73,6 +74,7 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invwedge_lusgs_linelet]="stage linear preconditioner (LINELET apply): device|LINELET device apply: linelets=|device-resident state (Step 6): ON"
                     [invwedge_ausm_sharp]="stage limiter (SHARP_EDGES): device|device-resident state (Step 6): ON"
                     [super_cat_walld]="stage limiter (WALL_DISTANCE): device|device-resident state (Step 6): ON"
+                    [invper_ausm]="periodic comms (4.6-Periodic): device (staged periodic rows)|device-resident state (Step 6): ON"
                     [super_cat_iluteam]="ILU(0) device build: team-per-row|device-resident state (Step 6): ON"
                     [super_cat_ilurow]="ILU(0) device build: row-per-thread|device-resident state (Step 6): ON"
                     [super_cat_pycustom]="stage bc:ISOTHERMAL (Wall) [non-catalytic] [py-custom Twall]: device|device-resident state (Step 6): ON"
@@ -82,7 +84,7 @@ status=0
 for c in "${cases[@]}"; do
   for mode in NO YES; do
     d=$RUN/chk_${c}${RUN_TAG}_$mode; rm -rf "$d"; mkdir -p "$d"; cd "$d"
-    cp "${CFG[$c]}" run.cfg; ln -sf $M/*.su2 .
+    cp "${CFG[$c]}" run.cfg; ln -sf $M/*.su2 .; ln -sf $SU2/TestCases/kokkos_nemo/meshes/*.su2 . 2>/dev/null  # 4.6-Periodic: committed gate meshes
     kmode=$mode; hostenv=""; bin=$BIN; np=$NP
     if [ "$mode" = NO ]; then bin=$REF_BIN; np=$REF_NP; fi
     if [ "$mode" = NO ] && [ "$REF_MODE" = HOST ]; then kmode=YES; hostenv=all; fi

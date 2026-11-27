@@ -1094,6 +1094,18 @@ double* CNEMOKokkosData::HaloDevicePtr(HaloQuantity q, size_t& rowLen, Group& g)
       rowLen = size_t(3) * nDim;
       g = G_AUXVAR;
       return st.AuxGrad.data();
+    case HaloQuantity::SOLUTION_OLD:
+      rowLen = nVar;
+      g = G_SOLUTION_OLD;
+      return st.Solution_Old.data();
+    case HaloQuantity::LAMBDA:
+      rowLen = 1;
+      g = N_GROUPS; /*--- not a residency group (domain rows downloaded by ComputeMaxEigenvalue) ---*/
+      return st.Lambda.data();
+    case HaloQuantity::DELTA_TIME:
+      rowLen = 1;
+      g = G_TIMESTEP;
+      return st.DeltaTime.data();
     default: break;
   }
   SU2_MPI::Error("CNEMOKokkosData: unknown halo quantity.", CURRENT_FUNCTION);
@@ -1108,6 +1120,9 @@ double* CNEMOKokkosData::HaloHostPtr(HaloQuantity q) {
     case HaloQuantity::LIMITER: return nodes->GetLimiter_Primitive().data();
     case HaloQuantity::SENSOR: return nodes->Sensor.data();
     case HaloQuantity::AUXVAR_GRADIENT: return nodes->Grad_AuxVar.data();
+    case HaloQuantity::SOLUTION_OLD: return nodes->Solution_Old.data();
+    case HaloQuantity::LAMBDA: return nodes->Lambda.data();
+    case HaloQuantity::DELTA_TIME: return nodes->Delta_Time.data();
     default: break;
   }
   return nullptr;
@@ -1222,11 +1237,26 @@ void CNEMOKokkosData::HaloExchange(CGeometry* geometry, HaloQuantity q, bool gpu
 void CNEMOKokkosData::DownloadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n) {
   if (!ResidentActive() || n == 0) return;
   /*--- Legacy path: send rows into the host container (device gather + one compact DtoH), host comms next. ---*/
+  GatherRowsToHost(q, rows, n);
+  size_t rowLen = 0;
+  Group g = G_SOLUTION;
+  (void)HaloDevicePtr(q, rowLen, g);
+  haloPerf[static_cast<int>(q)].bytesMsg += double(n) * rowLen * sizeof(double);
+}
+
+void CNEMOKokkosData::UploadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n) {
+  if (!ResidentActive() || n == 0) return;
+  ScatterRowsFromHost(q, rows, n);
+  haloPerf[static_cast<int>(q)].calls++;
+}
+
+void CNEMOKokkosData::GatherRowsToHost(HaloQuantity q, const unsigned long* rows, unsigned long n) {
+  if (n == 0) return;
   size_t rowLen = 0;
   Group g = G_SOLUTION;
   double* dev = HaloDevicePtr(q, rowLen, g);
   double* host = HaloHostPtr(q);
-  EnsureDevice(g);
+  if (g != N_GROUPS) EnsureDevice(g);
   auto& P = syncPerf[SYNC_HALO];
   View1D<unsigned long> idx("NEMO::haloIdx", n);
   View2D<double> stage("NEMO::haloStage", n, rowLen);
@@ -1238,11 +1268,10 @@ void CNEMOKokkosData::DownloadHaloRows(HaloQuantity q, const unsigned long* rows
   auto h = Kokkos::create_mirror_view_and_copy(HostSpace(), stage);
   for (unsigned long k = 0; k < n; ++k) std::memcpy(host + rows[k] * rowLen, &h(k, 0), rowLen * sizeof(double));
   P.bytes_d2h += double(n) * rowLen * sizeof(double);
-  haloPerf[static_cast<int>(q)].bytesMsg += double(n) * rowLen * sizeof(double);
 }
 
-void CNEMOKokkosData::UploadHaloRows(HaloQuantity q, const unsigned long* rows, unsigned long n) {
-  if (!ResidentActive() || n == 0) return;
+void CNEMOKokkosData::ScatterRowsFromHost(HaloQuantity q, const unsigned long* rows, unsigned long n) {
+  if (n == 0) return;
   size_t rowLen = 0;
   Group g = G_SOLUTION;
   double* dev = HaloDevicePtr(q, rowLen, g);
@@ -1260,9 +1289,78 @@ void CNEMOKokkosData::UploadHaloRows(HaloQuantity q, const unsigned long* rows, 
       });
   Kokkos::fence();
   P.bytes_h2d += double(n) * rowLen * sizeof(double);
-  if (residency[g] != Residency::DEVICE) MarkDeviceWritten(g);
+  if (ResidentActive() && g != N_GROUPS && residency[g] != Residency::DEVICE) MarkDeviceWritten(g);
   P.calls++;
-  haloPerf[static_cast<int>(q)].calls++;
+}
+
+void CNEMOKokkosData::AccumulatorRows(bool toHost, const unsigned long* rows, unsigned long n, double* hostRes,
+                                      double* hostJac, const unsigned long* hostRowPtr) {
+  if (n == 0) return;
+  auto& P = syncPerf[SYNC_HALO];
+  const size_t nv = nVar, bs = size_t(nVar) * nVar;
+  View1D<unsigned long> idx("NEMO::perIdx", n);
+  Kokkos::deep_copy(idx, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(rows, n));
+  double* res = st.Res.data();
+
+  /*--- Residual rows (nVar each). ---*/
+  View2D<double> rstage("NEMO::perResStage", n, nv);
+  auto hr = Kokkos::create_mirror_view(rstage);
+  if (toHost) {
+    Kokkos::parallel_for(
+        "NEMO::PerResGather", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
+          for (size_t v = 0; v < nv; ++v) rstage(k, v) = res[idx(k) * nv + v];
+        });
+    Kokkos::deep_copy(hr, rstage);
+    for (unsigned long k = 0; k < n; ++k) std::memcpy(hostRes + rows[k] * nv, &hr(k, 0), nv * sizeof(double));
+    P.bytes_d2h += double(n) * nv * sizeof(double);
+  } else {
+    for (unsigned long k = 0; k < n; ++k) std::memcpy(&hr(k, 0), hostRes + rows[k] * nv, nv * sizeof(double));
+    Kokkos::deep_copy(rstage, hr);
+    Kokkos::parallel_for(
+        "NEMO::PerResScatter", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
+          for (size_t v = 0; v < nv; ++v) res[idx(k) * nv + v] = rstage(k, v);
+        });
+    P.bytes_h2d += double(n) * nv * sizeof(double);
+  }
+
+  /*--- Jacobian block rows (row_ptr[r] .. row_ptr[r+1], contiguous in the CSysMatrix layout). ---*/
+  if (hostJac != nullptr) {
+    std::vector<unsigned long> hoff(n + 1, 0), hstart(n);
+    for (unsigned long k = 0; k < n; ++k) {
+      hstart[k] = hostRowPtr[rows[k]];
+      hoff[k + 1] = hoff[k] + (hostRowPtr[rows[k] + 1] - hostRowPtr[rows[k]]);
+    }
+    const unsigned long nb = hoff[n];
+    View1D<unsigned long> off("NEMO::perJacOff", n + 1), start("NEMO::perJacStart", n);
+    Kokkos::deep_copy(off, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(hoff.data(), n + 1));
+    Kokkos::deep_copy(start, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(hstart.data(), n));
+    View1D<double> jstage("NEMO::perJacStage", nb * bs);
+    auto hj = Kokkos::create_mirror_view(jstage);
+    double* jac = st.JacVal.data();
+    if (toHost) {
+      Kokkos::parallel_for(
+          "NEMO::PerJacGather", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
+            const unsigned long len = (off(k + 1) - off(k)) * bs;
+            for (unsigned long e = 0; e < len; ++e) jstage(off(k) * bs + e) = jac[start(k) * bs + e];
+          });
+      Kokkos::deep_copy(hj, jstage);
+      for (unsigned long k = 0; k < n; ++k)
+        std::memcpy(hostJac + hstart[k] * bs, &hj(hoff[k] * bs), (hoff[k + 1] - hoff[k]) * bs * sizeof(double));
+      P.bytes_d2h += double(nb) * bs * sizeof(double);
+    } else {
+      for (unsigned long k = 0; k < n; ++k)
+        std::memcpy(&hj(hoff[k] * bs), hostJac + hstart[k] * bs, (hoff[k + 1] - hoff[k]) * bs * sizeof(double));
+      Kokkos::deep_copy(jstage, hj);
+      Kokkos::parallel_for(
+          "NEMO::PerJacScatter", Kokkos::RangePolicy<exec_space>(0, n), KOKKOS_LAMBDA(const unsigned long k) {
+            const unsigned long len = (off(k + 1) - off(k)) * bs;
+            for (unsigned long e = 0; e < len; ++e) jac[start(k) * bs + e] = jstage(off(k) * bs + e);
+          });
+      P.bytes_h2d += double(nb) * bs * sizeof(double);
+    }
+  }
+  Kokkos::fence();
+  P.calls++;
 }
 
 void CNEMOKokkosData::PrepareImplicit(bool impl, ResidualReduction& red) {
