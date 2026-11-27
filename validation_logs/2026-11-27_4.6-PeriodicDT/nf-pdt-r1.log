@@ -1,0 +1,2 @@
+invper_dt ITER 16: field |YES-NO| = 8.416e-16, CPU strict-vs-prod |NO-NO| = 1.811e-15 (ratio 0.46, K 10); history 0.00e+00 vs 0.00e+00: PASS
+NOISEFLOOR OVERALL: PASS

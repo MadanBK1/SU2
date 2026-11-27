@@ -1,0 +1,10 @@
+invper_dt NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=1.15s
+invper_dt YES exit=0 wall=1.11s
+  residual row NO : [  3.        -1.958666  -2.483429 -32.       -32.       -26.828083
+   1.38664    1.91987    4.396599  -0.049743]
+  residual row YES: [  3.        -1.958666  -2.483429 -32.       -32.       -26.828083
+   1.38664    1.91987    4.396599  -0.049743]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invper_dt_muscl: PASS
+OVERALL: PASS

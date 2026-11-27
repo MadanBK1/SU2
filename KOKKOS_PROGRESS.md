@@ -110,3 +110,7 @@ READY FOR REVIEW: MERGE: 4.6-PeriodicNS — CPU sanity PASS (21 iters, rc=0); G1
   - HEAD 60a160f26b has DT (b0008fc) + PeriodicNS + new dev code AUSMM/Lim (not yet built). Round-174 binaries predate AUSMM/Lim; DT queue never ran (pdt_queue.sh existed, no QUEUE_STATUS.txt).
   - Plan: rebuild strict+serial at THIS head (logs build-pdt-r2*.log) -> launch pdt_queue.sh (steps: cpu-pdt-r1, g1-pdt-r1, variants 1st/muscl/off, ab, poison, 10-case regress incl. viscper_ausm, nf K=10) -> commit logs + INDEX. Then B (AUSMM), C (Lim), D (regress), E (one MERGE request per review 39).
   - Loop hint 07:17 superseded by review-39 queue (test work, no code unless compile error).
+- 2026-11-27 (round 175 cont, review-39 queue A COMPLETE — 4.6-PeriodicDT all gates PASS):
+  - Rebuilt strict+serial at HEAD 60a160f26b (build-pdt-r2.log / build-pdt-serial-r2.log, 16/16 rc=0; AUSMM/Lim dev code now compiled).
+  - pdt_queue.sh: cpu-pdt PASS; g1-pdt invper_dt PASS bitwise; variants dt1st/muscl/dtoff PASS bitwise; ab PASS; poison PASS; regress 10/10 bitwise (360s, incl. viscper_ausm); nf K=10 PASS ratio 0.46.
+  - 10 INDEX rows added; logs committed. NEXT: queue B 4.6-PeriodicAUSMM (build-mm logs, cpu, g1, exp, mmoff, ab, poison, nf), then C 4.6-PeriodicLim, D regress, E one MERGE request.

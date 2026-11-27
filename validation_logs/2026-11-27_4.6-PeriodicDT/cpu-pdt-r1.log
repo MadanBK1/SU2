@@ -1,0 +1,15 @@
+rc=0 residual_rows=16
+Deleted CVolumetricMovement class.
+Deleted CConfig container.
+Deleted nInst container.
+Deleted COutput class.
+-------------------------------------------------------------------------
+
+------------------------- Exit Success (SU2_CFD) ------------------------
+
+56:Unsteady simulation, dual time stepping strategy (second order in time).
+70:Residual minimum value: 1e-50.
+101:|                  Periodic boundary|                            PerLeft|
+139:Computing mesh quality statistics for the dual control volumes.
+152:Matching the periodic boundary points for marker pair 1.
+OVERALL: CPU SANITY PASS
