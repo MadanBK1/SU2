@@ -1,0 +1,42 @@
+ninja: Entering directory `build-kokkos-serial'
+[1/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosResidualWall.cpp.o
+In file included from ../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualWall.cpp:17:
+../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualKernels.hpp:42:8: warning: ‘nemo_kokkos_res::ResArgs’ has a field ‘nemo_kokkos_res::ResArgs::a’ whose type uses the anonymous namespace [-Wsubobject-linkage]
+   42 | struct ResArgs {
+      |        ^~~~~~~
+[2/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosResidualSource.cpp.o
+In file included from ../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualSource.cpp:17:
+../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualKernels.hpp:42:8: warning: ‘nemo_kokkos_res::ResArgs’ has a field ‘nemo_kokkos_res::ResArgs::a’ whose type uses the anonymous namespace [-Wsubobject-linkage]
+   42 | struct ResArgs {
+      |        ^~~~~~~
+[3/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosCentered.cpp.o
+[4/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosResidualBCFlux3D.cpp.o
+In file included from ../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualBCFlux3D.cpp:17:
+../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualKernels.hpp:42:8: warning: ‘nemo_kokkos_res::ResArgs’ has a field ‘nemo_kokkos_res::ResArgs::a’ whose type uses the anonymous namespace [-Wsubobject-linkage]
+   42 | struct ResArgs {
+      |        ^~~~~~~
+[5/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosResidualBCFlux2D.cpp.o
+In file included from ../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualBCFlux2D.cpp:17:
+../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualKernels.hpp:42:8: warning: ‘nemo_kokkos_res::ResArgs’ has a field ‘nemo_kokkos_res::ResArgs::a’ whose type uses the anonymous namespace [-Wsubobject-linkage]
+   42 | struct ResArgs {
+      |        ^~~~~~~
+[6/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosViscous.cpp.o
+[7/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CSolverFactory.cpp.o
+[8/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosMG.cpp.o
+[9/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosUpwind.cpp.o
+[10/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosData.cpp.o
+[11/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosStages.cpp.o
+[12/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CIncEulerSolver.cpp.o
+[13/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_kokkos_CNEMOKokkosResidual.cpp.o
+In file included from ../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidual.cpp:30:
+../SU2_CFD/src/solvers/kokkos/CNEMOKokkosResidualKernels.hpp:42:8: warning: ‘nemo_kokkos_res::ResArgs’ has a field ‘nemo_kokkos_res::ResArgs::a’ whose type uses the anonymous namespace [-Wsubobject-linkage]
+   42 | struct ResArgs {
+      |        ^~~~~~~
+[14/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CIncNSSolver.cpp.o
+[15/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CNSSolver.cpp.o
+[16/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CNEMOEulerSolver.cpp.o
+[17/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CEulerSolver.cpp.o
+[18/21] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CNEMONSSolver.cpp.o
+[19/21] Linking static target SU2_CFD/src/libSU2core.a
+[20/21] Linking target UnitTests/nemo_gas_kokkos_validation
+[21/21] Linking target SU2_CFD/src/SU2_CFD

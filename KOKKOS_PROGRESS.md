@@ -998,3 +998,11 @@ READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial
   - NEXT: when both finish — archive to validation_logs/2026-11-27_4.6-Limiters/ (g1-lim-regress-r1.log + 16 chk logs; nf-lim-r1.log + its chk logs), INDEX rows, commit, then `READY FOR REVIEW: MERGE: ResSplit + 4.6-Limiters`.
 
 - 2026-11-27T00:59:36-05:00 [loop] round 134 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_233623_134.log
+
+- 2026-11-27T01:08:42-05:00 [loop] round 135 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_005956_135.log
+
+- 2026-11-27 (round 136, review-31 queue: 4.6-Periodic step 1 VERIFIED + committed; Limiter step 6 debt noted):
+  - Review 31: 4.6-Limiters + ResSplit MERGED (su2kokkos fc5c06e) — do not re-request. New dev code 6dcd2bf = 4.6-Periodic step 1 (device periodic rows); agent queue steps 1-7 in REVIEW_NOTES. Debt: Limiter step 6 noise floor (.nflim.sh -> nf-lim-r1.log) still owed (run + archive, no merge request).
+  - Step 1 (builds strict+serial, ran round 135 via .buildper.sh): **rc=0 both, [21/21] linked** (build-per-r1.log, build-per-serial-r1.log; 1 -Wsubobject-linkage warning in CNEMOKokkosResidualKernels.hpp; binaries Nov 27 01:02/01:03). THIS SESSION: committed 2 build logs + runners .buildper.sh/.cpuper.sh + 2 INDEX rows (this commit).
+  - NOTE: stray round-135 artifacts at repo root (log.txt/run.cfg showing check_noisefloor.sh hitting default SU2_ROOT=/home/claude/su2, runs-r26/, _loop_log, .gateprobe.sh, .wait3.sh) — left untouched; runners must not rely on default env paths.
+  - NEXT: step 2 CPU sanity `bash TestCases/kokkos_nemo/.cpuper.sh` (ENABLE_KOKKOS=NO, 21 iters, translation x=+2.0; if preprocessing fails on matching vertices, flip cfg translation to -2.0 per review 31) -> cpu-per-r1.log; archive + INDEX row; then step 3 G1 `check.sh invper_ausm` strict -> g1-per-r1.log.
