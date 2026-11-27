@@ -967,3 +967,11 @@ READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial
   - THIS SESSION: created step-4 A/B runners (env embedded in scripts, per round-129 sandbox note): `.ablimsharp.sh` (SU2_KOKKOS_STAGE_VERIFY=1, RUN_TAG=_sharppv, EXTRA_CFG SHARP_EDGES, invwedge_ausm -> ab-lim-sharp-r1.log) and `.ablimwalld.sh` (RUN_TAG=_walldpv, MUSCL+WALL_DISTANCE, super_cat -> ab-lim-walld-r1.log).
   - RUNNING step 4a (A/B SHARP_EDGES): `bash TestCases/kokkos_nemo/.ablimsharp.sh` (expect OVERALL PASS bitwise + Limiter_Primitive / Solution_Max / Solution_Min StageCompare lines in chk_..._sharppv_YES/log.txt).
   - NEXT: step 4b A/B WALL_DISTANCE (.ablimwalld.sh); step 5 regressions strict (default list + invwedge_lusgs invwedge_mg invwedge_dyn supin_visc) -> g1-lim-regress-r1.log; step 6 noise floor `CASE=invwedge_ausm EXTRA_CFG="SLOPE_LIMITER_FLOW= SHARP_EDGES" K=10` -> nf-lim-r1.log; archive each + INDEX rows; then `READY FOR REVIEW: MERGE: 4.6-Limiters`.
+
+- 2026-11-26T22:28:28-05:00 [loop] round 131 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_221634_131.log
+
+- 2026-11-27 (round 132, review-29/30 queue 4.6-Limiters — step 4a VERIFIED + committed; step 4b running):
+  - Step 4a (A/B SHARP_EDGES invwedge_ausm, SU2_KOKKOS_STAGE_VERIFY=1, strict; ran round 131 via .ablimsharp.sh): **OVERALL PASS bitwise** (ab-lim-sharp-r1.log; max|dres|=0.00e+00, field diff=0.00e+00; wall NO 18.02s/YES 37.51s incl. verify). VERIFY lines (chk _sharppv_YES/log.txt): `MG 0 Limiter compares=33 entries=12785850 non-bitwise=0 max rel diff=0.000e+00`; `device-resident Primitive checks=33 mismatching entries=0`; other stages (Gradient/Upwind/Source/BC) all non-bitwise=0.
+  - THIS SESSION: archived ab-lim-sharp-r1.log + chk NO/YES log.txt -> validation_logs/2026-11-27_4.6-Limiters/ (9 files) + INDEX row step 4a + committed step-5/6 runners .g1limregress.sh/.nflim.sh (this commit).
+  - RUNNING step 4b (A/B WALL_DISTANCE viscous super_cat): `bash TestCases/kokkos_nemo/.ablimwalld.sh` (expect OVERALL PASS bitwise + Limiter StageCompare non-bitwise=0 in chk_..._walldpv_YES/log.txt).
+  - NEXT: step 5 regressions (.g1limregress.sh) -> g1-lim-regress-r1.log; step 6 noise floor (.nflim.sh) -> nf-lim-r1.log; archive + INDEX rows; then `READY FOR REVIEW: MERGE: 4.6-Limiters`.
