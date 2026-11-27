@@ -1,0 +1,10 @@
+invper_ausm NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=1.35s
+invper_ausm YES exit=0 wall=1.37s
+  residual row NO : [ -0.5911    -1.115863 -32.       -32.       -22.95314    2.747131
+   2.15269    5.72686    1.32009 ]
+  residual row YES: [ -0.5911    -1.115863 -32.       -32.       -22.95314    2.747131
+   2.15269    5.72686    1.32009 ]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  invper_ausm_perlax: PASS
+OVERALL: PASS
