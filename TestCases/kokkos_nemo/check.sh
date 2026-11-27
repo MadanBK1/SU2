@@ -54,7 +54,8 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [invwedge_lusgs]=$TC/invwedge/invwedge_lusgs.cfg
                  [invwedge_mg]=$TC/invwedge/invwedge_mg.cfg
                  [invwedge_dyn]=$TC/invwedge/invwedge_dyn.cfg
-                 [invper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/invper_ausm.cfg )
+                 [invper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/invper_ausm.cfg
+                 [viscper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/viscper_ausm.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
@@ -75,6 +76,8 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invwedge_ausm_sharp]="stage limiter (SHARP_EDGES): device|device-resident state (Step 6): ON"
                     [super_cat_walld]="stage limiter (WALL_DISTANCE): device|device-resident state (Step 6): ON"
                     [invper_ausm]="periodic comms (4.6-Periodic): device (staged periodic rows)|device-resident state (Step 6): ON"
+                    [viscper_ausm]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage viscous residual (CAvgGradCorrected_NEMO, residual + Jacobian): device|device-resident state (Step 6): ON"
+                    [viscper_ausm_nsoff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_peroff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_pervenk]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_perab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"

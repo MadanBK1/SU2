@@ -2,6 +2,29 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 37 (MERGED 4.6-Periodic; Dev: 4.6-PeriodicNS)
+
+Reviewed: 1c2ed85537. Logs committed (23 files) + INDEX rows OK. MERGED into su2kokkos b8b11be (code 1c0b4f8 incl. CSolver
+guard; VALIDATION_LOG row; plan matrix row). Thanks for archiving.
+Dev code this round (4.6-PeriodicNS, not built/run; tiny change, same getenv pattern as SU2_KOKKOS_NEMO_MIXED — not compiled here):
+- CNEMOEulerSolver::Device_PeriodicUnsupported: NS no longer gated (env SU2_KOKKOS_NEMO_PERIODIC_NS=0 restores the gate).
+  NS-only periodic traffic is PERIODIC_PRIM_GG rotation of the partial GG gradient, already staged in Device_PrimitiveGradient.
+- New gate case meshes/viscper_ausm.cfg (invper_ausm + NEMO_NAVIER_STOKES, isothermal 300 K Lower/Upper); check.sh case
+  `viscper_ausm` + EXPECT keys `viscper_ausm`, `viscper_ausm_nsoff`.
+Logs dir for everything below: validation_logs/2026-11-27_4.6-PeriodicNS/ (INDEX row + `git add -f` per log).
+
+Agent: do next
+1. Build strict + serial (`ninja -C build-kokkos-strict -j10 SU2_CFD/src/SU2_CFD > .../build-pns-r1.log 2>&1`, serial -> build-pns-serial-r1.log). Compile error -> fix yourself (smallest change).
+2. CPU sanity: strict binary, ENABLE_KOKKOS=NO, viscper_ausm.cfg, 21 iters, must finish rc=0 -> cpu-pns-r1.log. If the CPU itself diverges/NaNs, set CFL_NUMBER= 1 in viscper_ausm.cfg and retry (r2); still failing -> `HEAVY: 4.6-PeriodicNS: CPU case <last 10 lines>`.
+3. G1 strict: `BIN=<strict> REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 bash TestCases/kokkos_nemo/check.sh viscper_ausm > .../g1-pns-r1.log 2>&1` (OVERALL PASS, no "expected stage line missing").
+4. Variants (same command + EXTRA_CFG, RUN_TAG): (a) `TIME_DISCRE_FLOW= EULER_EXPLICIT` -> g1-pns-exp-r1.log (EXPECT key falls back to viscper_ausm: the viscous stage line then reads "(CAvgGradCorrected_NEMO)"; if that line is reported missing, add EXPECT key `viscper_ausm_exp` with ")" form and RUN_TAG=_exp, rerun r2); (b) `MUSCL_FLOW= YES;SLOPE_LIMITER_FLOW= VAN_ALBADA_EDGE` -> g1-pns-muscl-r1.log; (c) control `SU2_KOKKOS_NEMO_PERIODIC_NS=0 RUN_TAG=_nsoff` -> g1-pns-nsoff-r1.log.
+5. A/B: `SU2_KOKKOS_STAGE_VERIFY=1 RUN_TAG=_pnsab` (add EXPECT key `viscper_ausm_pnsab` = same as invper_ausm_perab) -> ab-pns-r1.log; on failure paste <= 20 StageCompare lines into the progress log.
+6. Poison variant (as poison-per-r1) on viscper_ausm -> poison-pns-r1.log.
+7. Regressions: 8-case default list + invper_ausm, strict bitwise -> g1-pns-regress-r1.log.
+8. Noise floor: add `viscper_ausm) CFG=$SU2/TestCases/kokkos_nemo/meshes/viscper_ausm.cfg; HREL=0 ;;` to check_noisefloor.sh, `CASE=viscper_ausm K=10` -> nf-pns-r1.log.
+9. All PASS + logs committed -> `REVIEW_REQUEST reason: MERGE: 4.6-PeriodicNS — <results>`. Failure you cannot localize in 3 sessions -> `HEAVY: 4.6-PeriodicNS: <stage + iteration + StageCompare lines>`.
+Next heavy items after this: periodic + MG, periodic + dual time, PERIODIC_SENSOR (AUSM+M / JST), periodic limiters.
+
 ## 2026-11-27 — review 36 (MERGE 4.6-Periodic REJECTED for now: logs not committed; nothing merged)
 
 Reviewed: 615f573cea. The gate claims look good (G1 strict bitwise, variants, A/B r2, poison, regress 8/8, NF r3; tested
