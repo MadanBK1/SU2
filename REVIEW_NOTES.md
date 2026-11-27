@@ -2,6 +2,34 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 29 (4.6-Linelet MERGED; new dev code 4.6-Limiters)
+
+Reviewed: 34636cb741. Merged into su2kokkos as ffbb893 (code bb0ab70: CPreconditioner.hpp, CSysMatrix.hpp/.cpp,
+CSysMatrixKokkos.cpp, CNEMOEulerSolver.cpp, check.sh, check_noisefloor.sh EXTRA_CFG) + VALIDATION_LOG row + plan matrix.
+Do not re-request 4.6-Linelet. V100 G7 for LINELET still OPEN (Madan).
+
+Dev code this round (332d230; g++ -fsyntax-only clean, NOT built, NOT validated) — device SHARP_EDGES / WALL_DISTANCE
+slope limiters: `KernelLimiter` multiplies by a per-point factor `st.LimiterGeo` (CNEMOKokkosStages.cpp), uploaded once by
+`SetLimiterGeoFactor` from the CPU `CLimiterDetails<...>::geometricFactor` (CNEMOEulerSolver::Device_PrimitiveLimiter);
+`Device_LimiterUnsupported` accepts both kinds (dynamic grid -> host). check.sh EXPECT keys `invwedge_ausm_sharp`,
+`super_cat_walld`. Note: laminar NEMO has no wall distance (numerical limit) -> WALL_DISTANCE factor is 1 there; the
+SHARP_EDGES case (wedge corner) is the real test.
+
+Agent: do next (archive every log under validation_logs/2026-11-27_4.6-Limiters/ + one INDEX row each)
+1. Build strict + serial (ninja -j10 SU2_CFD) -> build-lim-r1.log, build-lim-serial-r1.log. Fix compile errors yourself.
+2. G1 SHARP_EDGES: `EXTRA_CFG="SLOPE_LIMITER_FLOW= SHARP_EDGES" RUN_TAG=_sharp REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 timeout 1500
+   bash TestCases/kokkos_nemo/.g1run.sh ../kk/logs/g1-lim-sharp-r1.log invwedge_ausm` -> OVERALL PASS bitwise + EXPECT lines.
+   Also grep the CPU log for a limiter that differs from the VENKATAKRISHNAN run (sanity: factor < 1 near the corner) —
+   if the residual history is identical to the default invwedge_ausm run, note it (factor may be 1 everywhere).
+3. G1 WALL_DISTANCE viscous: `EXTRA_CFG="MUSCL_FLOW= YES;SLOPE_LIMITER_FLOW= WALL_DISTANCE" RUN_TAG=_walld ... super_cat`
+   -> g1-lim-walld-r1.log.
+4. A/B: step 2 and 3 with `SU2_KOKKOS_STAGE_VERIFY=1` -> ab-lim-sharp-r1.log, ab-lim-walld-r1.log; need the
+   Limiter_Primitive / Solution_Max / Solution_Min StageCompare lines bitwise (paste <= 20 lines on mismatch).
+5. Regressions strict (default list + invwedge_lusgs invwedge_mg invwedge_dyn supin_visc) -> g1-lim-regress-r1.log.
+6. Noise floor: `CASE=invwedge_ausm EXTRA_CFG="SLOPE_LIMITER_FLOW= SHARP_EDGES" K=10 check_noisefloor.sh` -> nf-lim-r1.log (<= 10).
+Request `MERGE: 4.6-Limiters` only after 1-6 pass and logs are committed; `HEAVY: ...` only for new code or a bug you
+cannot localize after 3 sessions.
+
 ## 2026-11-26 — review 28 (stale request; nothing merged; no new dev code)
 
 Reviewed: 42ae7b9275. The request repeated `READY FOR REVIEW: MERGE: 4.8-LUSGSHyb`, which is ALREADY merged (su2kokkos
