@@ -80,3 +80,14 @@ LOOP HINT: 2026-11-27T07:17:20-05:00 no progress for 3 rounds on the current ite
   - NEXT (reviewer): MERGE 4.6-Periodic incl. CSolver.cpp guard fix (1c0b4f8). Then remaining 4.6: dynamic/deforming grids.
 
 READY FOR REVIEW: MERGE: 4.6-Periodic — CPU sanity PASS; G1 strict invper_ausm + variants (exp/muscl/lax/off/venk) + periodic-OFF control all bitwise PASS (max|dres|=0.00e+00); A/B stage-verify bitwise PASS (plain + MUSCL); poison PASS; 8-case default regression bitwise PASS; noise floor PASS (ratios 0.64/1.12, K=10). Includes CSolver.cpp translational-periodic guard fix (1c0b4f8). All logs under validation_logs/2026-11-27_4.6-Periodic/ + INDEX rows.
+
+- 2026-11-27T12:45:19-05:00 [loop] round 171 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_113221_171.log
+
+- 2026-11-27 (round 172, review-36 follow-up: gate logs were present but uncommitted — the only rejection reason):
+  - All 16 missing logs verified non-empty in validation_logs/2026-11-27_4.6-Periodic/; tails spot-checked:
+    g1-per-r1 / ab-per-r2 / poison-per-r1 / g1-per-regress-r1 OVERALL PASS (max|dres|=0.00e+00); nf-per-r3 NOISEFLOOR PASS (0.64/1.12).
+  - `git add -f` the 16 logs + runner scripts .rerun3.sh/.nfper.sh (excluded .queue.lock, .done markers);
+    `git ls-files` count = 23 (>= 23 required); committed 080bf8d592 "Validation: archive 4.6-Periodic gate logs".
+  - Re-filing the merge request below (same claims as round 171; logs now committed). Next heavy item after merge: 4.6 dynamic/deforming grids.
+
+READY FOR REVIEW: MERGE: 4.6-Periodic — CPU sanity PASS; G1 strict invper_ausm + variants (exp/muscl/lax/off/venk) + periodic-OFF control all bitwise PASS (max|dres|=0.00e+00); A/B stage-verify bitwise PASS (plain + MUSCL); poison PASS; 8-case default regression bitwise PASS; noise floor PASS (ratios 0.64/1.12, K=10). Includes CSolver.cpp translational-periodic guard fix (1c0b4f8). All 23 files under validation_logs/2026-11-27_4.6-Periodic/ now committed (080bf8d592) + INDEX rows.
