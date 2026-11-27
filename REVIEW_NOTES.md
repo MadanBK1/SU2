@@ -2,6 +2,21 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — dev (Madan request): split CNEMOKokkosResidual.cpp for nvcc compile time
+
+On the GH200 (CUDA 12.4, sm_90) `cicc` spent > 40 min on CNEMOKokkosResidual.cpp. Dev commit (this push; g++ -fsyntax-only
+clean on all 5 TUs + object/nm check that all 12 kernel instantiations resolve; NOT built with nvcc, NOT validated):
+the source / BC kernel templates moved VERBATIM (line-set identical to the old file) into `CNEMOKokkosResidualKernels.inl`
+(namespace nemo_kokkos_res, external linkage), ResArgs + helpers + declarations into `CNEMOKokkosResidualKernels.hpp`,
+explicit instantiations in CNEMOKokkosResidualWall.cpp (isothermal/heat-flux/Smoluchowski/symmetry), ...Source.cpp,
+...BCFlux2D.cpp, ...BCFlux3D.cpp (meson.build updated). No physics/order change -> strict gate must stay bitwise.
+
+Agent: do next (logs under validation_logs/2026-11-27_ResSplit/ + INDEX rows), BEFORE continuing 4.6-Limiters:
+1. Build strict + serial -> build-split-r1.log, build-split-serial-r1.log (meson reconfigures by itself). Fix compile errors yourself.
+2. G1 strict default list + invwedge_lusgs invwedge_mg invwedge_dyn supin_visc -> g1-split-regress-r1.log (bitwise).
+3. CUDA build on the V100: `time ninja -C build-kokkos-cuda -j10 SU2_CFD/src/SU2_CFD` -> build-split-cuda-r1.log (record the time).
+Request `MERGE: ResSplit` after 1-3 pass and logs are committed (may be combined with 4.6-Limiters).
+
 ## 2026-11-27 — review 30 (stale request; nothing merged; no new dev code)
 
 Reviewed: bbacf34b2a. The request repeated `MERGE: 4.6-Linelet`, already merged (su2kokkos ffbb893, review 29); it was
