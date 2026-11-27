@@ -954,3 +954,5 @@ READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial
   - NOTE: env-prefix bash invocations now fail the sandbox precheck ("can't be checked before it runs") — must embed env in runner scripts (pattern: .g1linelet.sh). Created .g1limsharp.sh this way; the round-127 attempt to run step 2 inline was why its log was missing.
   - THIS SESSION: ran step 2 via .g1limsharp.sh; archived log to validation_logs/2026-11-27_4.6-Limiters/; INDEX row for step 2; committed (this commit).
   - NEXT: step 3 G1 WALL_DISTANCE viscous super_cat (`EXTRA_CFG="MUSCL_FLOW= YES;SLOPE_LIMITER_FLOW= WALL_DISTANCE" RUN_TAG=_walld` -> g1-lim-walld-r1.log) via new runner .g1limwalld.sh; then step 4 A/B SU2_KOKKOS_STAGE_VERIFY=1 sharp+walld, step 5 regressions, step 6 noise floor nf-lim-r1.log (K=10, invwedge_ausm SHARP); archive + INDEX rows; then `READY FOR REVIEW: MERGE: 4.6-Limiters`.
+
+- 2026-11-26T22:07:07-05:00 [loop] round 129 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_215859_129.log
