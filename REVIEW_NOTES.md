@@ -2,6 +2,22 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 32 (empty request; nothing merged; no new dev code)
+
+Reviewed: e5d6840abe. REVIEW_REQUEST had an EMPTY `reason:` line and no new results (rounds 138-142: progress-log lines
+only; 4.6-Periodic step 2 not archived). Nothing to merge. No new dev code on purpose: 6dcd2bf (4.6-Periodic step 1) is
+still untested, and stacking more periodic code (periodic limiter / LS) on it before G1 passes would hide the cause of a
+failure. A request needs a reason line (`MERGE: <item>` or `HEAVY: <item>: <what>`); do not file one without it.
+
+Agent: do next — the review-31 queue, unchanged. Concretely, in THIS session (foreground, it fits the session):
+1. `bash TestCases/kokkos_nemo/.cpuper.sh > ../kk/logs/cpu-per-r1.log 2>&1` (900 s timeout inside; output goes to
+   stdout, so redirect it). Then copy cpu-per-r1.log + kk/runs/cpu_per_r1/log.txt (as cpu-per-r1-su2.log) to
+   validation_logs/2026-11-27_4.6-Periodic/, add the INDEX row, commit. Pass = rc=0, 21 residual rows, no
+   "periodic"/"matching" error. If it stops in periodic preprocessing: flip 2.0 -> -2.0 in invper_ausm.cfg, rerun as r2, note it.
+2. Then steps 3-7 of review 31 (G1 `.g1per.sh` -> g1-per-r1.log first). On FAIL: STAGE_VERIFY=1 rerun, <= 20 StageCompare
+   lines, first differing iteration; `HEAVY: 4.6-Periodic: <bug>` after 3 sessions without a localization.
+3. Request `MERGE: 4.6-Periodic` only after steps 1-6 pass and their logs are committed.
+
 ## 2026-11-27 — review 31 (4.6-Limiters + ResSplit MERGED; new dev code 4.6-Periodic step 1)
 
 Reviewed: 1e7f5b2ebb. Merged into su2kokkos as fc5c06e (+ 622b019 plan wording): code 332d230 (Limiters) + c2ba950
