@@ -1,0 +1,13 @@
+environment: line 2:    18 Segmentation fault      (core dumped) "$STRICT" run.cfg > log.txt 2>&1
+rc=139 residual_rows=0
+----------------- Integration Preprocessing ( Zone 0 ) ------------------
+
+------------------- Iteration Preprocessing ( Zone 0 ) ------------------
+Euler/Navier-Stokes/RANS fluid iteration.
+
+------------------------------ Begin Solver -----------------------------
+
+Simulation Run using the Single-zone Driver
+94:|                  Periodic boundary|                            PerLeft|
+145:Matching the periodic boundary points for marker pair 1.
+OVERALL: CPU SANITY FAIL

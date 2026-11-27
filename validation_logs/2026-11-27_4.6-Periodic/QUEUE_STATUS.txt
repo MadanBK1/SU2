@@ -1,0 +1,6 @@
+2026-11-27T05:09:32-05:00 START cpu-per-r1 (code bc52acb159)
+2026-11-27T05:09:32-05:00 END   cpu-per-r1 rc=1 wall=0s :: OVERALL: CPU SANITY FAIL 
+2026-11-27T05:09:32-05:00 STOP: CPU sanity failed - fix cfg/mesh first (translation sign 2.0 -> -2.0?), then rm /home/mpr7366/software/AgenticTest/SU2/validation_logs/2026-11-27_4.6-Periodic/.cpu-per-r1.done and relaunch
+2026-11-27T08:50:58-05:00 START cpu-per-r1 (code 850323abbb)
+2026-11-27T08:50:58-05:00 END   cpu-per-r1 rc=139 wall=0s :: OVERALL: CPU SANITY FAIL 
+2026-11-27T08:50:58-05:00 STOP: CPU sanity failed - fix cfg/mesh first (translation sign 2.0 -> -2.0?), then rm /home/mpr7366/software/AgenticTest/SU2/validation_logs/2026-11-27_4.6-Periodic/.cpu-per-r1.done and relaunch
