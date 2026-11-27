@@ -169,10 +169,21 @@ class CSysMatrix {
   const unsigned long* d_col_ind_ilu = nullptr;
   const unsigned long* d_ilu_level_ptr = nullptr;
   const unsigned long* d_ilu_level_rows = nullptr;
+  /*--- 4.8-ILUPart: per-row partition bounds [lb, ub) of the device ILU (nullptr until uploaded). ---*/
+  const unsigned long* d_ilu_lb = nullptr;
+  const unsigned long* d_ilu_ub = nullptr;
 #endif
 
   /*!< \brief Level structure for alternative shared memory parallelization of ILU. */
   CCompressedSparsePatternUL levels_ilu;
+
+  /*--- 4.8-ILUPart: with ENABLE_KOKKOS= YES and LINEAR_SOLVER_PREC_THREADS > 1, levels_ilu only follows the
+   *    dependencies inside each omp partition and every level-scheduled ILU row uses its partition bounds, i.e.
+   *    the level-scheduled ILU computes the partitioned (block-Jacobi ILU) preconditioner of the levels_ilu.empty()
+   *    path. Empty vectors: not partitioned (bounds 0 / nPointDomain). ---*/
+  std::vector<unsigned long> ilu_part_lb, ilu_part_ub;
+  inline unsigned long IluPartLo(unsigned long i) const { return ilu_part_lb.empty() ? 0ul : ilu_part_lb[i]; }
+  inline unsigned long IluPartHi(unsigned long i) const { return ilu_part_ub.empty() ? nPointDomain : ilu_part_ub[i]; }
 
   ScalarType* invM; /*!< \brief Inverse of (Jacobi) preconditioner. */
 

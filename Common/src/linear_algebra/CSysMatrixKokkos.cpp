@@ -521,6 +521,16 @@ void CSysMatrix<ScalarType>::EnsureKokkosILUStructure() {
   if (d_ilu_level_rows == nullptr)
     d_ilu_level_rows = GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(
         levels_ilu.innerIdx(), level_rows * sizeof(unsigned long));
+  /*--- 4.8-ILUPart: per-row partition bounds (0 / nPointDomain when not partitioned). Pattern-only, once. ---*/
+  if (d_ilu_lb == nullptr) {
+    std::vector<unsigned long> lb(std::max<unsigned long>(nPointDomain, 1), 0), ub(lb.size(), nPointDomain);
+    for (unsigned long i = 0; i < nPointDomain; ++i) {
+      lb[i] = IluPartLo(i);
+      ub[i] = IluPartHi(i);
+    }
+    d_ilu_lb = GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(lb.data(), lb.size() * sizeof(unsigned long));
+    d_ilu_ub = GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(ub.data(), ub.size() * sizeof(unsigned long));
+  }
 }
 
 /*--- KOKKOS DEVICE ILU APPLY --------------------------------------------------
@@ -537,15 +547,19 @@ namespace {
 template <class T>
 KOKKOS_INLINE_FUNCTION void DeviceILUForwardRow(unsigned long i, const T* factors, const unsigned long* rows,
                                                 const unsigned long* diagonal, const unsigned long* columns,
-                                                const T* input, T* output, unsigned long block_size,
-                                                unsigned long block_entries) {
+                                                const unsigned long* lbound, const T* input, T* output,
+                                                unsigned long block_size, unsigned long block_entries) {
   const auto out_i = i * block_size;
 
   for (unsigned long i_var = 0; i_var < block_size; ++i_var)
     output[out_i + i_var] = input[out_i + i_var];
 
+  const auto begin = lbound[i];
+
   for (auto index = rows[i]; index < diagonal[i]; ++index) {
     const auto j = columns[index];
+    /*--- ForwardSolve(iPoint, begin): 4.8-ILUPart (begin = 0 when not partitioned). ---*/
+    if (j < begin) continue;
     const auto out_j = j * block_size;
     const auto block = factors + index * block_entries;
 
@@ -562,11 +576,12 @@ KOKKOS_INLINE_FUNCTION void DeviceILUForwardRow(unsigned long i, const T* factor
 template <class T>
 KOKKOS_INLINE_FUNCTION void DeviceILUBackwardRow(unsigned long i, const T* factors, const unsigned long* rows,
                                                  const unsigned long* diagonal, const unsigned long* columns,
-                                                 T* output, unsigned long block_size, unsigned long block_entries,
-                                                 unsigned long domain_points) {
+                                                 const unsigned long* ubound, T* output, unsigned long block_size,
+                                                 unsigned long block_entries) {
   const auto out_i = i * block_size;
 
   T rhs[20];
+  const auto end = ubound[i];  // 4.8-ILUPart: partition end, nPointDomain when not partitioned
 
   for (unsigned long i_var = 0; i_var < block_size; ++i_var)
     rhs[i_var] = output[out_i + i_var];
@@ -574,9 +589,9 @@ KOKKOS_INLINE_FUNCTION void DeviceILUBackwardRow(unsigned long i, const T* facto
   for (auto index = diagonal[i] + 1; index < rows[i + 1]; ++index) {
     const auto j = columns[index];
 
-    /*--- Match CPU BackwardSolve(iPoint,nPointDomain).
-     * Halo columns are not part of the local triangular solve. ---*/
-    if (j >= domain_points) break;
+    /*--- Match CPU BackwardSolve(iPoint, end).
+     * Halo columns (and, partitioned, columns past the partition) are not part of the local solve. ---*/
+    if (j >= end) break;
 
     const auto out_j = j * block_size;
     const auto block = factors + index * block_entries;
@@ -644,7 +659,7 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
                                                             const CConfig* config) const {
   if (d_ILU_matrix == nullptr || d_row_ptr_ilu == nullptr || d_dia_ptr_ilu == nullptr ||
       d_col_ind_ilu == nullptr || d_ilu_level_ptr == nullptr || d_ilu_level_rows == nullptr ||
-      levels_ilu.empty()) {
+      d_ilu_lb == nullptr || d_ilu_ub == nullptr || levels_ilu.empty()) {
     SU2_MPI::Error("Kokkos ILU device storage is not initialized.", CURRENT_FUNCTION);
   }
 
@@ -673,6 +688,8 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
   const auto columns = d_col_ind_ilu;
   const auto level_ptr = d_ilu_level_ptr;
   const auto level_rows = d_ilu_level_rows;
+  const auto lbound = d_ilu_lb;
+  const auto ubound = d_ilu_ub;
 
   const auto input = vec.GetDevicePointer();
   const auto output = prod.GetDevicePointer();
@@ -680,7 +697,6 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
   const unsigned long block_size = nVar;
   const unsigned long block_entries = nVar * nVar;
   const auto n_levels = levels_ilu.getOuterSize();
-  const unsigned long domain_points = nPointDomain;
   const unsigned long* h_level_ptr = levels_ilu.outerPtr();
 
   /*--- Segments of the level sequence (host only; O(levels), no device traffic). ---*/
@@ -711,7 +727,7 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
         Kokkos::parallel_for(
             "SU2::KokkosILUForwardLevel", range_policy(exec, h_level_ptr[level], h_level_ptr[level + 1]),
             KOKKOS_LAMBDA(const unsigned long k) {
-              DeviceILUForwardRow(level_rows[k], factors, rows, diagonal, columns, input, output, block_size,
+              DeviceILUForwardRow(level_rows[k], factors, rows, diagonal, columns, lbound, input, output, block_size,
                                   block_entries);
             });
       }
@@ -722,8 +738,8 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
             for (unsigned long level = l0; level < l1; ++level) {
               Kokkos::parallel_for(Kokkos::TeamThreadRange(team, level_ptr[level], level_ptr[level + 1]),
                                    [&](const unsigned long k) {
-                                     DeviceILUForwardRow(level_rows[k], factors, rows, diagonal, columns, input,
-                                                         output, block_size, block_entries);
+                                     DeviceILUForwardRow(level_rows[k], factors, rows, diagonal, columns, lbound,
+                                                         input, output, block_size, block_entries);
                                    });
               /*--- All rows in this level must finish before any row of the next level starts
                *    (league_size == 1: the team barrier synchronizes the whole kernel). ---*/
@@ -743,8 +759,8 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
         Kokkos::parallel_for(
             "SU2::KokkosILUBackwardLevel", range_policy(exec, h_level_ptr[level], h_level_ptr[level + 1]),
             KOKKOS_LAMBDA(const unsigned long k) {
-              DeviceILUBackwardRow(level_rows[k], factors, rows, diagonal, columns, output, block_size,
-                                   block_entries, domain_points);
+              DeviceILUBackwardRow(level_rows[k], factors, rows, diagonal, columns, ubound, output, block_size,
+                                   block_entries);
             });
       }
     } else {
@@ -755,8 +771,8 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
               const auto level = level_plus_one - 1;
               Kokkos::parallel_for(Kokkos::TeamThreadRange(team, level_ptr[level], level_ptr[level + 1]),
                                    [&](const unsigned long k) {
-                                     DeviceILUBackwardRow(level_rows[k], factors, rows, diagonal, columns, output,
-                                                          block_size, block_entries, domain_points);
+                                     DeviceILUBackwardRow(level_rows[k], factors, rows, diagonal, columns, ubound,
+                                                          output, block_size, block_entries);
                                    });
               team.team_barrier();
             }
@@ -978,7 +994,9 @@ void CSysMatrix<ScalarType>::KokkosBuildILUPreconditioner() {
   const auto diagonal = d_dia_ptr_ilu;
   const auto columns = d_col_ind_ilu;
   const auto level_rows = d_ilu_level_rows;
-  const unsigned long nv = nVar, bs = nVar * nVar, end = nPointDomain;
+  const auto lbound = d_ilu_lb;  // 4.8-ILUPart: BuildIluRow(iPoint, lb, ub); 0 / nPointDomain if not partitioned
+  const auto ubound = d_ilu_ub;
+  const unsigned long nv = nVar, bs = nVar * nVar;
 
   /*--- 4.8 perf: one team per row, block entries / (k-block, entry) pairs spread over the team's threads.
    *    Every block entry is computed by exactly the same statement sequence as the per-row kernel below
@@ -1025,9 +1043,11 @@ void CSysMatrix<ScalarType>::KokkosBuildILUPreconditioner() {
             team.team_barrier();
 
             if (!firstLevel) {
-              /*--- BuildIluRow(iPoint, 0, nPointDomain). ---*/
+              /*--- BuildIluRow(iPoint, begin, end). ---*/
+              const auto begin = lbound[iPoint], end = ubound[iPoint];
               for (auto index = rows[iPoint]; index < diagonal[iPoint]; ++index) {
                 const auto jPoint = columns[index];
+                if (jPoint < begin) continue;  // uniform over the team (no barrier skipped by part of it)
                 auto* Block_ij = ilu + index * bs;
                 const auto* invUjj = ilu + diagonal[jPoint] * bs;
 
@@ -1098,10 +1118,12 @@ void CSysMatrix<ScalarType>::KokkosBuildILUPreconditioner() {
           for (auto idx = rows[iPoint] * bs; idx < rows[iPoint + 1] * bs; ++idx) ilu[idx] = values[idx];
 
           if (!firstLevel) {
-            /*--- BuildIluRow(iPoint, 0, nPointDomain). ---*/
+            /*--- BuildIluRow(iPoint, begin, end). ---*/
+            const auto begin = lbound[iPoint], end = ubound[iPoint];
             ScalarType Lij[MAXNVAR * MAXNVAR], Lij_Ujk[MAXNVAR * MAXNVAR];
             for (auto index = rows[iPoint]; index < diagonal[iPoint]; ++index) {
               const auto jPoint = columns[index];
+              if (jPoint < begin) continue;
               auto* Block_ij = ilu + index * bs;
               const auto* invUjj = ilu + diagonal[jPoint] * bs;
               DeviceGemm(nv, Block_ij, invUjj, Lij);

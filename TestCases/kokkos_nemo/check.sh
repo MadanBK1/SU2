@@ -58,6 +58,7 @@ declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
 declare -A EXPECT=( [invwedge_ausm]="[KOKKOS] ILU(0) device apply:"  # 4.8-ILUApplyHyb: hybrid (default) or single-team (SU2_KOKKOS_ILU_APPLY=single)
+                    [invwedge_ausm_part]="[KOKKOS] ILU partitioned (LINEAR_SOLVER_PREC_THREADS=|[KOKKOS] ILU(0) device apply:"  # 4.8-ILUPart: RUN_TAG=_part EXTRA_CFG="LINEAR_SOLVER_PREC_THREADS= 200"
                     [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [invwedge_roe]="stage upwind (ROE + MUSCL, residual + Jacobian): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [invwedge_msw]="stage upwind (MSW + MUSCL, residual + Jacobian): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"

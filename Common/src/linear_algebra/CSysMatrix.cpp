@@ -90,6 +90,8 @@ CSysMatrix<ScalarType>::~CSysMatrix() {
   GPUMemoryAllocation::gpu_free(d_col_ind_ilu);
   GPUMemoryAllocation::gpu_free(d_ilu_level_ptr);
   GPUMemoryAllocation::gpu_free(d_ilu_level_rows);
+  GPUMemoryAllocation::gpu_free(d_ilu_lb);
+  GPUMemoryAllocation::gpu_free(d_ilu_ub);
   GPUMemoryAllocation::gpu_free(d_lusgs_fwd_ptr);
   GPUMemoryAllocation::gpu_free(d_lusgs_fwd_rows);
   GPUMemoryAllocation::gpu_free(d_lusgs_bwd_ptr);
@@ -259,6 +261,44 @@ void CSysMatrix<ScalarType>::Initialize(unsigned long npoint, unsigned long npoi
            << endl;
       break;
     }
+  }
+
+  /*--- 4.8-ILUPart: ENABLE_KOKKOS= YES with LINEAR_SOLVER_PREC_THREADS > 1. The level-scheduled ILU (host
+   *    levels branch and device) then computes the partitioned ILU of the levels_ilu.empty() branch, i.e. what
+   *    ENABLE_KOKKOS= NO computes with the same LINEAR_SOLVER_PREC_THREADS (block-Jacobi ILU over the omp
+   *    partitions): levels follow only the lower dependencies inside the row's partition [lb, ub), and every
+   *    row is built/solved with BuildIluRow(i, lb, ub) / ForwardSolve(i, lb) / BackwardSolve(i, ub).
+   *    Few short levels instead of one long dependency chain (GPU). Not partitioned: unchanged. ---*/
+  ilu_part_lb.clear();
+  ilu_part_ub.clear();
+  if (ilu_needed && !levels_ilu.empty() && config->GetKokkos() && config->GetLinear_Solver_Prec_Threads() > 1 &&
+      omp_num_parts > 1) {
+    ilu_part_lb.assign(nPointDomain, 0);
+    ilu_part_ub.assign(nPointDomain, nPointDomain);
+    for (unsigned long part = 0; part < omp_num_parts; ++part) {
+      const auto begin = omp_partitions[part];
+      const auto end = omp_partitions[part + 1];
+      for (auto i = begin; i < end; ++i) {
+        ilu_part_lb[i] = begin;
+        ilu_part_ub[i] = end;
+      }
+    }
+    std::vector<std::vector<unsigned long>> levels;
+    std::vector<unsigned long> level(nPointDomain, 0);
+    for (unsigned long i = 0; i < nPointDomain; ++i) {
+      unsigned long l = 0;
+      for (auto k = row_ptr_ilu[i]; k < dia_ptr_ilu[i]; ++k) {
+        const auto j = col_ind_ilu[k];
+        if (j < i && j >= ilu_part_lb[i]) l = std::max(l, level[j] + 1);
+      }
+      level[i] = l;
+      if (l + 1 > levels.size()) levels.emplace_back();
+      levels[l].push_back(i);
+    }
+    levels_ilu = CCompressedSparsePatternUL(levels);
+    if (SU2_MPI::GetRank() == MASTER_NODE)
+      cout << "[KOKKOS] ILU partitioned (LINEAR_SOLVER_PREC_THREADS= " << omp_num_parts
+           << "): levels=" << levels.size() << endl;
   }
 
   /*--- Generate MKL Kernels ---*/
@@ -852,7 +892,7 @@ void CSysMatrix<ScalarType>::BuildILUPreconditioner() {
       for (auto k = 0ul; k < levels_ilu.getNumNonZeros(level); ++k) {
         const auto iPoint = levels_ilu.getInnerIdx(level, k);
         InitIluRow(iPoint);
-        BuildIluRow(iPoint, 0ul, nPointDomain);
+        BuildIluRow(iPoint, IluPartLo(iPoint), IluPartHi(iPoint));  // 4.8-ILUPart (0, nPointDomain if not partitioned)
       }
       END_SU2_OMP_FOR
     }
@@ -923,7 +963,7 @@ void CSysMatrix<ScalarType>::ComputeILUPreconditioner(const CSysVector<ScalarTyp
       SU2_OMP_FOR_(schedule(static))
       for (auto k = 0ul; k < levels_ilu.getNumNonZeros(level); ++k) {
         const auto iPoint = levels_ilu.getInnerIdx(level, k);
-        ForwardSolve(iPoint, 0ul);
+        ForwardSolve(iPoint, IluPartLo(iPoint));  // 4.8-ILUPart
       }
       END_SU2_OMP_FOR
     }
@@ -932,7 +972,7 @@ void CSysMatrix<ScalarType>::ComputeILUPreconditioner(const CSysVector<ScalarTyp
       SU2_OMP_FOR_(schedule(static))
       for (auto k = 0ul; k < levels_ilu.getNumNonZeros(level); ++k) {
         const auto iPoint = levels_ilu.getInnerIdx(level, k);
-        BackwardSolve(iPoint, nPointDomain);
+        BackwardSolve(iPoint, IluPartHi(iPoint));  // 4.8-ILUPart
       }
       END_SU2_OMP_FOR
     }
