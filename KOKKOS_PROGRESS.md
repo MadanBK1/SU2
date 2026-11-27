@@ -915,3 +915,11 @@ READY FOR REVIEW: MERGE: 4.8-LUSGSHyb — steps 1-9 all PASS: build strict+seria
   - THIS SESSION: committed round-122 step-2 logs (g1-linelet-visc-r1.log + NO/YES chk log.txt) + step-2 INDEX row + runner .g1linelet.sh/.g1lineletinv.sh (this commit).
   - RUNNING step 3 (G1 inviscid invwedge_lusgs LINELET): `bash TestCases/kokkos_nemo/.g1lineletinv.sh` -> kk/logs/g1-linelet-inv-r1.log (expect OVERALL PASS bitwise + `LINELET device apply: linelets=` startup line).
   - NEXT: step 4 A/B `SU2_KOKKOS_PRECOND_VERIFY=1 RUN_TAG=_linelet` -> ab-linelet-r1.log (LINELET compares>0 non-bitwise=0); step 5 regressions -> g1-linelet-regress-r1.log; step 6 noise floor K=10 super_cat -> nf-linelet-r1.log; step 7 perf lines -> perf-linelet-r1.log; archive all under validation_logs/2026-11-26_4.6-Linelet/ + INDEX rows; then `READY FOR REVIEW: MERGE: 4.6-Linelet`.
+
+- 2026-11-26T19:04:52-05:00 [loop] round 123 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_185322_123.log
+
+- 2026-11-26 (round 124, review-28 queue 4.6-Linelet — steps 3-4 VERIFIED/DONE; step 5 next):
+  - Step 3 (G1 inviscid invwedge_lusgs LINELET, strict; ran round 123 via .g1lineletinv.sh): **OVERALL PASS bitwise** (g1-linelet-inv-r1.log; max|dres|=0.00e+00, field diff=0.00e+00; `invwedge_lusgs_linelet: PASS`; `LINELET device apply: linelets=369 linelet points=10963 jacobi points=14867`; applies=110 (2.68363 s incl. verification); wall NO 22.98s/YES 20.60s).
+  - Step 4 (A/B super_cat LINELET, SU2_KOKKOS_PRECOND_VERIFY=1, RUN_TAG=_linelet; new runner .abilinelet.sh): **OVERALL PASS bitwise** (ab-linelet-r1.log; max|dres|=0.00e+00, field diff=0.00e+00) + `[KOKKOS_NEMO_VERIFY] preconditioner device build vs host build: compares=11 non-bitwise=0` + `[KOKKOS_NEMO_VERIFY] LINELET device apply vs host apply: compares=76 non-bitwise=0`.
+  - Archived steps 3-4 logs + chk log.txt pairs -> validation_logs/2026-11-26_4.6-Linelet/ (now 11 files) + 2 INDEX rows (this commit).
+  - NEXT: step 5 regressions strict (default list + invwedge_lusgs invwedge_mg invwedge_dyn supin_visc) -> g1-linelet-regress-r1.log; step 6 noise floor K=10 super_cat EXTRA_CFG LINELET -> nf-linelet-r1.log; step 7 perf lines -> perf-linelet-r1.log; archive + INDEX rows; then `READY FOR REVIEW: MERGE: 4.6-Linelet`.
