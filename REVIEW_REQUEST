@@ -1,3 +1,3 @@
-id: 20261126T195852-34636cb741
-head: 34636cb74114bf40b5f6e648160739e9bfee346e
+id: 20261126T205737-bbacf34b2a
+head: bbacf34b2a51995e19f3e778d107294eb944c930
 reason: READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial rc=0; G1 viscous super_cat + inviscid invwedge_lusgs LINELET bitwise (strict); A/B PRECOND_VERIFY compares>0 non-bitwise=0 (build 11, apply 76); 8-case regressions bitwise; noise floor K=10 ratios 0.33/0.75 <= 10; perf: applies=76 (1.78167 s)/applies=110 (2.68363 s) serial; 25 logs committed under validation_logs/2026-11-26_4.6-Linelet/ + INDEX rows 6-7 (V100 G7 timing OPEN for Madan)
