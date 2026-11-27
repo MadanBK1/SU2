@@ -1013,3 +1013,5 @@ READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial
   - State check: review 31 queue current (4.6-Periodic steps 1-7); Limiter step 6 noise floor still owed (no merge request needed); 4.6-Limiters + ResSplit MERGED fc5c06e — do not re-request.
   - THIS SESSION: kicked off step 2 CPU sanity in background (`.cpuper.sh`, ENABLE_KOKKOS=NO, 21 iters, translation x=+2.0) -> kk/logs/cpu-per-r1.out + kk/runs/cpu_per_r1/log.txt. Prepared step-3 runner `.g1per.sh` (G1 strict invper_ausm, embedded env per round-129 sandbox note).
   - NEXT: when cpu-per run finishes — check OVERALL: no SU2 errors, residual rows present, periodic preprocessing found matching vertices (else flip cfg translation 2.0 -> -2.0, rerun, note); archive cpu-per-r1.log + log.txt to validation_logs/2026-11-27_4.6-Periodic/ + INDEX row; then step 3 `bash TestCases/kokkos_nemo/.g1per.sh` -> g1-per-r1.log.
+
+- 2026-11-27T01:31:07-05:00 [loop] round 137 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_012015_137.log
