@@ -6,7 +6,7 @@
 - [~] 4.3 CUDA V100 build + GPU run — G5 PASS (build-kokkos-cuda 320/320, rc=0); G7 BLOCKED (no /dev/nvidia* in sandbox; dangerouslyDisableSandbox refused); nsys BLOCKED (not installed)
 - [ ] 4.4 Device schemes: Roe, MSW, LAX, AUSM+-up2
 - [ ] 4.5 BCs: subsonic inlet, Smoluchowski–Maxwell slip, catalytic heat-flux wall
-- [ ] 4.6 Solver options: ILU(n>0), LU-SGS, MG levels, periodic markers, deforming grids
+- [~] 4.6 Solver options: ILU(n>0) done (device-resident), LU-SGS merged, MG levels merged, **periodic markers ALL GATES PASS 2026-11-27 (merge requested)**, deforming grids pending
 - [ ] 4.7 Turbulence coupling (or documented host-only)
 - [ ] 4.8 Performance (after 4.3)
 - [ ] 4.9 Keep feature-coverage matrix accurate after every item
@@ -69,3 +69,14 @@ LOOP HINT: 2026-11-27T07:17:20-05:00 no progress for 3 rounds on the current ite
 - 2026-11-27T10:26:40-05:00 [loop] round 168 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_095457_168.log
 
 - 2026-11-27T11:10:32-05:00 [loop] round 169 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_102700_169.log
+
+- 2026-11-27T11:32:01-05:00 [loop] round 170 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_111052_170.log
+
+- 2026-11-27 (round 171, 4.6-Periodic: queue complete, ALL gates PASS):
+  - Queue (10:07, code 7a1da1532e): cpu-per PASS; g1-per invper_ausm PASS bitwise; variants exp/muscl/lax/off PASS bitwise; poison PASS; 8-case regression PASS bitwise (372s).
+  - venk/ab r1 FAILs were check-script (not solver) — rerun with fixed scripts (.rerun3.sh, 11:10): g1-per-venk-sv, ab-per-r2, ab-per-muscl-r2 all PASS bitwise.
+  - Noise floor r1/r2 FAILed (run dirs never materialized); rerun THIS round: nf-per-r3 PASS (ratios 0.64 ITER11 / 1.12 ITER100, K=10).
+  - INDEX: 17 rows added (PASS + superseded FAILs kept); committing logs + runner scripts .rerun3.sh/.nfper.sh.
+  - NEXT (reviewer): MERGE 4.6-Periodic incl. CSolver.cpp guard fix (1c0b4f8). Then remaining 4.6: dynamic/deforming grids.
+
+READY FOR REVIEW: MERGE: 4.6-Periodic — CPU sanity PASS; G1 strict invper_ausm + variants (exp/muscl/lax/off/venk) + periodic-OFF control all bitwise PASS (max|dres|=0.00e+00); A/B stage-verify bitwise PASS (plain + MUSCL); poison PASS; 8-case default regression bitwise PASS; noise floor PASS (ratios 0.64/1.12, K=10). Includes CSolver.cpp translational-periodic guard fix (1c0b4f8). All logs under validation_logs/2026-11-27_4.6-Periodic/ + INDEX rows.
