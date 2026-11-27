@@ -77,6 +77,8 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invper_ausm]="periodic comms (4.6-Periodic): device (staged periodic rows)|device-resident state (Step 6): ON"
                     [invper_ausm_peroff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_pervenk]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
+                    [invper_ausm_perab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
+                    [invper_ausm_permusclab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
                     [super_cat_iluteam]="ILU(0) device build: team-per-row|device-resident state (Step 6): ON"
                     [super_cat_ilurow]="ILU(0) device build: row-per-thread|device-resident state (Step 6): ON"
                     [super_cat_pycustom]="stage bc:ISOTHERMAL (Wall) [non-catalytic] [py-custom Twall]: device|device-resident state (Step 6): ON"

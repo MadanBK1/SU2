@@ -29,6 +29,7 @@ case $CASE in
   invwedge_mg) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_mg.cfg; HREL=0 ;;
   invwedge_dyn) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_dyn.cfg; HREL=0
     ITERS=${ITERS_DYN:-16} ;; # dual-time case: fixed 4x4=16 history rows; compare the final state
+  invper_ausm) CFG=$SU2/TestCases/kokkos_nemo/meshes/invper_ausm.cfg; HREL=0 ;;  # 4.6-Periodic
   *) echo "unknown CASE $CASE"; exit 2 ;;
 esac
 st=0
