@@ -59,3 +59,7 @@ LOOP HINT: 2026-11-27T07:17:20-05:00 no progress for 3 rounds on the current ite
   - Guard fix (CSolver.cpp:348-356, angle check before NEMO periodic error) was already committed in 774b3e6bfd (round-163 autosave) and BUILT into build-kokkos-strict (binary 07:44:25 > source 07:43:29); cfg invper_ausm has zero rot angles -> should pass.
   - Removed .cpu-per-r1.done marker; relaunched per_queue.sh (harness bg task bhdclmz93, NOT setsid — detached launch dies in sandbox). Steps 2-7 now running: cpu-per-r1, g1-per, 5 variants, ab/poison, 8-case regress, noise floor.
   - NEXT: cat QUEUE_STATUS.txt; per new END line add INDEX row + `git add -f validation_logs` + commit (never commit .queue.lock). All PASS+committed -> `READY FOR REVIEW: MERGE: 4.6-Periodic` (incl. reviewer approval of the guard fix). CPU sanity FAIL again -> `HEAVY: 4.6-Periodic: CPU sanity <error line>`.
+
+- 2026-11-27T09:45:16-05:00 [loop] round 166 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_084027_166.log
+- 2026-11-27 (review-35 steps): built strict+serial after dev segfault fix 1c0b4f8 (CSolver.cpp:348-361 periodic-marker loop); both rc=0, logs build-per-r2.log / build-per-serial-r2.log, INDEX rows added.
+  - NEXT: rm .cpu-per-r1.done; relaunch `bash TestCases/kokkos_nemo/per_queue.sh` (harness bg, NOT setsid); per new END line add INDEX row + commit; all PASS -> `READY FOR REVIEW: MERGE: 4.6-Periodic — <results>`.

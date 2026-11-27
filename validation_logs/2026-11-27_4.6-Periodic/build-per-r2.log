@@ -1,0 +1,4 @@
+ninja: Entering directory `build-kokkos-strict'
+[1/3] Compiling C++ object SU2_CFD/src/libSU2core.a.p/solvers_CSolver.cpp.o
+[2/3] Linking static target SU2_CFD/src/libSU2core.a
+[3/3] Linking target SU2_CFD/src/SU2_CFD
