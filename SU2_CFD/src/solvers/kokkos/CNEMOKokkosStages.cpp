@@ -347,7 +347,8 @@ void KernelLeastSquares(const Geo& geo, const PrimField field, int nvg, int idxV
 template <int ND>
 void KernelLimiter(const Geo& geo, const View2D<double>& field, int nvg, double umusclKappa,
                    const View1D<double>& eps2, const View3D<double>& gradient, const View2D<double>& limiter,
-                   const View2D<double>& fieldMax, const View2D<double>& fieldMin) {
+                   const View2D<double>& fieldMax, const View2D<double>& fieldMin, const View1D<double>& geoF,
+                   bool useGeo) {
   const auto ptr = geo.point_ptr, idx = geo.point_idx;
   const auto coord = geo.coord;
 
@@ -396,8 +397,9 @@ void KernelLimiter(const Geo& geo, const View2D<double>& field, int nvg, double 
           }
         }
 
-        /*--- Compute the geometric factor (1 for these limiters). ---*/
-        const double geoFactor = 1.0;
+        /*--- Compute the geometric factor (1 except SHARP_EDGES / WALL_DISTANCE: host-evaluated
+         *    CLimiterDetails::geometricFactor, uploaded once). ---*/
+        const double geoFactor = useGeo ? geoF(iPoint) : 1.0;
 
         for (int iVar = 0; iVar < nvg; ++iVar) {
           const double e2 = eps2(iVar);
@@ -1001,8 +1003,14 @@ void CNEMOKokkosData::ComputeLimiter(int kind, double umusclKappa, double epsVen
     Kokkos::deep_copy(eps2, epsVenkat);
   }
 
-  if (nDim == 2) KernelLimiter<2>(geo, st.Primitive, nvg, umusclKappa, eps2, st.GradRec, st.Limiter, st.PrimMax, st.PrimMin);
-  else KernelLimiter<3>(geo, st.Primitive, nvg, umusclKappa, eps2, st.GradRec, st.Limiter, st.PrimMax, st.PrimMin);
+  const bool useGeo = (kind == static_cast<int>(LIMITER::SHARP_EDGES) || kind == static_cast<int>(LIMITER::WALL_DISTANCE));
+  if (useGeo && !limGeoValid) SU2_MPI::Error("SHARP_EDGES / WALL_DISTANCE limiter without SetLimiterGeoFactor", CURRENT_FUNCTION);
+  if (nDim == 2)
+    KernelLimiter<2>(geo, st.Primitive, nvg, umusclKappa, eps2, st.GradRec, st.Limiter, st.PrimMax, st.PrimMin,
+                     st.LimiterGeo, useGeo);
+  else
+    KernelLimiter<3>(geo, st.Primitive, nvg, umusclKappa, eps2, st.GradRec, st.Limiter, st.PrimMax, st.PrimMin,
+                     st.LimiterGeo, useGeo);
   Kokkos::fence();
   P.kernel += timer.seconds();
   timer.reset();
@@ -1017,6 +1025,16 @@ void CNEMOKokkosData::ComputeLimiter(int kind, double umusclKappa, double epsVen
   P.d2h += timer.seconds();
   P.calls++;
   limValid = true;
+}
+
+void CNEMOKokkosData::SetLimiterGeoFactor(const double* hostFactor) {
+  /*--- Pattern-like data (static mesh): uploaded once, nPointDomain doubles. ---*/
+  if (st.LimiterGeo.size() == 0) st.LimiterGeo = View1D<double>("NEMO::limiter_geo", geo.nPointDomain);
+  auto h = Kokkos::create_mirror_view(st.LimiterGeo);
+  for (unsigned long i = 0; i < geo.nPointDomain; ++i) h(i) = hostFactor[i];
+  Kokkos::deep_copy(st.LimiterGeo, h);
+  stagePerf[ST_LIMITER].bytes_h2d += double(geo.nPointDomain) * sizeof(double);
+  limGeoValid = true;
 }
 
 void CNEMOKokkosData::ComputeTimeStep(bool viscous, double maxDeltaTime, double& minDt, double& maxDt) {

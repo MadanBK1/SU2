@@ -71,6 +71,8 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invwedge_lusgs_lusgssingle]="stage linear preconditioner (LU_SGS apply): device|LU_SGS device apply: single-team|device-resident state (Step 6): ON"
                     [super_cat_linelet]="stage linear preconditioner (LINELET apply): device|LINELET device apply: linelets=|device-resident state (Step 6): ON"
                     [invwedge_lusgs_linelet]="stage linear preconditioner (LINELET apply): device|LINELET device apply: linelets=|device-resident state (Step 6): ON"
+                    [invwedge_ausm_sharp]="stage limiter (SHARP_EDGES): device|device-resident state (Step 6): ON"
+                    [super_cat_walld]="stage limiter (WALL_DISTANCE): device|device-resident state (Step 6): ON"
                     [super_cat_iluteam]="ILU(0) device build: team-per-row|device-resident state (Step 6): ON"
                     [super_cat_ilurow]="ILU(0) device build: row-per-thread|device-resident state (Step 6): ON"
                     [super_cat_pycustom]="stage bc:ISOTHERMAL (Wall) [non-catalytic] [py-custom Twall]: device|device-resident state (Step 6): ON"
