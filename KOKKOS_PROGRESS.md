@@ -1044,3 +1044,7 @@ LOOP HINT: 2026-11-27T03:11:21-05:00 no progress for 3 rounds on the current ite
   - State: review 32 (empty request, nothing merged) — do review-31 queue: step 1 DONE+committed (builds rc=0, round 136); step 2 CPU sanity (.cpuper.sh) never archived (round-137 bg run died with session; no cpu-per-r1.out, no kk/runs/cpu_per_r1). Re-running THIS round as bg task b7bj8w307 (`bash TestCases/kokkos_nemo/.cpuper.sh`, strict binary, ENABLE_KOKKOS=NO, 21 iters, translation x=+2.0) -> kk/logs/cpu-per-r1.out + kk/runs/cpu_per_r1/log.txt.
   - PASS criteria: rc=0, 21 residual rows, no periodic/matching error. If preprocessing fails on matching vertices: flip invper_ausm.cfg translation 2.0 -> -2.0, rerun as r2, note it.
   - NEXT on pass: archive cpu-per-r1.log + log.txt -> validation_logs/2026-11-27_4.6-Periodic/ + INDEX row + commit; then step 3 G1 strict `.g1per.sh` -> g1-per-r1.log. Limiter step 6 noise floor (.nflim.sh) still owed (run + archive, no merge request).
+
+- 2026-11-27T03:45:36-05:00 [loop] round 148 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_033604_148.log
+
+LOOP HINT: 2026-11-27T03:45:36-05:00 no progress for 3 rounds on the current item. No code changed (only the progress log). Stop planning: in THIS session write code immediately - the smallest compilable piece (e.g. one device function + its call site), build it, commit it. If you cannot, mark the item BLOCKED and move to the next unchecked item.
