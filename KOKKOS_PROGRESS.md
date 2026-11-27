@@ -1006,3 +1006,10 @@ READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial
   - Step 1 (builds strict+serial, ran round 135 via .buildper.sh): **rc=0 both, [21/21] linked** (build-per-r1.log, build-per-serial-r1.log; 1 -Wsubobject-linkage warning in CNEMOKokkosResidualKernels.hpp; binaries Nov 27 01:02/01:03). THIS SESSION: committed 2 build logs + runners .buildper.sh/.cpuper.sh + 2 INDEX rows (this commit).
   - NOTE: stray round-135 artifacts at repo root (log.txt/run.cfg showing check_noisefloor.sh hitting default SU2_ROOT=/home/claude/su2, runs-r26/, _loop_log, .gateprobe.sh, .wait3.sh) — left untouched; runners must not rely on default env paths.
   - NEXT: step 2 CPU sanity `bash TestCases/kokkos_nemo/.cpuper.sh` (ENABLE_KOKKOS=NO, 21 iters, translation x=+2.0; if preprocessing fails on matching vertices, flip cfg translation to -2.0 per review 31) -> cpu-per-r1.log; archive + INDEX row; then step 3 G1 `check.sh invper_ausm` strict -> g1-per-r1.log.
+
+- 2026-11-27T01:19:55-05:00 [loop] round 136 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_010903_136.log
+
+- 2026-11-27 (round 137, review-31 queue 4.6-Periodic — step 2 running):
+  - State check: review 31 queue current (4.6-Periodic steps 1-7); Limiter step 6 noise floor still owed (no merge request needed); 4.6-Limiters + ResSplit MERGED fc5c06e — do not re-request.
+  - THIS SESSION: kicked off step 2 CPU sanity in background (`.cpuper.sh`, ENABLE_KOKKOS=NO, 21 iters, translation x=+2.0) -> kk/logs/cpu-per-r1.out + kk/runs/cpu_per_r1/log.txt. Prepared step-3 runner `.g1per.sh` (G1 strict invper_ausm, embedded env per round-129 sandbox note).
+  - NEXT: when cpu-per run finishes — check OVERALL: no SU2 errors, residual rows present, periodic preprocessing found matching vertices (else flip cfg translation 2.0 -> -2.0, rerun, note); archive cpu-per-r1.log + log.txt to validation_logs/2026-11-27_4.6-Periodic/ + INDEX row; then step 3 `bash TestCases/kokkos_nemo/.g1per.sh` -> g1-per-r1.log.
