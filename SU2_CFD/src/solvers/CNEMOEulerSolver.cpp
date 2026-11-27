@@ -2959,7 +2959,12 @@ std::string CNEMOEulerSolver::Device_LimiterUnsupported(const CConfig *config) c
   if (!kokkosData) return "no device data";
   if (!kokkosData->geo.domain_first) return "domain points not first";
   if (config->GetDiscrete_Adjoint()) return "discrete adjoint";
-  if (config->GetnMarker_Periodic() > 0) return "periodic";
+  /*--- 4.6-PeriodicLim: periodic markers are allowed (LimiterPeriodicInit + host PERIODIC_LIM_PRIM_1 / _2 comms on
+   *    staged rows in Device_PrimitiveLimiter). SU2_KOKKOS_NEMO_PERIODIC_LIM=0 restores the gate (A/B control). ---*/
+  if (config->GetnMarker_Periodic() > 0) {
+    const char* e = std::getenv("SU2_KOKKOS_NEMO_PERIODIC_LIM");
+    if (e != nullptr && std::string(e) == "0") return "periodic (SU2_KOKKOS_NEMO_PERIODIC_LIM=0)";
+  }
   if (ForcedHost("lim")) return "SU2_KOKKOS_NEMO_HOST";
   const auto kind = config->GetKind_SlopeLimit_Flow();
   if (kind != LIMITER::BARTH_JESPERSEN && kind != LIMITER::VENKATAKRISHNAN && kind != LIMITER::VENKATAKRISHNAN_WANG &&
@@ -3321,8 +3326,45 @@ bool CNEMOEulerSolver::Device_PrimitiveLimiter(CGeometry *geometry, const CConfi
   auto& lim = nodes->GetLimiter_Primitive();
   auto& pmax = nodes->GetSolution_Max();
   auto& pmin = nodes->GetSolution_Min();
+
+  /*--- 4.6-PeriodicLim: computeLimiters_impl with periodic = (nMarker_Periodic > 0). Phase 1 (before the point loop):
+   *    fieldMax = fieldMin = field for all points (device), then PERIODIC_LIM_PRIM_1 on the host. The comms read
+   *    Solution_Min/Max of the send points and Primitive of their neighbours, and write Solution_Min/Max of the receive
+   *    points: stage the min/max rows of all periodic points (and, resident, the neighbours' Primitive rows) to the
+   *    host, run the comms, put the min/max rows back. ---*/
+  const bool per = config->GetnMarker_Periodic() > 0;
+  using HQ = K::HaloQuantity;
+  if (per) {
+    const auto& pr = Device_PeriodicRows(geometry);
+    kokkosData->LimiterPeriodicInit();
+    if (Device_ResidentActive()) {
+      const auto& nb = Device_PeriodicNeighborRows(geometry);
+      kokkosData->GatherRowsToHost(HQ::PRIMITIVE, nb.data(), nb.size());
+    }
+    kokkosData->GatherRowsToHost(HQ::PRIM_MAX, pr.data(), pr.size());
+    kokkosData->GatherRowsToHost(HQ::PRIM_MIN, pr.data(), pr.size());
+    for (unsigned short iPeriodic = 1; iPeriodic <= config->GetnMarker_Periodic() / 2; ++iPeriodic) {
+      InitiatePeriodicComms(geometry, config, iPeriodic, PERIODIC_LIM_PRIM_1);
+      CompletePeriodicComms(geometry, config, iPeriodic, PERIODIC_LIM_PRIM_1);
+    }
+    kokkosData->ScatterRowsFromHost(HQ::PRIM_MAX, pr.data(), pr.size());
+    kokkosData->ScatterRowsFromHost(HQ::PRIM_MIN, pr.data(), pr.size());
+  }
+
   kokkosData->ComputeLimiter(static_cast<int>(kind), config->GetMUSCL_Kappa_Flow(), eps, lim.data(), pmax.data(),
-                             pmin.data());
+                             pmin.data(), per);
+
+  if (per) {
+    /*--- Phase 2 (after the point loop): PERIODIC_LIM_PRIM_2, min limiter on each periodic pair (reads the send rows,
+     *    writes the receive rows of Limiter_Primitive). Not resident: ComputeLimiter downloaded the domain rows. ---*/
+    const auto& pr = Device_PeriodicRows(geometry);
+    if (Device_ResidentActive()) kokkosData->GatherRowsToHost(HQ::LIMITER, pr.data(), pr.size());
+    for (unsigned short iPeriodic = 1; iPeriodic <= config->GetnMarker_Periodic() / 2; ++iPeriodic) {
+      InitiatePeriodicComms(geometry, config, iPeriodic, PERIODIC_LIM_PRIM_2);
+      CompletePeriodicComms(geometry, config, iPeriodic, PERIODIC_LIM_PRIM_2);
+    }
+    kokkosData->ScatterRowsFromHost(HQ::LIMITER, pr.data(), pr.size());
+  }
 
   if (verify) {
     const size_t n = size_t(nPointDomain) * nPrimVarGrad;
@@ -4392,6 +4434,21 @@ const std::vector<unsigned long>& CNEMOEulerSolver::Device_PeriodicRows(CGeometr
   return periodicRows;
 }
 
+const std::vector<unsigned long>& CNEMOEulerSolver::Device_PeriodicNeighborRows(CGeometry *geometry) {
+  if (!periodicNbrRowsBuilt) {
+    /*--- 4.6-PeriodicLim: neighbours of the periodic send points (PERIODIC_LIM_PRIM_1 reads their Primitive). ---*/
+    const unsigned long nS = geometry->nPeriodicSend > 0 ? geometry->nPoint_PeriodicSend[geometry->nPeriodicSend] : 0;
+    periodicNbrRows.clear();
+    for (unsigned long i = 0; i < nS; ++i)
+      for (auto jPoint : geometry->nodes->GetPoints(geometry->Local_Point_PeriodicSend[i]))
+        periodicNbrRows.push_back(jPoint);
+    std::sort(periodicNbrRows.begin(), periodicNbrRows.end());
+    periodicNbrRows.erase(std::unique(periodicNbrRows.begin(), periodicNbrRows.end()), periodicNbrRows.end());
+    periodicNbrRowsBuilt = true;
+  }
+  return periodicNbrRows;
+}
+
 std::string CNEMOEulerSolver::Device_PeriodicUnsupported(const CConfig *config) const {
   if (config->GetnMarker_Periodic() == 0) return "";
   /*--- 4.6-Periodic step 1 scope: inviscid, single grid, steady / time stepping, no PERIODIC_SENSOR / limiter comms
@@ -4407,8 +4464,14 @@ std::string CNEMOEulerSolver::Device_PeriodicUnsupported(const CConfig *config) 
     if (e != nullptr && std::string(e) == "0") return "periodic markers with NS (SU2_KOKKOS_NEMO_PERIODIC_NS=0)";
   }
   if (config->GetnMGLevels() > 0) return "periodic markers with multigrid";
-  if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM && config->GetKind_ConvNumScheme_Flow() == SPACE_UPWIND)
-    return "periodic markers with AUSM+M (pressure sensor periodic comms)";
+  /*--- 4.6-PeriodicAUSMM: AUSM+M is allowed. Its sensor is CNEMOEulerSolver::SetPressureDiffusionSensor (min pressure
+   *    ratio over the direct neighbours + MPI SENSOR comms), which has NO periodic comms on the CPU (PERIODIC_SENSOR
+   *    belongs to the JST SetCentered_Dissipation_Sensor, not ported); the device sensor + staged SENSOR halo exchange
+   *    reproduce it as is. SU2_KOKKOS_NEMO_PERIODIC_AUSMM=0 restores the gate (A/B control). ---*/
+  if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM && config->GetKind_ConvNumScheme_Flow() == SPACE_UPWIND) {
+    const char* e = std::getenv("SU2_KOKKOS_NEMO_PERIODIC_AUSMM");
+    if (e != nullptr && std::string(e) == "0") return "periodic markers with AUSM+M (SU2_KOKKOS_NEMO_PERIODIC_AUSMM=0)";
+  }
   /*--- 4.6-PeriodicDT: dual time is allowed. CIntegration::Space_Integration adds SetResidual_DualTime (device kernel
    *    "stage dual-time source") before BC_Periodic on both paths, and the dual-time source has no periodic comms of its
    *    own, so the staged PERIODIC_RESIDUAL rows already carry the time term exactly as on the CPU. The time-level push

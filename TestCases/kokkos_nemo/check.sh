@@ -56,7 +56,9 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [invwedge_dyn]=$TC/invwedge/invwedge_dyn.cfg
                  [invper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/invper_ausm.cfg
                  [viscper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/viscper_ausm.cfg
-                 [invper_dt]=$SU2/TestCases/kokkos_nemo/meshes/invper_dt.cfg )
+                 [invper_dt]=$SU2/TestCases/kokkos_nemo/meshes/invper_dt.cfg
+                 [invper_ausmm]=$SU2/TestCases/kokkos_nemo/meshes/invper_ausmm.cfg
+                 [invper_lim]=$SU2/TestCases/kokkos_nemo/meshes/invper_lim.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
@@ -85,8 +87,16 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invper_dt_dtoff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_dt_dtab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
                     [invper_dt_dt1st]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage dual-time source (1st order): device|device-resident state (Step 6): ON"
+                    [invper_ausmm]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage pressure diffusion sensor (AUSM+M): device|device-resident state (Step 6): ON"
+                    [invper_ausmm_mmoff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
+                    [invper_ausmm_mmab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
+                    [invper_lim]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage limiter (VENKATAKRISHNAN): device|device-resident state (Step 6): ON"
+                    [invper_lim_bj]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage limiter (BARTH_JESPERSEN): device|device-resident state (Step 6): ON"
+                    [invper_lim_wang]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage limiter (VENKATAKRISHNAN_WANG): device|device-resident state (Step 6): ON"
+                    [invper_lim_limoff]="stage limiter (VENKATAKRISHNAN): host (periodic (SU2_KOKKOS_NEMO_PERIODIC_LIM=0))|device-resident state (Step 6): OFF ("
+                    [invper_lim_limab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
                     [invper_ausm_peroff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
-                    [invper_ausm_pervenk]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
+                    [invper_ausm_pervenk]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage limiter (VENKATAKRISHNAN): device|device-resident state (Step 6): ON"
                     [invper_ausm_perab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
                     [invper_ausm_permusclab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
                     [super_cat_iluteam]="ILU(0) device build: team-per-row|device-resident state (Step 6): ON"

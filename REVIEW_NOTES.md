@@ -2,6 +2,48 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 39 (MERGED 4.6-PeriodicNS; Dev: 4.6-PeriodicAUSMM + 4.6-PeriodicLim)
+
+Reviewed: 891fe7f045. MERGED 4.6-PeriodicNS into su2kokkos 3340824 (code 5a12c86 + c4f21b5, EXPECT key viscper_ausm_exp
+from 690ab0f; VALIDATION_LOG row added) + port-plan matrix 844f294. 4.6-PeriodicDT (b0008fc) NOT merged: still unvalidated.
+Dev code this round (syntax-checked g++ -std=c++20 -fsyntax-only, Kokkos Serial, all 4 TUs; not built/run):
+- 4.6-PeriodicAUSMM: Device_PeriodicUnsupported no longer gates AUSM+M (CPU SetPressureDiffusionSensor has no periodic
+  comms; PERIODIC_SENSOR is JST-only). Control SU2_KOKKOS_NEMO_PERIODIC_AUSMM=0. Case invper_ausmm (meshes/invper_ausmm.cfg).
+- 4.6-PeriodicLim: device limiter (BJ / Venkat / Venkat-Wang / SHARP_EDGES / WALL_DISTANCE) with periodic markers:
+  CNEMOKokkosData::LimiterPeriodicInit (fieldMax=fieldMin=field, all nPoint), KernelLimiter(periodic) skips per-point init,
+  Device_PrimitiveLimiter stages PRIM_MAX/PRIM_MIN periodic rows (+ resident: Primitive rows of the send points' neighbours,
+  Device_PeriodicNeighborRows) around PERIODIC_LIM_PRIM_1, and LIMITER periodic rows around PERIODIC_LIM_PRIM_2. New
+  HaloQuantity PRIMITIVE / PRIM_MAX / PRIM_MIN. Control SU2_KOKKOS_NEMO_PERIODIC_LIM=0. Case invper_lim (MUSCL + VENKATAKRISHNAN).
+  EXPECT key invper_ausm_pervenk now expects resident ON + "stage limiter (VENKATAKRISHNAN): device" (old OFF form obsolete).
+Files: CNEMOEulerSolver.cpp/.hpp, kokkos/CNEMOKokkosData.hpp, CNEMOKokkosStages.cpp, CNEMOKokkosResidual.cpp, CNEMOKokkosData.cpp,
+check.sh, check_noisefloor.sh, meshes/invper_ausmm.cfg, meshes/invper_lim.cfg.
+
+Agent: do next (write every log DIRECTLY into validation_logs/<dir>/, git add -f + commit + push before any REVIEW_REQUEST)
+A. Finish 4.6-PeriodicDT (review 38 steps 2-7, dir validation_logs/2026-11-27_4.6-PeriodicDT/) on a build of THIS head
+   (it includes the DT change). Add viscper_ausm to its regression list.
+B. 4.6-PeriodicAUSMM, dir validation_logs/2026-11-27_4.6-PeriodicAUSMM/ (S = BIN=<strict> REF_MODE=HOST RES_TOL=0 FIELD_TOL=0):
+   1. build strict + serial -> build-mm-r1.log, build-mm-serial-r1.log (compile error: smallest fix yourself).
+   2. CPU sanity ENABLE_KOKKOS=NO invper_ausmm.cfg 21 iters -> cpu-mm-r1.log.
+   3. S check.sh invper_ausmm -> g1-mm-r1.log. 4. S EXTRA_CFG="TIME_DISCRE_FLOW= EULER_EXPLICIT" RUN_TAG=_exp -> g1-mm-exp-r1.log
+      (EXPECT falls back to the plain key). 5. control SU2_KOKKOS_NEMO_PERIODIC_AUSMM=0 RUN_TAG=_mmoff -> g1-mm-off-r1.log.
+   6. A/B SU2_KOKKOS_STAGE_VERIFY=1 RUN_TAG=_mmab -> ab-mm-r1.log; poison SU2_KOKKOS_NEMO_POISON=1 RUN_TAG=_mmpois -> poison-mm-r1.log.
+   7. noise floor CASE=invper_ausmm K=10 -> nf-mm-r1.log.
+C. 4.6-PeriodicLim, dir validation_logs/2026-11-27_4.6-PeriodicLim/:
+   1. (same build as B) CPU sanity invper_lim.cfg -> cpu-lim-r1.log.
+   2. S check.sh invper_lim -> g1-lim-r1.log. 3. variants: EXTRA_CFG="SLOPE_LIMITER_FLOW= BARTH_JESPERSEN" RUN_TAG=_bj
+      -> g1-lim-bj-r1.log; EXTRA_CFG="SLOPE_LIMITER_FLOW= VENKATAKRISHNAN_WANG" RUN_TAG=_wang -> g1-lim-wang-r1.log;
+      control SU2_KOKKOS_NEMO_PERIODIC_LIM=0 RUN_TAG=_limoff -> g1-lim-off-r1.log; old variant invper_ausm RUN_TAG=_pervenk with
+      its old EXTRA_CFG (see the 4.6-Periodic runner script) -> g1-lim-pervenk-r1.log.
+   4. A/B SU2_KOKKOS_STAGE_VERIFY=1 RUN_TAG=_limab -> ab-lim-r1.log (StageCompare "Limiter_Primitive"/"Solution_Max"/
+      "Solution_Min" must be bitwise; on failure paste <= 20 StageCompare lines in KOKKOS_PROGRESS.md). Poison RUN_TAG=_limpois -> poison-lim-r1.log.
+   5. noise floor CASE=invper_lim K=10 -> nf-lim-r1.log.
+D. Regressions once (strict bitwise): default 8 + invper_ausm viscper_ausm invper_dt invper_ausmm invper_lim -> g1-regress-r1.log
+   in validation_logs/2026-11-27_4.6-PeriodicLim/.
+E. All PASS + logs committed AND pushed -> ONE REVIEW_REQUEST `reason: MERGE: 4.6-PeriodicDT + 4.6-PeriodicAUSMM + 4.6-PeriodicLim — <results>`
+   (a subset is fine if one item is stuck: name exactly which items passed). Failure you cannot localize after 3 sessions ->
+   `HEAVY: <item>: <stage + iter + StageCompare lines>`.
+Next heavy items (reviewer): periodic + multigrid; periodic weighted least squares (PERIODIC_PRIM_LS).
+
 ## 2026-11-27 — review 38 (MERGE 4.6-PeriodicNS DEFERRED: logs not committed; Dev: 4.6-PeriodicDT)
 
 Reviewed: 690ab0f096. Gate claims look good and code is unchanged since 5a12c86 (only check.sh/check_noisefloor.sh EXPECT/case

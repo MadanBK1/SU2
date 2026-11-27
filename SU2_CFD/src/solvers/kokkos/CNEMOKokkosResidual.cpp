@@ -1106,6 +1106,18 @@ double* CNEMOKokkosData::HaloDevicePtr(HaloQuantity q, size_t& rowLen, Group& g)
       rowLen = 1;
       g = G_TIMESTEP;
       return st.DeltaTime.data();
+    case HaloQuantity::PRIMITIVE:
+      rowLen = nPrimVar;
+      g = G_PRIMITIVE;
+      return st.Primitive.data();
+    case HaloQuantity::PRIM_MAX:
+      rowLen = nPrimVarGrad;
+      g = N_GROUPS; /*--- limiter scratch (written by LimiterPeriodicInit / ComputeLimiter), no residency group ---*/
+      return st.PrimMax.data();
+    case HaloQuantity::PRIM_MIN:
+      rowLen = nPrimVarGrad;
+      g = N_GROUPS;
+      return st.PrimMin.data();
     default: break;
   }
   SU2_MPI::Error("CNEMOKokkosData: unknown halo quantity.", CURRENT_FUNCTION);
@@ -1123,6 +1135,9 @@ double* CNEMOKokkosData::HaloHostPtr(HaloQuantity q) {
     case HaloQuantity::SOLUTION_OLD: return nodes->Solution_Old.data();
     case HaloQuantity::LAMBDA: return nodes->Lambda.data();
     case HaloQuantity::DELTA_TIME: return nodes->Delta_Time.data();
+    case HaloQuantity::PRIMITIVE: return nodes->Primitive.data();
+    case HaloQuantity::PRIM_MAX: return nodes->GetSolution_Max().data();
+    case HaloQuantity::PRIM_MIN: return nodes->GetSolution_Min().data();
     default: break;
   }
   return nullptr;

@@ -33,6 +33,8 @@ case $CASE in
   viscper_ausm) CFG=$SU2/TestCases/kokkos_nemo/meshes/viscper_ausm.cfg; HREL=0 ;;  # 4.6-PeriodicNS
   invper_dt) CFG=$SU2/TestCases/kokkos_nemo/meshes/invper_dt.cfg; HREL=0
     ITERS=${ITERS_DYN:-16} ;; # 4.6-PeriodicDT: 4x4 dual-time rows, compare the final state
+  invper_ausmm) CFG=$SU2/TestCases/kokkos_nemo/meshes/invper_ausmm.cfg; HREL=0 ;;  # 4.6-PeriodicAUSMM
+  invper_lim) CFG=$SU2/TestCases/kokkos_nemo/meshes/invper_lim.cfg; HREL=0 ;;  # 4.6-PeriodicLim
   *) echo "unknown CASE $CASE"; exit 2 ;;
 esac
 st=0

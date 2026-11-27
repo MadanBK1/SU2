@@ -158,6 +158,10 @@ protected:
   const std::vector<unsigned long>& Device_PeriodicRows(CGeometry *geometry);
   std::vector<unsigned long> periodicRows;
   bool periodicRowsBuilt = false;
+  /*! \brief 4.6-PeriodicLim: sorted unique neighbours of the periodic send points (static mesh). */
+  const std::vector<unsigned long>& Device_PeriodicNeighborRows(CGeometry *geometry);
+  std::vector<unsigned long> periodicNbrRows;
+  bool periodicNbrRowsBuilt = false;
   /*! \brief 4.6-Periodic: why device-resident mode is off with periodic markers ("" = supported). */
   std::string Device_PeriodicUnsupported(const CConfig *config) const;
 

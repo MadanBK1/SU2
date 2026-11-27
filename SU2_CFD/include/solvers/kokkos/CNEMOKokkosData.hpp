@@ -338,7 +338,13 @@ class CNEMOKokkosData {
    * \param[in] epsVenkat - eps2 (BJ/Venkat), or K (Venkat-Wang).
    */
   void ComputeLimiter(int kind, double umusclKappa, double epsVenkat, double* hostLim, double* hostMax,
-                      double* hostMin);
+                      double* hostMin, bool periodic = false);
+  /*!
+   * \brief 4.6-PeriodicLim: computeLimiters_impl "if (periodic)" initialisation, fieldMax = fieldMin = field for all
+   *        nPoint rows (device), before the host PERIODIC_LIM_PRIM_1 comms on staged rows. ComputeLimiter(periodic=true)
+   *        then skips its per-point initialisation, as the CPU main loop does.
+   */
+  void LimiterPeriodicInit();
   /*!
    * \brief 4.6-Limiters: per-point geometric factor of SHARP_EDGES / WALL_DISTANCE (CLimiterDetails::geometricFactor,
    *        evaluated on the host from the geometry distances, uploaded once: static mesh). Used by ComputeLimiter
@@ -676,6 +682,9 @@ class CNEMOKokkosData {
                                   SOLUTION_OLD,     /*!< 4.6-Periodic: Solution_Old (PERIODIC_IMPLICIT), periodic rows only */
                                   LAMBDA,           /*!< 4.6-Periodic: Lambda (PERIODIC_MAX_EIG), no residency group */
                                   DELTA_TIME,       /*!< 4.6-Periodic: Delta_Time (PERIODIC_RESIDUAL), periodic rows only */
+                                  PRIMITIVE,        /*!< 4.6-PeriodicLim: Primitive rows read by PERIODIC_LIM_PRIM_1 (gather only) */
+                                  PRIM_MAX,         /*!< 4.6-PeriodicLim: Solution_Max (PERIODIC_LIM_PRIM_1), periodic rows only */
+                                  PRIM_MIN,         /*!< 4.6-PeriodicLim: Solution_Min (PERIODIC_LIM_PRIM_1), periodic rows only */
                                   N };
   /*!
    * \brief Device halo exchange with the SU2 point-to-point layout (CGeometry nP2PSend / nPoint_P2PSend /

@@ -348,7 +348,7 @@ template <int ND>
 void KernelLimiter(const Geo& geo, const View2D<double>& field, int nvg, double umusclKappa,
                    const View1D<double>& eps2, const View3D<double>& gradient, const View2D<double>& limiter,
                    const View2D<double>& fieldMax, const View2D<double>& fieldMin, const View1D<double>& geoF,
-                   bool useGeo) {
+                   bool useGeo, bool periodic) {
   const auto ptr = geo.point_ptr, idx = geo.point_idx;
   const auto coord = geo.coord;
 
@@ -358,9 +358,12 @@ void KernelLimiter(const Geo& geo, const View2D<double>& field, int nvg, double 
         const double* coord_i = &coord(iPoint, 0);
 
         for (int iVar = 0; iVar < nvg; ++iVar) {
-          /*--- Initialize min/max now for iPoint if not periodic. ---*/
-          fieldMax(iPoint, iVar) = field(iPoint, iVar);
-          fieldMin(iPoint, iVar) = field(iPoint, iVar);
+          /*--- Initialize min/max now for iPoint if not periodic (periodic: LimiterPeriodicInit + host
+           *    PERIODIC_LIM_PRIM_1 comms already set them, "started outside loop"). ---*/
+          if (!periodic) {
+            fieldMax(iPoint, iVar) = field(iPoint, iVar);
+            fieldMin(iPoint, iVar) = field(iPoint, iVar);
+          }
         }
 
         /*--- Initialize min/max projection out of iPoint. ---*/
@@ -954,11 +957,38 @@ void CNEMOKokkosData::UploadGradient(bool reconstruction, const double* hostGrad
   if (!reconstruction || !separateRecGradient) gradPrimValid = true;
 }
 
-void CNEMOKokkosData::ComputeLimiter(int kind, double umusclKappa, double epsVenkat, double* hostLim,
-                                     double* hostMax, double* hostMin) {
+void CNEMOKokkosData::LimiterPeriodicInit() {
   auto& P = stagePerf[ST_LIMITER];
   Kokkos::Timer timer;
   if (st.Limiter.size() == 0) {
+    st.Limiter = View2D<double>("NEMO::Limiter_Primitive", nPoint, nPrimVarGrad);
+    st.PrimMax = View2D<double>("NEMO::Solution_Max", nPoint, nPrimVarGrad);
+    st.PrimMin = View2D<double>("NEMO::Solution_Min", nPoint, nPrimVarGrad);
+  }
+  if (!primDeviceValid) {
+    UploadPrimitiveOnly();
+    P.bytes_h2d += double(nPoint) * nPrimVar * sizeof(double);
+  }
+  P.h2d += timer.seconds();
+  timer.reset();
+  /*--- computeLimiters_impl: if (periodic) for iPoint < nPoint: fieldMax = fieldMin = field. ---*/
+  const int nvg = nPrimVarGrad;
+  const auto field = st.Primitive;
+  const auto fieldMax = st.PrimMax, fieldMin = st.PrimMin;
+  Kokkos::parallel_for(
+      "NEMO::LimiterPeriodicInit", Kokkos::RangePolicy<exec_space>(0, nPoint), KOKKOS_LAMBDA(const unsigned long iPoint) {
+        for (int iVar = 0; iVar < nvg; ++iVar) fieldMax(iPoint, iVar) = fieldMin(iPoint, iVar) = field(iPoint, iVar);
+      });
+  Kokkos::fence();
+  P.kernel += timer.seconds();
+}
+
+void CNEMOKokkosData::ComputeLimiter(int kind, double umusclKappa, double epsVenkat, double* hostLim,
+                                     double* hostMax, double* hostMin, bool periodic) {
+  auto& P = stagePerf[ST_LIMITER];
+  Kokkos::Timer timer;
+  if (st.Limiter.size() == 0) {
+    if (periodic) SU2_MPI::Error("periodic ComputeLimiter without LimiterPeriodicInit", CURRENT_FUNCTION);
     st.Limiter = View2D<double>("NEMO::Limiter_Primitive", nPoint, nPrimVarGrad);
     st.PrimMax = View2D<double>("NEMO::Solution_Max", nPoint, nPrimVarGrad);
     st.PrimMin = View2D<double>("NEMO::Solution_Min", nPoint, nPrimVarGrad);
@@ -1007,10 +1037,10 @@ void CNEMOKokkosData::ComputeLimiter(int kind, double umusclKappa, double epsVen
   if (useGeo && !limGeoValid) SU2_MPI::Error("SHARP_EDGES / WALL_DISTANCE limiter without SetLimiterGeoFactor", CURRENT_FUNCTION);
   if (nDim == 2)
     KernelLimiter<2>(geo, st.Primitive, nvg, umusclKappa, eps2, st.GradRec, st.Limiter, st.PrimMax, st.PrimMin,
-                     st.LimiterGeo, useGeo);
+                     st.LimiterGeo, useGeo, periodic);
   else
     KernelLimiter<3>(geo, st.Primitive, nvg, umusclKappa, eps2, st.GradRec, st.Limiter, st.PrimMax, st.PrimMin,
-                     st.LimiterGeo, useGeo);
+                     st.LimiterGeo, useGeo, periodic);
   Kokkos::fence();
   P.kernel += timer.seconds();
   timer.reset();
