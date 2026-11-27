@@ -114,3 +114,9 @@ READY FOR REVIEW: MERGE: 4.6-PeriodicNS — CPU sanity PASS (21 iters, rc=0); G1
   - Rebuilt strict+serial at HEAD 60a160f26b (build-pdt-r2.log / build-pdt-serial-r2.log, 16/16 rc=0; AUSMM/Lim dev code now compiled).
   - pdt_queue.sh: cpu-pdt PASS; g1-pdt invper_dt PASS bitwise; variants dt1st/muscl/dtoff PASS bitwise; ab PASS; poison PASS; regress 10/10 bitwise (360s, incl. viscper_ausm); nf K=10 PASS ratio 0.46.
   - 10 INDEX rows added; logs committed. NEXT: queue B 4.6-PeriodicAUSMM (build-mm logs, cpu, g1, exp, mmoff, ab, poison, nf), then C 4.6-PeriodicLim, D regress, E one MERGE request.
+
+- 2026-11-27T16:29:49-05:00 [loop] round 175 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_155234_175.log
+- 2026-11-27 (round 176, review-39 queue B COMPLETE — 4.6-PeriodicAUSMM all gates PASS):
+  - mm_queue.sh (launched round 175, finished 16:17:39, code 7704af8288): builds rc=0 (no-op at this head); cpu-mm 21 iters PASS; g1-mm invper_ausmm PASS bitwise (sensor (AUSM+M): device, resident ON); variants exp + control mmoff PASS bitwise; ab PASS; poison PASS; nf K=10 PASS ratios 0.60/0.93.
+  - 8 INDEX rows added; logs (17 files) + runner mm_queue.sh committed this session.
+  - NEXT: queue C 4.6-PeriodicLim (lim_queue.sh: cpu, g1, bj/wang/limoff/pervenk variants, ab, poison, nf), D regress (default 8 + invper_ausm viscper_ausm invper_dt invper_ausmm invper_lim -> g1-regress-r1 in Lim dir), E ONE MERGE request (review-39 E).
