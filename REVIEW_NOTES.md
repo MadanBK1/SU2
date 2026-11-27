@@ -2,6 +2,41 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 31 (4.6-Limiters + ResSplit MERGED; new dev code 4.6-Periodic step 1)
+
+Reviewed: 1e7f5b2ebb. Merged into su2kokkos as fc5c06e (+ 622b019 plan wording): code 332d230 (Limiters) + c2ba950
+(ResSplit) — CNEMOKokkosData.hpp, meson.build, CNEMOEulerSolver.cpp, kokkos/CNEMOKokkosResidual*.{cpp,hpp,inl},
+CNEMOKokkosStages.cpp, check.sh — + VALIDATION_LOG row + plan matrix. Do not re-request either. Limiter step 6
+(noise floor, .nflim.sh -> nf-lim-r1.log) is still owed: run it once and archive (no merge request needed).
+
+Dev code this round (6dcd2bf; g++ -fsyntax-only clean, NOT built, NOT validated) — 4.6-Periodic step 1: device-resident
+NEMO with periodic markers. The host periodic comms run unchanged on staged device rows of the periodic points:
+BC_Periodic override (PERIODIC_RESIDUAL: residual + Delta_Time + Jacobian block rows, `AccumulatorRows`), SetMax_Eigenvalue
+(Lambda rows re-uploaded after PERIODIC_MAX_EIG), GG gradient (PERIODIC_PRIM_GG), CompleteImplicitIteration
+(PERIODIC_IMPLICIT: Solution + Solution_Old). Scope gate `Device_PeriodicUnsupported`: inviscid, no MG, no AUSM+M,
+steady / time stepping. New gate case `invper_ausm` (TestCases/kokkos_nemo/meshes/: perchannel.su2, make_perchannel.py,
+invper_ausm.cfg; check.sh links that mesh dir). Startup line `periodic comms (4.6-Periodic): device (staged periodic rows)`.
+Common change: CFVMFlowSolverBase::BC_Periodic `final` -> `override` (non-NEMO solvers unchanged).
+
+Agent: do next (logs under validation_logs/2026-11-27_4.6-Periodic/ + one INDEX row each; strict = REF_MODE=HOST RES_TOL=0 FIELD_TOL=0):
+1. Build strict + serial -> build-per-r1.log, build-per-serial-r1.log. Fix compile errors yourself (smallest change).
+2. Sanity: run invper_ausm once with ENABLE_KOKKOS= NO (plain CPU, 21 iters) -> cpu-per-r1.log. If SU2 stops in the
+   periodic preprocessing (no matching vertices), flip the translation sign in invper_ausm.cfg (2.0 -> -2.0), rerun, note it.
+3. G1 strict `check.sh invper_ausm` -> g1-per-r1.log (bitwise; EXPECT line must be found).
+4. Variants, strict, one log each (RUN_TAG per variant):
+   a. explicit: EXTRA_CFG="TIME_DISCRE_FLOW= EULER_EXPLICIT;CFL_NUMBER= 0.5" RUN_TAG=_perexp -> g1-per-exp-r1.log
+   b. MUSCL GG: EXTRA_CFG="MUSCL_FLOW= YES;SLOPE_LIMITER_FLOW= VAN_ALBADA_EDGE" RUN_TAG=_permuscl -> g1-per-muscl-r1.log
+   c. LAX: EXTRA_CFG="CONV_NUM_METHOD_FLOW= LAX-FRIEDRICH" RUN_TAG=_perlax -> g1-per-lax-r1.log
+   d. resident OFF control: SU2_KOKKOS_NEMO_RESIDENT=0 RUN_TAG=_peroff (EXPECT not applicable; must still be bitwise) -> g1-per-off-r1.log
+   e. Venkatakrishnan (expected resident OFF "limiter: periodic", still bitwise): EXTRA_CFG="MUSCL_FLOW= YES;SLOPE_LIMITER_FLOW= VENKATAKRISHNAN" RUN_TAG=_pervenk -> g1-per-venk-r1.log
+5. A/B: SU2_KOKKOS_STAGE_VERIFY=1 on invper_ausm and variant b -> ab-per-r1.log, ab-per-muscl-r1.log (paste the StageCompare
+   lines with non-bitwise > 0, if any). Poison: SU2_KOKKOS_NEMO_POISON=1 on invper_ausm -> poison-per-r1.log (bitwise).
+6. Regressions strict: default list + invwedge_lusgs invwedge_mg invwedge_dyn supin_visc -> g1-per-regress-r1.log.
+7. Noise floor (production build): `check_noisefloor.sh` with CASE=invper_ausm K=10 -> nf-per-r1.log.
+On any FAIL: rerun that case with SU2_KOKKOS_STAGE_VERIFY=1, paste <= 20 StageCompare lines; check whether the first
+differing iteration is 1 (setup) or later. Request `MERGE: 4.6-Periodic` only after 1-6 pass and logs are committed;
+`HEAVY: 4.6-Periodic: <bug>` only if you cannot localize a failure after 3 sessions.
+
 ## 2026-11-27 — dev (Madan request): split CNEMOKokkosResidual.cpp for nvcc compile time
 
 On the GH200 (CUDA 12.4, sm_90) `cicc` spent > 40 min on CNEMOKokkosResidual.cpp. Dev commit (this push; g++ -fsyntax-only
