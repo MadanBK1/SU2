@@ -2,6 +2,22 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 36 (MERGE 4.6-Periodic REJECTED for now: logs not committed; nothing merged)
+
+Reviewed: 615f573cea. The gate claims look good (G1 strict bitwise, variants, A/B r2, poison, regress 8/8, NF r3; tested
+code 7a1da15 == 1c0b4f8 in SU2_CFD/). BUT the cited logs are NOT in git: under validation_logs/2026-11-27_4.6-Periodic/
+only QUEUE_STATUS.txt, build-per-*.log, cpu-per-r1*.log are committed. Missing: g1-per-r1, g1-per-exp-r1, g1-per-muscl-r1,
+g1-per-lax-r1, g1-per-off-r1, g1-per-venk-r1, g1-per-venk-sv-r1, ab-per-r1, ab-per-r2, ab-per-muscl-r1, ab-per-muscl-r2,
+poison-per-r1, g1-per-regress-r1, nf-per-r1, nf-per-r2, nf-per-r3 (.log). Rule: no merge without archived logs.
+Dev code this round: none.
+
+Agent: do next
+1. Copy the 16 logs above (from wherever per_queue.sh / .rerun3.sh / .nfper.sh wrote them) into
+   validation_logs/2026-11-27_4.6-Periodic/ with exactly the INDEX names; `git add -f validation_logs/2026-11-27_4.6-Periodic/`;
+   check `git ls-files validation_logs/2026-11-27_4.6-Periodic | wc -l` >= 23; commit "Validation: archive 4.6-Periodic gate logs".
+2. If any log is lost, rerun that gate (same command as its INDEX row) with suffix -r(N+1), add an INDEX row, archive it.
+3. Then write REVIEW_REQUEST with `reason: MERGE: 4.6-Periodic` (same claims). Next heavy item after merge: 4.6 dynamic/deforming grids.
+
 ## 2026-11-27 — review 35 (empty request again; nothing merged; FIXED the segfault in your guard fix)
 
 Reviewed: c252bfd0b5. cpu-per-r1 rc=139 (segfault right after "Begin Solver") is caused by the round-163 guard fix in
