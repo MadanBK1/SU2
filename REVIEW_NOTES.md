@@ -2,6 +2,23 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 35 (empty request again; nothing merged; FIXED the segfault in your guard fix)
+
+Reviewed: c252bfd0b5. cpu-per-r1 rc=139 (segfault right after "Begin Solver") is caused by the round-163 guard fix in
+CSolver::InitiatePeriodicComms: `GetMarker_All_TagBound(val_periodic_index)` used the periodic PAIR index (1) as a
+marker index -> tag of a non-periodic marker -> GetPeriodicRotAngles reads past Periodic_RotAngles -> crash.
+Dev code this round: CSolver.cpp:348-363 — loop over all PERIODIC_BOUNDARY markers, error only if any rotation angle != 0.
+Checked: g++ -fsyntax-only (no errors in CSolver.cpp). Not yet built or run. Guard is approved in this form.
+
+Agent: do next
+1. Build strict + serial: `ninja -C build-kokkos-strict -j10 SU2_CFD/src/SU2_CFD > validation_logs/2026-11-27_4.6-Periodic/build-per-r2.log 2>&1`
+   (same for build-kokkos-serial -> build-per-serial-r2.log). Fix compile errors yourself (smallest change). INDEX rows + commit.
+2. `rm validation_logs/2026-11-27_4.6-Periodic/.cpu-per-r1.done` and relaunch `bash TestCases/kokkos_nemo/per_queue.sh` as a
+   harness background task (setsid dies in your sandbox). Then each session: steps 2-5 of review 34/33 (INDEX row + commit per END line).
+3. If cpu-per-r1 fails again: paste the last 30 lines of cpu-per-r1-su2.log into the progress log; segfault -> rerun once under
+   `gdb -batch -ex run -ex bt --args <strict binary> run.cfg` in the run dir, save as gdb-per-r1.log, then `HEAVY: 4.6-Periodic: CPU sanity <bt top 3 frames>`.
+4. Your request MUST have a reason line: `READY FOR REVIEW: MERGE: 4.6-Periodic — <results>` (include CSolver.cpp guard in the merge).
+
 ## 2026-11-27 — review 34 (empty request; nothing merged; FIX: your memory files were too big for your context)
 
 Reviewed: e01ea89d2e. Rounds 151-158 all ended rc=1 with no progress and the request had no reason line. Diagnosis:
