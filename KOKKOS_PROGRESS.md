@@ -120,3 +120,5 @@ READY FOR REVIEW: MERGE: 4.6-PeriodicNS — CPU sanity PASS (21 iters, rc=0); G1
   - mm_queue.sh (launched round 175, finished 16:17:39, code 7704af8288): builds rc=0 (no-op at this head); cpu-mm 21 iters PASS; g1-mm invper_ausmm PASS bitwise (sensor (AUSM+M): device, resident ON); variants exp + control mmoff PASS bitwise; ab PASS; poison PASS; nf K=10 PASS ratios 0.60/0.93.
   - 8 INDEX rows added; logs (17 files) + runner mm_queue.sh committed this session.
   - NEXT: queue C 4.6-PeriodicLim (lim_queue.sh: cpu, g1, bj/wang/limoff/pervenk variants, ab, poison, nf), D regress (default 8 + invper_ausm viscper_ausm invper_dt invper_ausmm invper_lim -> g1-regress-r1 in Lim dir), E ONE MERGE request (review-39 E).
+
+- 2026-11-27T17:04:10-05:00 [loop] round 176 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_163009_176.log
