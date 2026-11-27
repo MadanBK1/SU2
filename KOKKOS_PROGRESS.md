@@ -122,3 +122,5 @@ READY FOR REVIEW: MERGE: 4.6-PeriodicNS — CPU sanity PASS (21 iters, rc=0); G1
   - NEXT: queue C 4.6-PeriodicLim (lim_queue.sh: cpu, g1, bj/wang/limoff/pervenk variants, ab, poison, nf), D regress (default 8 + invper_ausm viscper_ausm invper_dt invper_ausmm invper_lim -> g1-regress-r1 in Lim dir), E ONE MERGE request (review-39 E).
 
 - 2026-11-27T17:04:10-05:00 [loop] round 176 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_163009_176.log
+
+- 2026-11-27T17:21:50-05:00 [loop] round 177 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_170430_177.log
