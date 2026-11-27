@@ -22,6 +22,10 @@ if get_option('enable-kokkos')
                         'solvers/kokkos/CNEMOKokkosUpwind.cpp',
                         'solvers/kokkos/CNEMOKokkosCentered.cpp',
                         'solvers/kokkos/CNEMOKokkosResidual.cpp',
+                        'solvers/kokkos/CNEMOKokkosResidualWall.cpp',
+                        'solvers/kokkos/CNEMOKokkosResidualSource.cpp',
+                        'solvers/kokkos/CNEMOKokkosResidualBCFlux2D.cpp',
+                        'solvers/kokkos/CNEMOKokkosResidualBCFlux3D.cpp',
                         'solvers/kokkos/CNEMOKokkosViscous.cpp',
                         'solvers/kokkos/CNEMOKokkosMG.cpp'])
 endif

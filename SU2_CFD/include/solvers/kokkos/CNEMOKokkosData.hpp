@@ -162,6 +162,7 @@ class CNEMOKokkosData {
     View3D<double> Rmatrix;                /*!< (nPoint, nDim, nDim) least-squares R (device only, not downloaded) */
     View2D<double> Limiter, PrimMax, PrimMin; /*!< (nPoint, nPrimVarGrad) */
     View1D<double> LimiterEps2;               /*!< (nPrimVarGrad) limiter eps^2 per variable */
+    View1D<double> LimiterGeo;                /*!< (nPointDomain) SHARP_EDGES / WALL_DISTANCE geometric factor */
     View1D<double> LocalCFL, MaxLambdaInv, MaxLambdaVisc, DeltaTime, Lambda; /*!< (nPoint) */
     View1D<double> LamVisc, ThermalCond, ThermalCondVe;                      /*!< (nPoint), NS only */
 
@@ -338,6 +339,13 @@ class CNEMOKokkosData {
    */
   void ComputeLimiter(int kind, double umusclKappa, double epsVenkat, double* hostLim, double* hostMax,
                       double* hostMin);
+  /*!
+   * \brief 4.6-Limiters: per-point geometric factor of SHARP_EDGES / WALL_DISTANCE (CLimiterDetails::geometricFactor,
+   *        evaluated on the host from the geometry distances, uploaded once: static mesh). Used by ComputeLimiter
+   *        when kind is SHARP_EDGES or WALL_DISTANCE.
+   */
+  void SetLimiterGeoFactor(const double* hostFactor);
+  bool LimiterGeoFactorValid() const { return limGeoValid; }
   /*! \brief Re-upload the host reconstruction gradient (when it was computed on the host or for A/B isolation). */
   void UploadGradient(bool reconstruction, const double* hostGrad);
   bool GradientOnDevice(bool reconstruction) const { return reconstruction ? gradRecValid : gradPrimValid; }
@@ -769,6 +777,7 @@ class CNEMOKokkosData {
   bool primDeviceValid = false, gradPrimValid = false, gradRecValid = false;
   bool secDeviceValid = false; /*!< device dPdU/dTdU/dTvedU/eves/Cvves/Gamma == host (set by SetPrimVar/UploadPrimitive) */
   bool limValid = false;       /*!< device Limiter == host domain rows (set by ComputeLimiter) */
+  bool limGeoValid = false;    /*!< st.LimiterGeo uploaded (SetLimiterGeoFactor) */
   bool consDeviceValid = false; /*!< device Solution == host (set by SetPrimVar, cleared by InvalidatePrimitive) */
   bool sensorValid = false;     /*!< device Sensor == host (uploaded by the upwind/BC stages, cleared by SetPrimVar) */
   bool lambdaValid = false;     /*!< device Lambda domain rows == host (set by ComputeMaxEigenvalue, cleared with Primitive) */

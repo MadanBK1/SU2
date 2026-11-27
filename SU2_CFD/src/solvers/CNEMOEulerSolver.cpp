@@ -2938,8 +2938,12 @@ std::string CNEMOEulerSolver::Device_LimiterUnsupported(const CConfig *config) c
   if (config->GetnMarker_Periodic() > 0) return "periodic";
   if (ForcedHost("lim")) return "SU2_KOKKOS_NEMO_HOST";
   const auto kind = config->GetKind_SlopeLimit_Flow();
-  if (kind != LIMITER::BARTH_JESPERSEN && kind != LIMITER::VENKATAKRISHNAN && kind != LIMITER::VENKATAKRISHNAN_WANG)
+  if (kind != LIMITER::BARTH_JESPERSEN && kind != LIMITER::VENKATAKRISHNAN && kind != LIMITER::VENKATAKRISHNAN_WANG &&
+      kind != LIMITER::SHARP_EDGES && kind != LIMITER::WALL_DISTANCE)
     return "limiter kind not ported";
+  /*--- 4.6-Limiters: the geometric factor is uploaded once (static mesh); moving grids re-evaluate the distances. ---*/
+  if ((kind == LIMITER::SHARP_EDGES || kind == LIMITER::WALL_DISTANCE) && dynamic_grid)
+    return "SHARP_EDGES / WALL_DISTANCE with dynamic grid";
   return "";
 #else
   return "no Kokkos";
@@ -2994,6 +2998,7 @@ void CNEMOEulerSolver::PrintDeviceStages(const CConfig *config) const {
   if (muscl && !center && lim != LIMITER::NONE && lim != LIMITER::VAN_ALBADA_EDGE)
     cout << "[KOKKOS_NEMO] stage limiter (" << (lim == LIMITER::VENKATAKRISHNAN ? "VENKATAKRISHNAN"
             : lim == LIMITER::BARTH_JESPERSEN ? "BARTH_JESPERSEN" : lim == LIMITER::VENKATAKRISHNAN_WANG ? "VENKATAKRISHNAN_WANG"
+            : lim == LIMITER::SHARP_EDGES ? "SHARP_EDGES" : lim == LIMITER::WALL_DISTANCE ? "WALL_DISTANCE"
             : "other") << "): " << where(Device_LimiterUnsupported(config)) << endl;
   else
     cout << "[KOKKOS_NEMO] stage limiter: not used" << endl;
@@ -3243,7 +3248,27 @@ bool CNEMOEulerSolver::Device_PrimitiveLimiter(CGeometry *geometry, const CConfi
 
   /*--- eps2 as CLimiterDetails<kind>::preprocess (Venkatakrishnan-Wang: K, eps2 from the device range). ---*/
   su2double eps = LimiterHelpers<>::epsilon();
-  if (kind == LIMITER::VENKATAKRISHNAN) {
+  if (kind == LIMITER::SHARP_EDGES || kind == LIMITER::WALL_DISTANCE) {
+    /*--- CLimiterDetails<SHARP_EDGES|WALL_DISTANCE>::preprocess (same eps2 as VENKATAKRISHNAN); the geometric
+     *    factor is evaluated with the CPU struct itself, once (static mesh), and uploaded. ---*/
+    su2double L = config->GetRefElemLength();
+    su2double Kc = config->GetVenkat_LimiterCoeff();
+    su2double eps1 = fabs(L*Kc);
+    eps = max(eps1*eps1*eps1, LimiterHelpers<>::epsilon());
+    if (!kokkosData->LimiterGeoFactorValid()) {
+      std::vector<double> gf(nPointDomain);
+      if (kind == LIMITER::SHARP_EDGES) {
+        CLimiterDetails<LIMITER::SHARP_EDGES> d;
+        d.preprocess(*geometry, *config);
+        for (unsigned long iPoint = 0; iPoint < nPointDomain; ++iPoint) gf[iPoint] = d.geometricFactor(iPoint, *geometry);
+      } else {
+        CLimiterDetails<LIMITER::WALL_DISTANCE> d;
+        d.preprocess(*geometry, *config);
+        for (unsigned long iPoint = 0; iPoint < nPointDomain; ++iPoint) gf[iPoint] = d.geometricFactor(iPoint, *geometry);
+      }
+      kokkosData->SetLimiterGeoFactor(gf.data());
+    }
+  } else if (kind == LIMITER::VENKATAKRISHNAN) {
     su2double L = config->GetRefElemLength();
     su2double Kc = config->GetVenkat_LimiterCoeff();
     su2double eps1 = fabs(L*Kc);

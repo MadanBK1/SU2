@@ -268,7 +268,8 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | Convection | other upwind / centered (JST) | host fallback | not ported |
 | Reconstruction | MUSCL (GG, WLS), Venkatakrishnan, BJ, Venkat-Wang, van Albada, none | device-resident | |
 | Reconstruction | LEAST_SQUARES (unweighted) gradients | device (stage) / resident OFF | resident needs GG or WLS |
-| Reconstruction | other limiters, periodic LS / limiter | host fallback | |
+| Reconstruction | SHARP_EDGES, WALL_DISTANCE limiters | device-resident (4.6-Limiters, merged 2026-11-27: G1 strict invwedge_ausm SHARP_EDGES + super_cat WALL_DISTANCE bitwise, A/B Limiter non-bitwise=0, 8-case regressions bitwise; noise floor pending) | geometric factor host-evaluated (CLimiterDetails) and uploaded once; dynamic grid -> host |
+| Reconstruction | other limiters (e.g. van Albada edge limiter variants not listed), periodic LS / limiter | host fallback | |
 | Viscous | laminar NS (CAvgGradCorrected_NEMO) | device-resident | |
 | Viscous | turbulence (SA/SST), wall functions | host fallback | eddy viscosity from the host turbulence solver |
 | Source | chemistry + V-T | device-resident | |
