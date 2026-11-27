@@ -26,8 +26,8 @@ You are continuing a validated port of SU2's two-temperature NEMO solver to Kokk
 
 ## 0. Restart protocol (do this every session)
 1. `cd` to the clone, run `git checkout su2kokkos_qwenlocal_agent`, then `git status` and `git log --oneline -5`. Stop if you are not on that branch.
-2. Read `KOKKOS_PROGRESS.md` (create it if missing). It is the only memory you have between sessions.
-3. Read the newest section of `REVIEW_NOTES.md` (from the Claude reviewer; never edit that file). Do its **Agent: do next** items (tests/analysis), then write `READY FOR REVIEW` with the results (see ROLE above).
+2. Read `KOKKOS_PROGRESS.md` (create it if missing). It is the only memory you have between sessions. It must stay SHORT (< 15 KB): read it with `head -30 KOKKOS_PROGRESS.md; tail -40 KOKKOS_PROGRESS.md`. Old history is in `KOKKOS_PROGRESS_ARCHIVE.md` (grep it only; never read it whole). Keep each entry ≤ 5 lines.
+3. Read ONLY the newest section of `REVIEW_NOTES.md` (`head -45 REVIEW_NOTES.md`; older sections are in REVIEW_NOTES_ARCHIVE.md) (from the Claude reviewer; never edit that file). Do its **Agent: do next** items (tests/analysis), then write `READY FOR REVIEW` with the results (see ROLE above).
 4. After every meaningful step, append to `KOKKOS_PROGRESS.md`: date, what you did, the exact commands, pass/fail numbers, and the next step.
 5. Work on **one item per session**. When the item is committed, or your context is getting long, update `KOKKOS_PROGRESS.md`, commit it, and tell the user: "restart me with the same prompt". Never rely on remembering earlier chat.
 
