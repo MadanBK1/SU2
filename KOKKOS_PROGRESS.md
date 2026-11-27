@@ -27,3 +27,5 @@
   - PASS criteria: rc=0, 21 residual rows, no periodic/matching error. If preprocessing fails on matching vertices: flip invper_ausm.cfg translation 2.0 -> -2.0, rerun as r2, note it.
   - NEXT on pass: archive cpu-per-r1.log + log.txt -> validation_logs/2026-11-27_4.6-Periodic/ + INDEX row + commit; then step 3 G1 strict `.g1per.sh` -> g1-per-r1.log. Limiter step 6 noise floor (.nflim.sh) still owed (run + archive, no merge request).
 - 2026-11-27T04:44:47-05:00 [loop] round 150 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_040551_150.log
+
+- 2026-11-27T06:43:52-05:00 [loop] round 158 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_062426_158.log
