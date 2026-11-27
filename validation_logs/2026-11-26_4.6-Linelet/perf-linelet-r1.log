@@ -1,0 +1,7 @@
+# 4.6-Linelet step 7: perf lines from steps 2 (super_cat) and 3 (invwedge_lusgs), strict binary
+--- step 2 super_cat (g1-linelet-visc-r1)
+[KOKKOS] LINELET device apply: linelets=369 linelet points=10963 jacobi points=14867 (rank 0)
+[KOKKOS_NEMO_PERF] device LINELET applies=76 (1.78167 s incl. verification)
+--- step 3 invwedge_lusgs (g1-linelet-inv-r1)
+[KOKKOS] LINELET device apply: linelets=369 linelet points=10963 jacobi points=14867 (rank 0)
+[KOKKOS_NEMO_PERF] device LINELET applies=110 (2.68363 s incl. verification)
