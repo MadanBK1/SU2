@@ -529,6 +529,114 @@ void CSysMatrix<ScalarType>::EnsureKokkosILUStructure() {
  * using dependency levels. Rows in one level are independent, while levels are
  * fenced to preserve the exact triangular dependency ordering portably across
  * CUDA, HIP, and SYCL execution spaces. ---*/
+namespace {
+
+/*--- 4.8-ILUApplyHyb: row bodies of the ILU(0) triangular solves, moved verbatim out of the former persistent
+ *    single-team kernels so that a single-team segment and a one-thread-per-row level launch execute the same
+ *    statements in the same order (results do not depend on the segmentation). ---*/
+template <class T>
+KOKKOS_INLINE_FUNCTION void DeviceILUForwardRow(unsigned long i, const T* factors, const unsigned long* rows,
+                                                const unsigned long* diagonal, const unsigned long* columns,
+                                                const T* input, T* output, unsigned long block_size,
+                                                unsigned long block_entries) {
+  const auto out_i = i * block_size;
+
+  for (unsigned long i_var = 0; i_var < block_size; ++i_var)
+    output[out_i + i_var] = input[out_i + i_var];
+
+  for (auto index = rows[i]; index < diagonal[i]; ++index) {
+    const auto j = columns[index];
+    const auto out_j = j * block_size;
+    const auto block = factors + index * block_entries;
+
+    for (unsigned long i_var = 0; i_var < block_size; ++i_var) {
+      T value = 0;
+      for (unsigned long j_var = 0; j_var < block_size; ++j_var)
+        value += block[i_var * block_size + j_var] * output[out_j + j_var];
+
+      output[out_i + i_var] -= value;
+    }
+  }
+}
+
+template <class T>
+KOKKOS_INLINE_FUNCTION void DeviceILUBackwardRow(unsigned long i, const T* factors, const unsigned long* rows,
+                                                 const unsigned long* diagonal, const unsigned long* columns,
+                                                 T* output, unsigned long block_size, unsigned long block_entries,
+                                                 unsigned long domain_points) {
+  const auto out_i = i * block_size;
+
+  T rhs[20];
+
+  for (unsigned long i_var = 0; i_var < block_size; ++i_var)
+    rhs[i_var] = output[out_i + i_var];
+
+  for (auto index = diagonal[i] + 1; index < rows[i + 1]; ++index) {
+    const auto j = columns[index];
+
+    /*--- Match CPU BackwardSolve(iPoint,nPointDomain).
+     * Halo columns are not part of the local triangular solve. ---*/
+    if (j >= domain_points) break;
+
+    const auto out_j = j * block_size;
+    const auto block = factors + index * block_entries;
+
+    for (unsigned long i_var = 0; i_var < block_size; ++i_var) {
+      T value = 0;
+
+      for (unsigned long j_var = 0; j_var < block_size; ++j_var)
+        value += block[i_var * block_size + j_var] * output[out_j + j_var];
+
+      rhs[i_var] -= value;
+    }
+  }
+
+  const auto inv_diag = factors + diagonal[i] * block_entries;
+
+  for (unsigned long i_var = 0; i_var < block_size; ++i_var) {
+    T value = 0;
+
+    for (unsigned long j_var = 0; j_var < block_size; ++j_var)
+      value += inv_diag[i_var * block_size + j_var] * rhs[j_var];
+
+    output[out_i + i_var] = value;
+  }
+}
+
+/*--- SU2_KOKKOS_ILU_APPLY=single: former persistent single-team apply. Otherwise hybrid: a level with
+ *    >= SU2_KOKKOS_ILU_WIDE rows (default 256, >= 1) gets its own launch over the whole device, runs of narrower
+ *    levels stay in one single-team launch. SU2_KOKKOS_ILU_TEAM: team size of the narrow segments (default 64). ---*/
+unsigned long ILUWideThreshold() {
+  const char* mode = std::getenv("SU2_KOKKOS_ILU_APPLY");
+  if (mode && std::string(mode) == "single") return 0;
+  const char* w = std::getenv("SU2_KOKKOS_ILU_WIDE");
+  const long v = w ? std::atol(w) : 256;
+  return static_cast<unsigned long>(v < 1 ? 1 : v);
+}
+
+int ILUTeamSize() {
+  const char* t = std::getenv("SU2_KOKKOS_ILU_TEAM");
+  const long v = t ? std::atol(t) : 64;
+  return static_cast<int>(v < 1 ? 1 : v);
+}
+
+/*--- Same segmentation as SegmentLevels (LU_SGS), on a raw level pointer: triples (l0, l1, wide). ---*/
+void SegmentILULevels(const unsigned long* ptr, unsigned long nLev, unsigned long wide,
+                      std::vector<unsigned long>& seg) {
+  seg.clear();
+  auto isWide = [&](unsigned long l) { return wide > 0 && ptr[l + 1] - ptr[l] >= wide; };
+  unsigned long l = 0;
+  while (l < nLev) {
+    const bool w = isWide(l);
+    auto e = l + 1;
+    if (!w) while (e < nLev && !isWide(e)) ++e;
+    seg.push_back(l); seg.push_back(e); seg.push_back(w ? 1 : 0);
+    l = e;
+  }
+}
+
+}  // namespace
+
 template <class ScalarType>
 void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<ScalarType>& vec,
                                                             CSysVector<ScalarType>& prod,
@@ -544,17 +652,20 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
   if (vec.GetNVar() != nVar || prod.GetNVar() != nVar)
     SU2_MPI::Error("Incompatible vector dimensions in Kokkos ILU apply.", CURRENT_FUNCTION);
 #endif
+  if (nVar > 20) SU2_MPI::Error("Kokkos ILU apply supports at most 20 variables per block.", CURRENT_FUNCTION);
 
   using execution_space = Kokkos::DefaultExecutionSpace;
   using team_policy = Kokkos::TeamPolicy<execution_space>;
+  using range_policy = Kokkos::RangePolicy<execution_space>;
   using member_type = typename team_policy::member_type;
 
   execution_space exec;
 
-  /*--- 64 threads was tuned for V100. Cap by backend concurrency so host
-   * backends (Serial: max team size 1) remain valid. ---*/
+  /*--- Narrow segments: one team (64 threads tuned for V100 by default). Cap by backend concurrency so host
+   *    backends (Serial: max team size 1) remain valid. ---*/
+  static const int team_request = ILUTeamSize();
   const int ilu_team_size = static_cast<int>(
-      std::min<long>(64, static_cast<long>(exec.concurrency())));
+      std::min<long>(team_request, static_cast<long>(exec.concurrency())));
 
   const auto factors = d_ILU_matrix;
   const auto rows = d_row_ptr_ilu;
@@ -566,128 +677,97 @@ void CSysMatrix<ScalarType>::KokkosComputeILUPreconditioner(const CSysVector<Sca
   const auto input = vec.GetDevicePointer();
   const auto output = prod.GetDevicePointer();
 
-  const auto block_size = nVar;
-  const auto block_entries = nVar * nVar;
+  const unsigned long block_size = nVar;
+  const unsigned long block_entries = nVar * nVar;
   const auto n_levels = levels_ilu.getOuterSize();
-  const auto domain_points = nPointDomain;
+  const unsigned long domain_points = nPointDomain;
+  const unsigned long* h_level_ptr = levels_ilu.outerPtr();
 
-  /*--- Persistent level-scheduled forward substitution.
-   *
-   * There is deliberately one league team.  Rows within a dependency level
-   * execute in parallel through TeamThreadRange, then the complete team
-   * synchronizes before advancing to the next level.  This preserves the
-   * triangular level ordering while avoiding one kernel launch per level.
-   * ---*/
-  Kokkos::parallel_for(
-      "SU2::KokkosILUForwardPersistent",
-      team_policy(exec, 1, ilu_team_size),
-      KOKKOS_LAMBDA(const member_type& team) {
-        for (unsigned long level = 0; level < n_levels; ++level) {
-          const auto begin = level_ptr[level];
-          const auto end = level_ptr[level + 1];
+  /*--- Segments of the level sequence (host only; O(levels), no device traffic). ---*/
+  static const unsigned long wide = ILUWideThreshold();
+  std::vector<unsigned long> seg;
+  SegmentILULevels(h_level_ptr, n_levels, wide, seg);
+  static bool reported = false;
+  if (!reported && SU2_MPI::GetRank() == MASTER_NODE) {
+    reported = true;
+    unsigned long n_wide = 0;
+    for (size_t s = 0; s + 2 < seg.size(); s += 3) if (seg[s + 2]) n_wide += seg[s + 1] - seg[s];
+    if (wide == 0)
+      std::cout << "[KOKKOS] ILU(0) device apply: single-team (levels=" << n_levels << ", team=" << ilu_team_size
+                << ")" << std::endl;
+    else
+      std::cout << "[KOKKOS] ILU(0) device apply: hybrid (wide >= " << wide << " rows; levels=" << n_levels
+                << " wide=" << n_wide << " segments=" << seg.size() / 3 << " team=" << ilu_team_size << ")"
+                << std::endl;
+  }
 
-          Kokkos::parallel_for(
-              Kokkos::TeamThreadRange(team, begin, end),
-              [&](const unsigned long k) {
-                const auto i = level_rows[k];
-                const auto out_i = i * block_size;
+  /*--- Forward substitution, levels in ascending order. Wide level: one thread per row over the device.
+   *    Narrow run of levels: one league team, rows of a level through TeamThreadRange, team barrier between
+   *    levels. All launches go to the same execution-space instance, so stream order = level order. ---*/
+  for (size_t s = 0; s + 2 < seg.size(); s += 3) {
+    const unsigned long l0 = seg[s], l1 = seg[s + 1];
+    if (seg[s + 2]) {
+      for (auto level = l0; level < l1; ++level) {
+        Kokkos::parallel_for(
+            "SU2::KokkosILUForwardLevel", range_policy(exec, h_level_ptr[level], h_level_ptr[level + 1]),
+            KOKKOS_LAMBDA(const unsigned long k) {
+              DeviceILUForwardRow(level_rows[k], factors, rows, diagonal, columns, input, output, block_size,
+                                  block_entries);
+            });
+      }
+    } else {
+      Kokkos::parallel_for(
+          "SU2::KokkosILUForwardPersistent", team_policy(exec, 1, ilu_team_size),
+          KOKKOS_LAMBDA(const member_type& team) {
+            for (unsigned long level = l0; level < l1; ++level) {
+              Kokkos::parallel_for(Kokkos::TeamThreadRange(team, level_ptr[level], level_ptr[level + 1]),
+                                   [&](const unsigned long k) {
+                                     DeviceILUForwardRow(level_rows[k], factors, rows, diagonal, columns, input,
+                                                         output, block_size, block_entries);
+                                   });
+              /*--- All rows in this level must finish before any row of the next level starts
+               *    (league_size == 1: the team barrier synchronizes the whole kernel). ---*/
+              team.team_barrier();
+            }
+          });
+    }
+  }
 
-                for (unsigned long i_var = 0; i_var < block_size; ++i_var)
-                  output[out_i + i_var] = input[out_i + i_var];
-
-                for (auto index = rows[i]; index < diagonal[i]; ++index) {
-                  const auto j = columns[index];
-                  const auto out_j = j * block_size;
-                  const auto block = factors + index * block_entries;
-
-                  for (unsigned long i_var = 0; i_var < block_size; ++i_var) {
-                    ScalarType value = 0;
-                    for (unsigned long j_var = 0; j_var < block_size; ++j_var)
-                      value += block[i_var * block_size + j_var] *
-                               output[out_j + j_var];
-
-                    output[out_i + i_var] -= value;
-                  }
-                }
-              });
-
-          /*--- All rows in this dependency level must finish before any row
-           * in the following level starts.  Since league_size == 1 this team
-           * barrier synchronizes the complete persistent solve kernel. ---*/
-          team.team_barrier();
-        }
-      });
-
-  /*--- Persistent level-scheduled backward substitution.
-   *
-   * Same dependency levels are traversed in reverse.  Halo columns are
-   * excluded exactly as in the validated CPU/device implementation.
-   * ---*/
-  Kokkos::parallel_for(
-      "SU2::KokkosILUBackwardPersistent",
-      team_policy(exec, 1, ilu_team_size),
-      KOKKOS_LAMBDA(const member_type& team) {
-        for (unsigned long level_plus_one = n_levels;
-             level_plus_one > 0; --level_plus_one) {
-          const auto level = level_plus_one - 1;
-          const auto begin = level_ptr[level];
-          const auto end = level_ptr[level + 1];
-
-          Kokkos::parallel_for(
-              Kokkos::TeamThreadRange(team, begin, end),
-              [&](const unsigned long k) {
-                const auto i = level_rows[k];
-                const auto out_i = i * block_size;
-
-                ScalarType rhs[20];
-
-                for (unsigned long i_var = 0; i_var < block_size; ++i_var)
-                  rhs[i_var] = output[out_i + i_var];
-
-                for (auto index = diagonal[i] + 1;
-                     index < rows[i + 1]; ++index) {
-                  const auto j = columns[index];
-
-                  /*--- Match CPU BackwardSolve(iPoint,nPointDomain).
-                   * Halo columns are not part of the local triangular solve. ---*/
-                  if (j >= domain_points) break;
-
-                  const auto out_j = j * block_size;
-                  const auto block = factors + index * block_entries;
-
-                  for (unsigned long i_var = 0; i_var < block_size; ++i_var) {
-                    ScalarType value = 0;
-
-                    for (unsigned long j_var = 0; j_var < block_size; ++j_var)
-                      value += block[i_var * block_size + j_var] *
-                               output[out_j + j_var];
-
-                    rhs[i_var] -= value;
-                  }
-                }
-
-                const auto inv_diag =
-                    factors + diagonal[i] * block_entries;
-
-                for (unsigned long i_var = 0; i_var < block_size; ++i_var) {
-                  ScalarType value = 0;
-
-                  for (unsigned long j_var = 0; j_var < block_size; ++j_var)
-                    value +=
-                        inv_diag[i_var * block_size + j_var] * rhs[j_var];
-
-                  output[out_i + i_var] = value;
-                }
-              });
-
-          team.team_barrier();
-        }
-      });
+  /*--- Backward substitution: the same levels in reverse, i.e. segments in reverse order and, inside a narrow
+   *    segment, levels from l1-1 down to l0. Halo columns are excluded exactly as before. ---*/
+  for (size_t s = seg.size(); s >= 3; s -= 3) {
+    const unsigned long l0 = seg[s - 3], l1 = seg[s - 2];
+    if (seg[s - 1]) {
+      for (auto level_plus_one = l1; level_plus_one > l0; --level_plus_one) {
+        const auto level = level_plus_one - 1;
+        Kokkos::parallel_for(
+            "SU2::KokkosILUBackwardLevel", range_policy(exec, h_level_ptr[level], h_level_ptr[level + 1]),
+            KOKKOS_LAMBDA(const unsigned long k) {
+              DeviceILUBackwardRow(level_rows[k], factors, rows, diagonal, columns, output, block_size,
+                                   block_entries, domain_points);
+            });
+      }
+    } else {
+      Kokkos::parallel_for(
+          "SU2::KokkosILUBackwardPersistent", team_policy(exec, 1, ilu_team_size),
+          KOKKOS_LAMBDA(const member_type& team) {
+            for (unsigned long level_plus_one = l1; level_plus_one > l0; --level_plus_one) {
+              const auto level = level_plus_one - 1;
+              Kokkos::parallel_for(Kokkos::TeamThreadRange(team, level_ptr[level], level_ptr[level + 1]),
+                                   [&](const unsigned long k) {
+                                     DeviceILUBackwardRow(level_rows[k], factors, rows, diagonal, columns, output,
+                                                          block_size, block_entries, domain_points);
+                                   });
+              team.team_barrier();
+            }
+          });
+    }
+  }
 
   /*--- Forward and backward kernels use the same execution-space instance and
    * are therefore ordered on the same backend queue.  Synchronize once before
    * MPI or host communication consumes the completed triangular solve. ---*/
-  exec.fence("SU2::Kokkos persistent ILU triangular solve complete");
+  exec.fence("SU2::Kokkos ILU triangular solve complete");
 
   /*--- Preserve existing ILU halo semantics. ---*/
   if (config->GetKokkosGPUAwareMPI()) {

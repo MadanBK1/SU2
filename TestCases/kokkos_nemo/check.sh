@@ -57,7 +57,8 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
-declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
+declare -A EXPECT=( [invwedge_ausm]="[KOKKOS] ILU(0) device apply:"  # 4.8-ILUApplyHyb: hybrid (default) or single-team (SU2_KOKKOS_ILU_APPLY=single)
+                    [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [invwedge_roe]="stage upwind (ROE + MUSCL, residual + Jacobian): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [invwedge_msw]="stage upwind (MSW + MUSCL, residual + Jacobian): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
                     [invwedge_ausmplusup2]="stage upwind (AUSM+-up2, residual): device|stage bc:FAR_FIELD (Inlet): device|stage bc:OUTLET_FLOW (Exit): device|stage bc:EULER_WALL (Wall): device"
