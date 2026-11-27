@@ -31,6 +31,8 @@ case $CASE in
     ITERS=${ITERS_DYN:-16} ;; # dual-time case: fixed 4x4=16 history rows; compare the final state
   invper_ausm) CFG=$SU2/TestCases/kokkos_nemo/meshes/invper_ausm.cfg; HREL=0 ;;  # 4.6-Periodic
   viscper_ausm) CFG=$SU2/TestCases/kokkos_nemo/meshes/viscper_ausm.cfg; HREL=0 ;;  # 4.6-PeriodicNS
+  invper_dt) CFG=$SU2/TestCases/kokkos_nemo/meshes/invper_dt.cfg; HREL=0
+    ITERS=${ITERS_DYN:-16} ;; # 4.6-PeriodicDT: 4x4 dual-time rows, compare the final state
   *) echo "unknown CASE $CASE"; exit 2 ;;
 esac
 st=0

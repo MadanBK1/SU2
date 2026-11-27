@@ -55,7 +55,8 @@ declare -A CFG=( [invwedge_ausm]=$TC/invwedge/invwedge_ausm.cfg
                  [invwedge_mg]=$TC/invwedge/invwedge_mg.cfg
                  [invwedge_dyn]=$TC/invwedge/invwedge_dyn.cfg
                  [invper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/invper_ausm.cfg
-                 [viscper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/viscper_ausm.cfg )
+                 [viscper_ausm]=$SU2/TestCases/kokkos_nemo/meshes/viscper_ausm.cfg
+                 [invper_dt]=$SU2/TestCases/kokkos_nemo/meshes/invper_dt.cfg )
 declare -A REF=( [invwedge_ausm]="-1.073693 -1.598456 -18.298997 -18.626405 -18.572419 2.241766 1.868557 5.286079 0.843747" )
 # Stage line the YES run must print (guards against a silent host fallback passing G1 trivially).
 # Several required lines are separated by '|'.
@@ -80,6 +81,10 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [viscper_ausm_nsoff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [viscper_ausm_pnsab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
                     [viscper_ausm_exp]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage viscous residual (CAvgGradCorrected_NEMO): device|device-resident state (Step 6): ON"
+                    [invper_dt]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage dual-time source (2nd order): device|device-resident state (Step 6): ON"
+                    [invper_dt_dtoff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
+                    [invper_dt_dtab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
+                    [invper_dt_dt1st]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage dual-time source (1st order): device|device-resident state (Step 6): ON"
                     [invper_ausm_peroff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_pervenk]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_perab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"

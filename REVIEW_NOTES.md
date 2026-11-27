@@ -2,6 +2,33 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 38 (MERGE 4.6-PeriodicNS DEFERRED: logs not committed; Dev: 4.6-PeriodicDT)
+
+Reviewed: 690ab0f096. Gate claims look good and code is unchanged since 5a12c86 (only check.sh/check_noisefloor.sh EXPECT/case
+lines added). BUT `git ls-tree origin/su2kokkos_qwenlocal_agent validation_logs/2026-11-27_4.6-PeriodicNS/` is EMPTY: the
+12 INDEX rows cite logs that are not in git (same as review 36). Rule: no merge without archived logs. Nothing merged.
+Dev code this round (4.6-PeriodicDT, not built/run; same getenv pattern as PeriodicNS):
+- CNEMOEulerSolver::Device_PeriodicUnsupported: dual time no longer gated (SU2_KOKKOS_NEMO_PERIODIC_DT=0 restores it).
+  Dual-time source is added in Space_Integration before BC_Periodic on both paths; no periodic comms of its own.
+- New case meshes/invper_dt.cfg (invper_ausm + DUAL_TIME_STEPPING-2ND_ORDER, dt 1e-6, 4 x 4 inner); check.sh case `invper_dt`
+  + EXPECT keys invper_dt, invper_dt_dtoff, invper_dt_dtab, invper_dt_dt1st; check_noisefloor.sh case invper_dt (16 rows).
+
+Agent: do next
+1. FIRST archive PeriodicNS logs: copy the 12 logs + runner scripts to validation_logs/2026-11-27_4.6-PeriodicNS/ with the
+   exact INDEX names; `git add -f validation_logs/2026-11-27_4.6-PeriodicNS/`; check `git ls-files validation_logs/2026-11-27_4.6-PeriodicNS | wc -l` >= 12;
+   commit "Validation: archive 4.6-PeriodicNS gate logs"; `git push`; verify with `git ls-tree origin/su2kokkos_qwenlocal_agent validation_logs/2026-11-27_4.6-PeriodicNS/`.
+   Lost log -> rerun that gate as -r(N+1) + INDEX row. Make the runner write logs DIRECTLY into validation_logs/<dir>/ from now on.
+2. Build strict + serial -> validation_logs/2026-11-27_4.6-PeriodicDT/build-pdt-r1.log, build-pdt-serial-r1.log. Compile error -> fix (smallest change).
+3. CPU sanity: strict, ENABLE_KOKKOS=NO, invper_dt.cfg -> cpu-pdt-r1.log (rc=0, 16 rows). Diverges -> TIME_STEP= 1e-7 (r2).
+4. G1 strict: `BIN=<strict> REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 bash TestCases/kokkos_nemo/check.sh invper_dt` -> g1-pdt-r1.log.
+5. Variants: (a) EXTRA_CFG="TIME_MARCHING= DUAL_TIME_STEPPING-1ST_ORDER" RUN_TAG=_dt1st -> g1-pdt-1st-r1.log; (b) MUSCL_FLOW= YES;SLOPE_LIMITER_FLOW= VAN_ALBADA_EDGE
+   -> g1-pdt-muscl-r1.log; (c) control SU2_KOKKOS_NEMO_PERIODIC_DT=0 RUN_TAG=_dtoff -> g1-pdt-off-r1.log.
+6. A/B: SU2_KOKKOS_STAGE_VERIFY=1 RUN_TAG=_dtab -> ab-pdt-r1.log (fail: <= 20 StageCompare lines in progress log). Poison -> poison-pdt-r1.log.
+7. Regressions: default 8 + invper_ausm viscper_ausm, strict bitwise -> g1-pdt-regress-r1.log. Noise floor CASE=invper_dt K=10 -> nf-pdt-r1.log.
+8. All PASS + logs committed AND pushed -> one REVIEW_REQUEST `reason: MERGE: 4.6-PeriodicNS + 4.6-PeriodicDT — <results>`.
+   Unlocalized failure after 3 sessions -> `HEAVY: 4.6-PeriodicDT: <stage + iter + StageCompare lines>`.
+Next heavy items: periodic + MG, PERIODIC_SENSOR (AUSM+M / JST), periodic limiters (BJ/Venkat).
+
 ## 2026-11-27 — review 37 (MERGED 4.6-Periodic; Dev: 4.6-PeriodicNS)
 
 Reviewed: 1c2ed85537. Logs committed (23 files) + INDEX rows OK. MERGED into su2kokkos b8b11be (code 1c0b4f8 incl. CSolver

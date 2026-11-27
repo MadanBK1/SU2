@@ -4409,8 +4409,15 @@ std::string CNEMOEulerSolver::Device_PeriodicUnsupported(const CConfig *config) 
   if (config->GetnMGLevels() > 0) return "periodic markers with multigrid";
   if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM && config->GetKind_ConvNumScheme_Flow() == SPACE_UPWIND)
     return "periodic markers with AUSM+M (pressure sensor periodic comms)";
+  /*--- 4.6-PeriodicDT: dual time is allowed. CIntegration::Space_Integration adds SetResidual_DualTime (device kernel
+   *    "stage dual-time source") before BC_Periodic on both paths, and the dual-time source has no periodic comms of its
+   *    own, so the staged PERIODIC_RESIDUAL rows already carry the time term exactly as on the CPU. The time-level push
+   *    (SetDualTime_Device) is per point. SU2_KOKKOS_NEMO_PERIODIC_DT=0 restores the gate (A/B control). ---*/
   const auto tm = config->GetTime_Marching();
-  if (tm != TIME_MARCHING::STEADY && tm != TIME_MARCHING::TIME_STEPPING) return "periodic markers with dual time";
+  if (tm != TIME_MARCHING::STEADY && tm != TIME_MARCHING::TIME_STEPPING) {
+    const char* e = std::getenv("SU2_KOKKOS_NEMO_PERIODIC_DT");
+    if (e != nullptr && std::string(e) == "0") return "periodic markers with dual time (SU2_KOKKOS_NEMO_PERIODIC_DT=0)";
+  }
   return "";
 }
 
