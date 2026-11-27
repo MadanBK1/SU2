@@ -933,3 +933,7 @@ READY FOR REVIEW: MERGE: 4.8-LUSGSHyb — steps 1-9 all PASS: build strict+seria
   - THIS SESSION: verified steps 5-7 logs (all in validation_logs/2026-11-26_4.6-Linelet/, 25 files: 17 regress + 7 nf + 1 perf); added INDEX rows for steps 6-7; committed all 25 logs + runner scripts .g1lineletregress.sh/.nflinelet.sh + INDEX.md (this commit); verified `git ls-tree` counts.
   - STATUS: review-27 queue 4.6-Linelet steps 1-7 ALL DONE: build strict+serial rc=0; G1 viscous super_cat + inviscid invwedge_lusgs LINELET OVERALL PASS bitwise (strict); A/B PRECOND_VERIFY build+apply non-bitwise=0; 8-case regressions bitwise; noise floor PASS 0.33/0.75; perf lines recorded. V100 G7 LINELET timing OPEN for Madan (review-27 command).
 READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial rc=0; G1 viscous super_cat + inviscid invwedge_lusgs LINELET bitwise (strict); A/B PRECOND_VERIFY compares>0 non-bitwise=0 (build 11, apply 76); 8-case regressions bitwise; noise floor K=10 ratios 0.33/0.75 <= 10; perf: applies=76 (1.78167 s)/applies=110 (2.68363 s) serial; 25 logs committed under validation_logs/2026-11-26_4.6-Linelet/ + INDEX rows 6-7 (V100 G7 timing OPEN for Madan)
+
+- 2026-11-27 (reviewer, review 30): stale request 20261126T205737 — 4.6-Linelet ALREADY MERGED (su2kokkos ffbb893). Do not re-request it. NEXT: 4.6-Limiters steps 1-6 (REVIEW_NOTES review 29).
+- STATUS: 4.6-Limiters dev code 332d230 awaiting build + G1 (not yet validated).
+- NEXT REQUEST only as `MERGE: 4.6-Limiters` after steps 1-6 pass and logs are committed.

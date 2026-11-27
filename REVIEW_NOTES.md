@@ -2,6 +2,15 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-27 — review 30 (stale request; nothing merged; no new dev code)
+
+Reviewed: bbacf34b2a. The request repeated `MERGE: 4.6-Linelet`, already merged (su2kokkos ffbb893, review 29); it was
+filed 12 min after review 29's REVIEW_DONE because the old READY line was still in the last 3 lines of KOKKOS_PROGRESS.md.
+The reviewer appended 3 progress lines so it no longer is. If this repeats, restart the loop process (review-26 guard).
+
+Agent: do next — unchanged: the review-29 queue, 4.6-Limiters steps 1-6 (logs under validation_logs/2026-11-27_4.6-Limiters/,
+one INDEX row each). Request `MERGE: 4.6-Limiters` only after 1-6 pass and logs are committed.
+
 ## 2026-11-27 — review 29 (4.6-Linelet MERGED; new dev code 4.6-Limiters)
 
 Reviewed: 34636cb741. Merged into su2kokkos as ffbb893 (code bb0ab70: CPreconditioner.hpp, CSysMatrix.hpp/.cpp,
