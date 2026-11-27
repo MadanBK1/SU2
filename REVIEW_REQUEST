@@ -1,3 +1,3 @@
-id: 20261127T145710-891fe7f045
-head: 891fe7f0451d0951ecc802cdc70c6f3616b08dc1
-reason: READY FOR REVIEW: MERGE: 4.6-PeriodicNS — CPU sanity PASS (21 iters, rc=0); G1 strict viscper_ausm bitwise PASS (max|dres|=0.00e+00, field diff=0.00e+00); variants EULER_EXPLICIT (r2, new EXPECT key viscper_ausm_exp) + MUSCL/VAN_ALBADA + NS-gate control (SU2_KOKKOS_NEMO_PERIODIC_NS=0) all bitwise PASS; A/B stage-verify bitwise PASS; poison PASS; 9/9-case regression (default 8 + invper_ausm) bitwise PASS (349s); noise floor PASS (ratios 0.83/1.33, K=10). 12 logs + runner scripts under validation_logs/2026-11-27_4.6-PeriodicNS/ (committed) + 12 INDEX rows.
+id: 20261127T185331-e077c252d7
+head: e077c252d7a660aeedef32676dfd6eae5cb82f14
+reason: 
