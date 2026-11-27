@@ -1,0 +1,12 @@
+rc=0 residual_rows=21
+Deleted CVolumetricMovement class.
+Deleted CConfig container.
+Deleted nInst container.
+Deleted COutput class.
+-------------------------------------------------------------------------
+
+------------------------- Exit Success (SU2_CFD) ------------------------
+
+93:|                  Periodic boundary|                            PerLeft|
+147:Matching the periodic boundary points for marker pair 1.
+OVERALL: CPU SANITY PASS

@@ -1,0 +1,19 @@
+2026-11-27T13:57:32-05:00 START cpu-pns-r1 (code c4f21b5804)
+2026-11-27T13:57:33-05:00 END   cpu-pns-r1 rc=0 wall=1s :: OVERALL: CPU SANITY PASS 
+2026-11-27T13:57:33-05:00 START g1-pns-r1 (code c4f21b5804)
+2026-11-27T13:57:37-05:00 END   g1-pns-r1 rc=0 wall=4s :: OVERALL: PASS 
+2026-11-27T13:57:37-05:00 START g1-pns-exp-r1 (code c4f21b5804)
+2026-11-27T13:57:39-05:00 END   g1-pns-exp-r1 rc=1 wall=2s ::   expected stage line missing: stage viscous residual (CAvgGradCorrected_NEMO, residual + Jacobian): device OVERALL: FAIL 
+2026-11-27T13:57:39-05:00 START g1-pns-muscl-r1 (code c4f21b5804)
+2026-11-27T13:57:44-05:00 END   g1-pns-muscl-r1 rc=0 wall=5s :: OVERALL: PASS 
+2026-11-27T13:57:44-05:00 START g1-pns-nsoff-r1 (code c4f21b5804)
+2026-11-27T13:57:48-05:00 END   g1-pns-nsoff-r1 rc=0 wall=4s :: OVERALL: PASS 
+2026-11-27T13:57:48-05:00 START ab-pns-r1 (code c4f21b5804)
+2026-11-27T13:57:53-05:00 END   ab-pns-r1 rc=0 wall=5s :: OVERALL: PASS 
+2026-11-27T13:57:53-05:00 START poison-pns-r1 (code c4f21b5804)
+2026-11-27T13:57:58-05:00 END   poison-pns-r1 rc=0 wall=5s :: OVERALL: PASS 
+2026-11-27T13:57:58-05:00 START g1-pns-regress-r1 (code c4f21b5804)
+2026-11-27T14:03:47-05:00 END   g1-pns-regress-r1 rc=0 wall=349s :: OVERALL: PASS 
+2026-11-27T14:03:47-05:00 START nf-pns-r1 (code c4f21b5804)
+2026-11-27T14:04:03-05:00 END   nf-pns-r1 rc=0 wall=16s :: NOISEFLOOR OVERALL: PASS 
+2026-11-27T14:04:03-05:00 QUEUE FINISHED

@@ -1,0 +1,10 @@
+viscper_ausm NO (REF_MODE=HOST: YES, all NEMO stages host) exit=0 wall=1.96s
+viscper_ausm YES exit=0 wall=2.03s
+  residual row NO : [  0.165734  -0.357966  -9.752031 -13.726498  -7.389422   3.512293
+   2.955971   6.550521   4.659813]
+  residual row YES: [  0.165734  -0.357966  -9.752031 -13.726498  -7.389422   3.512293
+   2.955971   6.550521   4.659813]
+  max |dres| = 0.00e+00 (tol 0.0)
+  max field |diff|/max|field| = 0.00e+00 (tol 0.0)
+  viscper_ausm_pnspois: PASS
+OVERALL: PASS
