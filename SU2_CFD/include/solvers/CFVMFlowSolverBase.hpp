@@ -1155,7 +1155,7 @@ class CFVMFlowSolverBase : public CSolver {
    * \param[in] numerics - Description of the numerical method.
    * \param[in] config - Definition of the particular problem.
    */
-  void BC_Periodic(CGeometry* geometry, CSolver** solver_container, CNumerics* numerics, CConfig* config) final;
+  void BC_Periodic(CGeometry* geometry, CSolver** solver_container, CNumerics* numerics, CConfig* config) override;
 
   /*!
    * \brief Impose the interface state across sliding meshes.

@@ -151,6 +151,15 @@ protected:
   bool Device_ResidentActive() const;
   /*! \brief Device-resident MPI comms: download the send rows of the group, host comms, upload the receive rows. */
   void Device_StagedComms(CGeometry *geometry, const CConfig *config, MPI_QUANTITIES comm, int group);
+  /*!
+   * \brief 4.6-Periodic: unique sorted points of the periodic comms (Local_Point_PeriodicSend + Recv), built once.
+   *        The host periodic comms read / write only these rows, so the device rows around them are staged.
+   */
+  const std::vector<unsigned long>& Device_PeriodicRows(CGeometry *geometry);
+  std::vector<unsigned long> periodicRows;
+  bool periodicRowsBuilt = false;
+  /*! \brief 4.6-Periodic: why device-resident mode is off with periodic markers ("" = supported). */
+  std::string Device_PeriodicUnsupported(const CConfig *config) const;
 
   /*!
    * \brief Device (Kokkos) Step 8: NS viscous residual (CAvgGradCorrected_NEMO edges) into the device accumulator.
@@ -236,6 +245,13 @@ protected:
   void SetReferenceValues(const CConfig& config) final;
 
 public:
+
+  /*!
+   * \brief 4.6-Periodic: PERIODIC_RESIDUAL comms (CFVMFlowSolverBase::BC_Periodic). Device-resident: the residual /
+   *        time-step (/ Jacobian block) rows of the periodic points are staged around the host comms; otherwise the
+   *        device accumulator is moved to the host first (host-stage hook) and the base routine runs.
+   */
+  void BC_Periodic(CGeometry *geometry, CSolver **solver_container, CNumerics *numerics, CConfig *config) override;
   CNEMOEulerSolver() = delete;
 
   /*!

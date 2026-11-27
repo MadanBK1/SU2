@@ -1066,7 +1066,7 @@ void CNEMOKokkosData::PrintPerf() const {
   }
   for (int q = 0; q < static_cast<int>(HaloQuantity::N); ++q) {
     static const char* hn[] = {"SOLUTION", "PRIMITIVE_GRADIENT", "PRIMITIVE_GRAD_REC", "PRIMITIVE_LIMITER", "SENSOR",
-                               "AUXVAR_GRADIENT"};
+                               "AUXVAR_GRADIENT", "SOLUTION_OLD", "LAMBDA", "DELTA_TIME"};
     if (haloPerf[q].calls > 0)
       std::cout << "[KOKKOS_NEMO_PERF] MG " << iMesh << " halo " << hn[q] << " calls=" << haloPerf[q].calls
                 << " | " << haloPerf[q].time << " s | MPI send " << haloPerf[q].bytesMsg / 1e6 << " MB (rank 0)"

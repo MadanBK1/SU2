@@ -346,7 +346,18 @@ void CSolver::InitiatePeriodicComms(CGeometry *geometry,
   if (commType == PERIODIC_NONE) return;
 
   if (rotate_periodic && config->GetNEMOProblem()) {
-    SU2_MPI::Error("The NEMO solvers do not support rotational periodicity yet.", CURRENT_FUNCTION);
+    /*--- NEMO supports pure-translational periodicity (zero rotation
+     angles, identity rotation matrix). Only non-zero rotation angles
+     are not supported. ---*/
+    /*--- val_periodic_index is the periodic PAIR index, not a marker index: check the angles of every periodic
+     marker of this rank (GetPeriodicRotAngles on a non-periodic tag reads out of bounds). ---*/
+    for (unsigned short iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
+      if (config->GetMarker_All_KindBC(iMarker) != PERIODIC_BOUNDARY) continue;
+      const su2double *const rot_angles = config->GetPeriodicRotAngles(config->GetMarker_All_TagBound(iMarker));
+      if (rot_angles[0] != 0.0 || rot_angles[1] != 0.0 || rot_angles[2] != 0.0) {
+        SU2_MPI::Error("The NEMO solvers do not support rotational periodicity yet.", CURRENT_FUNCTION);
+      }
+    }
   }
 
   /*--- Local variables ---*/

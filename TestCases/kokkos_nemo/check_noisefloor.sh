@@ -29,12 +29,13 @@ case $CASE in
   invwedge_mg) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_mg.cfg; HREL=0 ;;
   invwedge_dyn) CFG=$SU2/TestCases/nonequilibrium/invwedge/invwedge_dyn.cfg; HREL=0
     ITERS=${ITERS_DYN:-16} ;; # dual-time case: fixed 4x4=16 history rows; compare the final state
+  invper_ausm) CFG=$SU2/TestCases/kokkos_nemo/meshes/invper_ausm.cfg; HREL=0 ;;  # 4.6-Periodic
   *) echo "unknown CASE $CASE"; exit 2 ;;
 esac
 st=0
 for it in $ITERS; do
   run() { # name bin mode
-    local d=$RUN/nf_${CASE}_${it}_$1; rm -rf $d; mkdir -p $d; cd $d; ln -sf $M/*.su2 .
+    local d=$RUN/nf_${CASE}_${it}_$1; rm -rf $d; mkdir -p $d; cd $d; ln -sf $M/*.su2 .; ln -sf $SU2/TestCases/kokkos_nemo/meshes/*.su2 . 2>/dev/null
     cp $CFG run.cfg; printf "\n" >> run.cfg; sed -i "/^ENABLE_KOKKOS/d; s/^ITER=.*/ITER= $it/; s/^OUTPUT_FILES=.*/OUTPUT_FILES= (RESTART_ASCII)/" run.cfg
     printf "\nENABLE_KOKKOS= %s\n" $3 >> run.cfg
     if [ -n "${EXTRA_CFG:-}" ]; then echo "$EXTRA_CFG" | tr ';' '\n' | while read -r l; do

@@ -27,6 +27,7 @@
 
 #include "../../include/solvers/CNEMOEulerSolver.hpp"
 #include "../../include/gradients/correctGradientsSymmetry.hpp"
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <type_traits>
@@ -321,6 +322,9 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
           config->GetKind_Linear_Solver_Prec() == LINELET)
         cout << "[KOKKOS_NEMO] stage linear preconditioner (LINELET apply): " << (deviceResident ? "device" : "host")
              << endl;
+      if (rank == MASTER_NODE && iMesh == MESH_0 && config->GetnMarker_Periodic() > 0)
+        cout << "[KOKKOS_NEMO] periodic comms (4.6-Periodic): "
+             << (deviceResident ? "device (staged periodic rows)" : "host") << endl;
       if (rank == MASTER_NODE && iMesh == MESH_0)
         cout << "[KOKKOS_NEMO] device-resident state (Step 6): "
              << (deviceResident ? std::string("ON (U, V, secondaries, gradient, limiter, dt, Non_Physical, residual, "
@@ -740,6 +744,12 @@ void CNEMOEulerSolver::SetMax_Eigenvalue(CGeometry *geometry, CConfig *config) {
       for (unsigned short iPeriodic = 1; iPeriodic <= config->GetnMarker_Periodic()/2; iPeriodic++) {
         InitiatePeriodicComms(geometry, config, iPeriodic, PERIODIC_MAX_EIG);
         CompletePeriodicComms(geometry, config, iPeriodic, PERIODIC_MAX_EIG);
+      }
+      if (config->GetnMarker_Periodic() > 0) {
+        /*--- 4.6-Periodic: the host comms changed Lambda of the periodic points (domain rows, already downloaded by
+         *    ComputeMaxEigenvalue); refresh those device rows, which the device centered residual reads. ---*/
+        const auto& pr = Device_PeriodicRows(geometry);
+        kokkosData->ScatterRowsFromHost(CNEMOKokkosData::HaloQuantity::LAMBDA, pr.data(), pr.size());
       }
       InitiateComms(geometry, config, MPI_QUANTITIES::MAX_EIGENVALUE);
       CompleteComms(geometry, config, MPI_QUANTITIES::MAX_EIGENVALUE);
@@ -1356,6 +1366,20 @@ void CNEMOEulerSolver::CompleteImplicitIteration(CGeometry *geometry, CSolver**,
   if (Device_ResidentActive()) {
     /*--- Device ComputeUnderRelaxationFactor + AddSolution into the resident U, staged SOLUTION comms. ---*/
     kokkosData->CompleteImplicit(config->GetMaxUpdateFractionFlow());
+    if (config->GetnMarker_Periodic() > 0) {
+      /*--- 4.6-Periodic: PERIODIC_IMPLICIT (passive face Solution / Solution_Old = master), as in
+       *    CompleteImplicitIteration_impl, on staged rows of the periodic points. ---*/
+      using HQ = CNEMOKokkosData::HaloQuantity;
+      const auto& pr = Device_PeriodicRows(geometry);
+      kokkosData->GatherRowsToHost(HQ::SOLUTION, pr.data(), pr.size());
+      kokkosData->GatherRowsToHost(HQ::SOLUTION_OLD, pr.data(), pr.size());
+      for (unsigned short iPeriodic = 1; iPeriodic <= config->GetnMarker_Periodic()/2; iPeriodic++) {
+        InitiatePeriodicComms(geometry, config, iPeriodic, PERIODIC_IMPLICIT);
+        CompletePeriodicComms(geometry, config, iPeriodic, PERIODIC_IMPLICIT);
+      }
+      kokkosData->ScatterRowsFromHost(HQ::SOLUTION, pr.data(), pr.size());
+      kokkosData->ScatterRowsFromHost(HQ::SOLUTION_OLD, pr.data(), pr.size());
+    }
     Device_StagedComms(geometry, config, MPI_QUANTITIES::SOLUTION, CNEMOKokkosData::G_SOLUTION);
     ComputeVerificationError(geometry, config);
     return;
@@ -3219,9 +3243,22 @@ bool CNEMOEulerSolver::Device_PrimitiveGradient(CGeometry *geometry, const CConf
   Kokkos::Timer timer;
   if (greenGauss) {
     const auto commPer = reconstruction? PERIODIC_PRIM_GG_R : PERIODIC_PRIM_GG;
+    /*--- 4.6-Periodic: the comms add the donor's partial gradient on the periodic rows (host container). Resident:
+     *    those rows come from the device first; both modes: the result goes back to the device rows (the device
+     *    limiter / upwind read them). ---*/
+    const bool per = config->GetnMarker_Periodic() > 0;
+    const auto hq = reconstruction ? K::HaloQuantity::GRADIENT_RECONSTRUCTION : K::HaloQuantity::GRADIENT_PRIMITIVE;
+    if (per && Device_ResidentActive()) {
+      const auto& pr = Device_PeriodicRows(geometry);
+      kokkosData->GatherRowsToHost(hq, pr.data(), pr.size());
+    }
     for (size_t iPeriodic = 1; iPeriodic <= config->GetnMarker_Periodic() / 2; ++iPeriodic) {
       InitiatePeriodicComms(geometry, config, iPeriodic, commPer);
       CompletePeriodicComms(geometry, config, iPeriodic, commPer);
+    }
+    if (per) {
+      const auto& pr = Device_PeriodicRows(geometry);
+      kokkosData->ScatterRowsFromHost(hq, pr.data(), pr.size());
     }
   }
   if (Device_ResidentActive()) {
@@ -3547,7 +3584,7 @@ std::string CNEMOEulerSolver::Device_DeferralUnsupported(const CConfig *config) 
   if (CNEMOKokkosData::StageVerifyEnabled()) return "SU2_KOKKOS_STAGE_VERIFY";
   if (EagerForced()) return "SU2_KOKKOS_NEMO_EAGER";
   /*--- Batch A: SetResidual_DualTime is a NEMO override with the host-stage hook (device or host). ---*/
-  if (config->GetnMarker_Periodic() > 0) return "periodic markers";
+  /*--- 4.6-Periodic: BC_Periodic is a NEMO override with the host-stage hook (or staged rows when resident). ---*/
   if (config->GetBoolTurbomachinery() || config->GetBoolGiles()) return "turbomachinery";
   if (ReducerStrategy) return "reducer strategy";
   /*--- Every residual writer must be a NEMO function with the host-stage hook (Device_BeginHostStage). ---*/
@@ -3555,7 +3592,7 @@ std::string CNEMOEulerSolver::Device_DeferralUnsupported(const CConfig *config) 
     switch (config->GetMarker_All_KindBC(iMarker)) {
       case SYMMETRY_PLANE: case EULER_WALL: case FAR_FIELD: case OUTLET_FLOW: case INLET_FLOW:
       case SUPERSONIC_INLET: case SUPERSONIC_OUTLET: case ISOTHERMAL: case HEAT_FLUX: case SMOLUCHOWSKI_MAXWELL:
-      case SEND_RECEIVE:
+      case SEND_RECEIVE: case PERIODIC_BOUNDARY:
         break;
       default:
         return "marker " + config->GetMarker_All_TagBound(iMarker) + " of a kind without host-stage hook";
@@ -4320,6 +4357,13 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
       case HEAT_FLUX: k = static_cast<int>(K::BCKind::HEAT_FLUX); break;
       case SMOLUCHOWSKI_MAXWELL: k = static_cast<int>(K::BCKind::SMOLUCHOWSKI_MAXWELL); break;
       case SEND_RECEIVE: continue;
+      case PERIODIC_BOUNDARY: {
+        /*--- 4.6-Periodic: host periodic comms on staged device rows (BC_Periodic, SetMax_Eigenvalue, GG gradient,
+         *    CompleteImplicitIteration). ---*/
+        why = Device_PeriodicUnsupported(config);
+        if (!why.empty()) return "marker " + config->GetMarker_All_TagBound(iMarker) + ": " + why;
+        continue;
+      }
       default: return "marker " + config->GetMarker_All_TagBound(iMarker) + ": BC not ported";
     }
     why = Device_BCUnsupported(config, k, iMarker);
@@ -4330,6 +4374,62 @@ std::string CNEMOEulerSolver::Device_ResidentUnsupported(const CConfig *config) 
   (void)config;
   return "no Kokkos";
 #endif
+}
+
+const std::vector<unsigned long>& CNEMOEulerSolver::Device_PeriodicRows(CGeometry *geometry) {
+  if (!periodicRowsBuilt) {
+    /*--- nPoint_PeriodicSend / Recv are cumulative offsets (nPeriodicSend + 1 entries, [0] = 0). ---*/
+    const unsigned long nS = geometry->nPeriodicSend > 0 ? geometry->nPoint_PeriodicSend[geometry->nPeriodicSend] : 0;
+    const unsigned long nR = geometry->nPeriodicRecv > 0 ? geometry->nPoint_PeriodicRecv[geometry->nPeriodicRecv] : 0;
+    periodicRows.clear();
+    periodicRows.reserve(nS + nR);
+    for (unsigned long i = 0; i < nS; ++i) periodicRows.push_back(geometry->Local_Point_PeriodicSend[i]);
+    for (unsigned long i = 0; i < nR; ++i) periodicRows.push_back(geometry->Local_Point_PeriodicRecv[i]);
+    std::sort(periodicRows.begin(), periodicRows.end());
+    periodicRows.erase(std::unique(periodicRows.begin(), periodicRows.end()), periodicRows.end());
+    periodicRowsBuilt = true;
+  }
+  return periodicRows;
+}
+
+std::string CNEMOEulerSolver::Device_PeriodicUnsupported(const CConfig *config) const {
+  if (config->GetnMarker_Periodic() == 0) return "";
+  /*--- 4.6-Periodic step 1 scope: inviscid, single grid, steady / time stepping, no PERIODIC_SENSOR / limiter comms
+   *    (BJ / Venkatakrishnan limiters and least squares stay gated by their own "periodic" reasons). ---*/
+  if (config->GetViscous()) return "periodic markers with NS (4.6-Periodic step 1: inviscid only)";
+  if (config->GetnMGLevels() > 0) return "periodic markers with multigrid";
+  if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM && config->GetKind_ConvNumScheme_Flow() == SPACE_UPWIND)
+    return "periodic markers with AUSM+M (pressure sensor periodic comms)";
+  const auto tm = config->GetTime_Marching();
+  if (tm != TIME_MARCHING::STEADY && tm != TIME_MARCHING::TIME_STEPPING) return "periodic markers with dual time";
+  return "";
+}
+
+void CNEMOEulerSolver::BC_Periodic(CGeometry *geometry, CSolver **solver_container, CNumerics *numerics,
+                                   CConfig *config) {
+#ifdef HAVE_KOKKOS
+  if (Device_ResidentActive()) {
+    /*--- PERIODIC_RESIDUAL reads the send rows and writes the receive rows of LinSysRes, Delta_Time and (implicit)
+     *    the Jacobian block rows (AddBlock2Diag, DeleteValsRowi): stage exactly those rows, run the host comms of
+     *    CFVMFlowSolverBase::BC_Periodic, put them back. ---*/
+    using HQ = CNEMOKokkosData::HaloQuantity;
+    const auto& pr = Device_PeriodicRows(geometry);
+    const auto& pattern = geometry->GetSparsePattern(ConnectivityType::FiniteVolume, 0);
+    su2mixedfloat* jac = implicit_periodic ? JacobianValues(geometry, Jacobian, nVar) : nullptr;
+    kokkosData->AccumulatorRows(true, pr.data(), pr.size(), LinSysRes.GetBlock(0), jac, pattern.outerPtr());
+    kokkosData->GatherRowsToHost(HQ::DELTA_TIME, pr.data(), pr.size());
+    for (unsigned short iPeriodic = 1; iPeriodic <= config->GetnMarker_Periodic() / 2; iPeriodic++) {
+      InitiatePeriodicComms(geometry, config, iPeriodic, PERIODIC_RESIDUAL);
+      CompletePeriodicComms(geometry, config, iPeriodic, PERIODIC_RESIDUAL);
+    }
+    kokkosData->AccumulatorRows(false, pr.data(), pr.size(), LinSysRes.GetBlock(0), jac, pattern.outerPtr());
+    kokkosData->ScatterRowsFromHost(HQ::DELTA_TIME, pr.data(), pr.size());
+    return;
+  }
+  Device_BeginHostStage(geometry);
+#endif
+  CFVMFlowSolverBase<CNEMOEulerVariable, ENUM_REGIME::COMPRESSIBLE>::BC_Periodic(geometry, solver_container, numerics,
+                                                                                 config);
 }
 
 void CNEMOEulerSolver::Device_StagedComms(CGeometry *geometry, const CConfig *config, MPI_QUANTITIES comm,
