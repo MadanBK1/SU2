@@ -4,3 +4,28 @@
 2026-11-27T08:50:58-05:00 START cpu-per-r1 (code 850323abbb)
 2026-11-27T08:50:58-05:00 END   cpu-per-r1 rc=139 wall=0s :: OVERALL: CPU SANITY FAIL 
 2026-11-27T08:50:58-05:00 STOP: CPU sanity failed - fix cfg/mesh first (translation sign 2.0 -> -2.0?), then rm /home/mpr7366/software/AgenticTest/SU2/validation_logs/2026-11-27_4.6-Periodic/.cpu-per-r1.done and relaunch
+2026-11-27T10:07:31-05:00 START cpu-per-r1 (code 7a1da1532e)
+2026-11-27T10:07:32-05:00 END   cpu-per-r1 rc=0 wall=1s :: OVERALL: CPU SANITY PASS 
+2026-11-27T10:07:32-05:00 START g1-per-r1 (code 7a1da1532e)
+2026-11-27T10:07:35-05:00 END   g1-per-r1 rc=0 wall=3s :: OVERALL: PASS 
+2026-11-27T10:07:35-05:00 START g1-per-exp-r1 (code 7a1da1532e)
+2026-11-27T10:07:36-05:00 END   g1-per-exp-r1 rc=0 wall=1s :: OVERALL: PASS 
+2026-11-27T10:07:36-05:00 START g1-per-muscl-r1 (code 7a1da1532e)
+2026-11-27T10:07:39-05:00 END   g1-per-muscl-r1 rc=0 wall=3s :: OVERALL: PASS 
+2026-11-27T10:07:39-05:00 START g1-per-lax-r1 (code 7a1da1532e)
+2026-11-27T10:07:42-05:00 END   g1-per-lax-r1 rc=0 wall=3s :: OVERALL: PASS 
+2026-11-27T10:07:42-05:00 START g1-per-off-r1 (code 7a1da1532e)
+2026-11-27T10:07:44-05:00 END   g1-per-off-r1 rc=0 wall=2s :: OVERALL: PASS 
+2026-11-27T10:07:44-05:00 START g1-per-venk-r1 (code 7a1da1532e)
+2026-11-27T10:07:47-05:00 END   g1-per-venk-r1 rc=1 wall=3s :: OVERALL: FAIL 
+2026-11-27T10:07:47-05:00 START ab-per-r1 (code 7a1da1532e)
+2026-11-27T10:07:51-05:00 END   ab-per-r1 rc=1 wall=4s ::   expected stage line missing: periodic comms (4.6-Periodic): device (staged periodic rows)   expected stage line missing: device-resident state (Step 6): ON OVERALL: FAIL 
+2026-11-27T10:07:51-05:00 START ab-per-muscl-r1 (code 7a1da1532e)
+2026-11-27T10:07:56-05:00 END   ab-per-muscl-r1 rc=1 wall=5s ::   expected stage line missing: periodic comms (4.6-Periodic): device (staged periodic rows)   expected stage line missing: device-resident state (Step 6): ON OVERALL: FAIL 
+2026-11-27T10:07:56-05:00 START poison-per-r1 (code 7a1da1532e)
+2026-11-27T10:07:58-05:00 END   poison-per-r1 rc=0 wall=2s :: OVERALL: PASS 
+2026-11-27T10:07:58-05:00 START g1-per-regress-r1 (code 7a1da1532e)
+2026-11-27T10:14:10-05:00 END   g1-per-regress-r1 rc=0 wall=372s :: OVERALL: PASS 
+2026-11-27T10:14:10-05:00 START nf-per-r1 (code 7a1da1532e)
+2026-11-27T10:14:10-05:00 END   nf-per-r1 rc=2 wall=0s :: <no OVERALL line; see log>
+2026-11-27T10:14:10-05:00 QUEUE FINISHED
