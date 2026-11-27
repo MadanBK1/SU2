@@ -22,6 +22,15 @@
 
 (Entries before round 148 are in KOKKOS_PROGRESS_ARCHIVE.md — grep it, never read it whole.)
 
+- 2026-11-27 (round 161, 4.6-Periodic step 2 diagnosis):
+  - cpu-per-r1 CPU sanity FAIL root cause FOUND: CSolver.cpp:348-350 guard `rotate_periodic && config->GetNEMOProblem()` errors on ANY NEMO+periodic run.
+    `rotate_periodic` is set unconditionally at MESH_0 (upstream CFVMFlowSolverBase.inl:272; upstream guard commit 41624d6ad2, 2021) — so it blocks pure translational markers too (rotation matrix is identity for zero angles).
+    Translation-sign flip (review-33 step 3 fallback) cannot help: the guard never reads marker data. Mesh matching itself worked ("Matched 42 points, max distance 0").
+  - Proposed minimal fix (reviewer's call, solver code): guard only when marker angles non-zero, e.g.
+    `if (rotate_periodic && config->GetNEMOProblem()) { a = config->GetPeriodicRotAngles(config->GetMarker_All_TagBound(val_periodic_index)); if (a[0]!=0||a[1]!=0||a[2]!=0) SU2_MPI::Error(...); }`
+  - THIS SESSION: applying that patch locally to verify it is the ONLY blocker; strict rebuild + rerun of .cpuper.sh (21 iters, ENABLE_KOKKOS=NO).
+  - After reviewer approves the guard fix: `rm validation_logs/2026-11-27_4.6-Periodic/.cpu-per-r1.done` and relaunch `per_queue.sh` (steps 2-7 resume).
+
 - 2026-11-27 (round 148, review-32 queue = review-31 4.6-Periodic, step 2 re-running in foreground-ish bg):
   - State: review 32 (empty request, nothing merged) — do review-31 queue: step 1 DONE+committed (builds rc=0, round 136); step 2 CPU sanity (.cpuper.sh) never archived (round-137 bg run died with session; no cpu-per-r1.out, no kk/runs/cpu_per_r1). Re-running THIS round as bg task b7bj8w307 (`bash TestCases/kokkos_nemo/.cpuper.sh`, strict binary, ENABLE_KOKKOS=NO, 21 iters, translation x=+2.0) -> kk/logs/cpu-per-r1.out + kk/runs/cpu_per_r1/log.txt.
   - PASS criteria: rc=0, 21 residual rows, no periodic/matching error. If preprocessing fails on matching vertices: flip invper_ausm.cfg translation 2.0 -> -2.0, rerun as r2, note it.
@@ -31,3 +40,5 @@
 - 2026-11-27T06:43:52-05:00 [loop] round 158 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_062426_158.log
 
 - 2026-11-27T06:50:56-05:00 [loop] round 159 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_064413_159.log
+
+- 2026-11-27T06:59:54-05:00 [loop] round 160 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_065116_160.log
