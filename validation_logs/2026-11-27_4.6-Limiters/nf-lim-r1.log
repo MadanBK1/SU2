@@ -1,0 +1,3 @@
+invwedge_ausm ITER 11: field |YES-NO| = 2.192e-01, CPU strict-vs-prod |NO-NO| = 2.180e-01 (ratio 1.01, K 10); history 4.73e-02 vs 3.88e-02: PASS
+invwedge_ausm ITER 100: field |YES-NO| = 1.435e-01, CPU strict-vs-prod |NO-NO| = 3.374e-01 (ratio 0.43, K 10); history 1.37e-01 vs 3.88e-02: PASS
+NOISEFLOOR OVERALL: PASS
