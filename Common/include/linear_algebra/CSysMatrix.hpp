@@ -206,6 +206,22 @@ class CSysMatrix {
   mutable std::vector<unsigned long> lusgs_fwd_ptr_h, lusgs_bwd_ptr_h, lusgs_fwd_seg, lusgs_bwd_seg;
   mutable unsigned long kokkos_lusgs_applies = 0, kokkos_lusgs_verify = 0, kokkos_lusgs_verify_nonbitwise = 0;
   mutable double kokkos_lusgs_seconds = 0.0;
+
+  /*--- 4.6-Linelet KOKKOS DEVICE LINELET apply: pattern-only structure of ComputeLineletPreconditioner, built once on
+   *    first use. Jacobi points (NO_LINELET domain points), linelet CSR (ptr / points), per element iElem >= 1 the
+   *    d_matrix offsets of the blocks GetBlock(iPoint, im1Point) (lower) and GetBlock(im1Point, iPoint) (upper), and
+   *    flattened working memory (one slot per linelet point: modified diagonal, rhs / solution). ---*/
+  mutable const unsigned long* d_ll_jac_pts = nullptr;
+  mutable const unsigned long* d_ll_ptr = nullptr;
+  mutable const unsigned long* d_ll_pts = nullptr;
+  mutable const unsigned long* d_ll_lblk = nullptr;
+  mutable const unsigned long* d_ll_ublk = nullptr;
+  mutable ScalarType* d_ll_invdiag = nullptr;
+  mutable ScalarType* d_ll_vec = nullptr;
+  mutable unsigned long ll_n_jac = 0, ll_n_linelets = 0, ll_n_points = 0;
+  mutable bool ll_structure_ready = false;
+  mutable unsigned long kokkos_linelet_applies = 0, kokkos_linelet_verify = 0, kokkos_linelet_verify_nonbitwise = 0;
+  mutable double kokkos_linelet_seconds = 0.0;
 #endif
 
   /*--- Temporary (hence mutable) working memory used in the Linelet preconditioner, outer vector is for threads ---*/
@@ -964,6 +980,19 @@ class CSysMatrix {
   inline unsigned long GetKokkosLU_SGSVerify() const { return kokkos_lusgs_verify; }
   inline unsigned long GetKokkosLU_SGSVerifyNonBitwise() const { return kokkos_lusgs_verify_nonbitwise; }
   inline double GetKokkosLU_SGSSeconds() const { return kokkos_lusgs_seconds; }
+
+  /*! \brief 4.6-Linelet: ComputeLineletPreconditioner on the device (Jacobi points + one thread per linelet, block
+   *         Thomas algorithm with the CPU statement order). Reads d_matrix and the device Jacobi inverse d_invM
+   *         (BuildLineletPreconditioner -> BuildJacobiPreconditioner builds it on the device when the values are
+   *         device-authoritative). A/B vs the host apply with SU2_KOKKOS_PRECOND_VERIFY=1. */
+  void KokkosComputeLineletPreconditioner(const CSysVector<ScalarType>& vec, CSysVector<ScalarType>& prod,
+                                          CGeometry* geometry, const CConfig* config) const;
+  /*! \brief Build / upload the linelet structure once (pattern-only). */
+  void EnsureKokkosLineletStructure(CGeometry* geometry, const CConfig* config) const;
+  inline unsigned long GetKokkosLineletApplies() const { return kokkos_linelet_applies; }
+  inline unsigned long GetKokkosLineletVerify() const { return kokkos_linelet_verify; }
+  inline unsigned long GetKokkosLineletVerifyNonBitwise() const { return kokkos_linelet_verify_nonbitwise; }
+  inline double GetKokkosLineletSeconds() const { return kokkos_linelet_seconds; }
 
   /*!
    * \brief The device values (d_matrix, CSysMatrix layout, nnz*nVar*nEqn) are authoritative (on = true), e.g. because

@@ -4,6 +4,7 @@
 # between the CPU-only (NO) runs of the strict IEEE and the production binaries (same source, different FP
 # contraction), at ITER iterations. Also compares the residual history (max |d log10|) the same way.
 # Env: BIN, BIN_STRICT, ITERS (default "11 100"), K (default 10), CASE (invwedge_ausm | super_cat; Step 8).
+# EXTRA_CFG="KEY= VALUE;KEY2= VALUE2": options appended to the config (as in check.sh).
 # super_cat: the history also holds LIFT / DRAG / TOTAL_HEATFLUX (printed with 4-6 significant digits), so history
 # differences are measured relative to max(|value|, 1) per entry instead of absolutely.
 set -u
@@ -35,7 +36,10 @@ for it in $ITERS; do
   run() { # name bin mode
     local d=$RUN/nf_${CASE}_${it}_$1; rm -rf $d; mkdir -p $d; cd $d; ln -sf $M/*.su2 .
     cp $CFG run.cfg; printf "\n" >> run.cfg; sed -i "/^ENABLE_KOKKOS/d; s/^ITER=.*/ITER= $it/; s/^OUTPUT_FILES=.*/OUTPUT_FILES= (RESTART_ASCII)/" run.cfg
-    printf "\nENABLE_KOKKOS= %s\n" $3 >> run.cfg; $2 run.cfg > log.txt 2>&1
+    printf "\nENABLE_KOKKOS= %s\n" $3 >> run.cfg
+    if [ -n "${EXTRA_CFG:-}" ]; then echo "$EXTRA_CFG" | tr ';' '\n' | while read -r l; do
+      [ -n "$l" ] && { sed -i "/^${l%%=*}[ =]/d" run.cfg; [ -n "${l#*=}" ] && echo "$l" >> run.cfg; }; done; fi
+    $2 run.cfg > log.txt 2>&1
   }
   run prodNO $BIN NO & a=$!; run strictNO $BIN_STRICT NO & b=$!; wait $a $b
   run prodYES $BIN YES

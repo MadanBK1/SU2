@@ -1404,4 +1404,211 @@ void CSysMatrix<ScalarType>::KokkosComputeLU_SGSPreconditioner(const CSysVector<
   kokkos_lusgs_seconds += timer.seconds();
 }
 
+/*============================== 4.6-Linelet: device linelet apply ==============================*/
+namespace {
+/*--- gemv_impl<T, true, false, false> of CSysMatrix.inl (MatrixVectorProduct, non-MKL): c = a.b, square blocks. ---*/
+template <class T>
+KOKKOS_INLINE_FUNCTION void DeviceGemvLL(unsigned long n, const T* a, const T* b, T* c) {
+  for (unsigned long i = 0; i < n; i++) {
+    c[i] = 0.0;
+    for (unsigned long j = 0; j < n; j++) c[i] += 1 * a[i * n + j] * b[j];
+  }
+}
+}  // namespace
+
+template <class ScalarType>
+void CSysMatrix<ScalarType>::EnsureKokkosLineletStructure(CGeometry* geometry, const CConfig* config) const {
+  if (ll_structure_ready) return;
+  if (d_dia_ptr == nullptr)
+    d_dia_ptr = GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(dia_ptr, nPointDomain * sizeof(unsigned long));
+
+  const auto& li = geometry->GetLineletInfo(config);
+  std::vector<unsigned long> jac, ptr(1, 0), pts, lblk, ublk;
+  for (unsigned long iPoint = 0; iPoint < nPointDomain; iPoint++)
+    if (li.lineletIdx[iPoint] == CGeometry::CLineletInfo::NO_LINELET) jac.push_back(iPoint);
+  for (const auto& line : li.linelets) {
+    for (unsigned long iElem = 0; iElem < line.size(); iElem++) {
+      pts.push_back(line[iElem]);
+      unsigned long lo = 0, uo = 0;
+      if (iElem > 0) {
+        /*--- Same blocks as the host GetBlock(iPoint, im1Point) / GetBlock(im1Point, iPoint); d_matrix has the host
+         *    layout, so the host offsets index it directly. ---*/
+        const auto* l = GetBlock(line[iElem], line[iElem - 1]);
+        const auto* u = GetBlock(line[iElem - 1], line[iElem]);
+        if (l == nullptr || u == nullptr) SU2_MPI::Error("Kokkos linelet: missing off-diagonal block.", CURRENT_FUNCTION);
+        lo = static_cast<unsigned long>(l - matrix);
+        uo = static_cast<unsigned long>(u - matrix);
+      }
+      lblk.push_back(lo);
+      ublk.push_back(uo);
+    }
+    ptr.push_back(pts.size());
+  }
+  ll_n_jac = jac.size();
+  ll_n_linelets = li.linelets.size();
+  ll_n_points = pts.size();
+
+  auto up = [](const std::vector<unsigned long>& v) {
+    return GPUMemoryAllocation::gpu_alloc_cpy<const unsigned long>(v.data(), std::max<size_t>(v.size(), 1) * sizeof(unsigned long));
+  };
+  if (jac.empty()) jac.push_back(0);
+  if (pts.empty()) { pts.push_back(0); lblk.push_back(0); ublk.push_back(0); }
+  d_ll_jac_pts = up(jac);
+  d_ll_ptr = up(ptr);
+  d_ll_pts = up(pts);
+  d_ll_lblk = up(lblk);
+  d_ll_ublk = up(ublk);
+  const size_t np = std::max<size_t>(ll_n_points, 1);
+  d_ll_invdiag = GPUMemoryAllocation::gpu_alloc<ScalarType>(np * nVar * nVar * sizeof(ScalarType));
+  d_ll_vec = GPUMemoryAllocation::gpu_alloc<ScalarType>(np * nVar * sizeof(ScalarType));
+  ll_structure_ready = true;
+
+  static bool reported = false;
+  if (!reported && SU2_MPI::GetRank() == MASTER_NODE) {
+    reported = true;
+    std::cout << "[KOKKOS] LINELET device apply: linelets=" << ll_n_linelets << " linelet points=" << ll_n_points
+              << " jacobi points=" << ll_n_jac << " (rank 0)" << std::endl;
+  }
+}
+
+/*--- Transcription of ComputeLineletPreconditioner: Jacobi product on the NO_LINELET domain points (invM -> d_invM),
+ *    then per linelet the forward elimination (MatrixCopy / MatrixInverse / MatrixMatrixProduct x2 /
+ *    MatrixSubtraction / MatrixVectorProduct / VectorSubtraction) and the backward substitution (Gauss_Elimination,
+ *    MatrixVectorProduct / VectorSubtraction / MatrixVectorProduct), same statement order; the per-thread working
+ *    vectors become one slot per linelet point; then the halo exchange (CSysMatrixComms on the host). ---*/
+template <class ScalarType>
+void CSysMatrix<ScalarType>::KokkosComputeLineletPreconditioner(const CSysVector<ScalarType>& vec,
+                                                                CSysVector<ScalarType>& prod, CGeometry* geometry,
+                                                                const CConfig* config) const {
+  if (nVar != nEqn || nVar > MAXNVAR) SU2_MPI::Error("Kokkos LINELET needs square blocks <= MAXNVAR.", CURRENT_FUNCTION);
+  if (d_invM == nullptr) SU2_MPI::Error("Kokkos LINELET: device Jacobi inverse not built.", CURRENT_FUNCTION);
+  Kokkos::Timer timer;
+  EnsureKokkosLineletStructure(geometry, config);
+
+  const bool matrix_on_device = kokkos_spmv_mode.active && kokkos_spmv_mode.matrix_on_device;
+  if (!matrix_on_device && !kokkos_values_on_device) HtDTransfer();
+
+  using execution_space = Kokkos::DefaultExecutionSpace;
+  using range_policy = Kokkos::RangePolicy<execution_space, Kokkos::IndexType<unsigned long>>;
+  execution_space exec;
+
+  const auto values = d_matrix;
+  const auto diag = d_dia_ptr;
+  const auto inv = d_invM;
+  const auto jpts = d_ll_jac_pts;
+  const auto lptr = d_ll_ptr;
+  const auto lpts = d_ll_pts;
+  const auto lblk = d_ll_lblk;
+  const auto ublk = d_ll_ublk;
+  const auto invdiag = d_ll_invdiag;
+  const auto work = d_ll_vec;
+  const auto input = vec.GetDevicePointer();
+  const auto output = prod.GetDevicePointer();
+  const unsigned long nv = nVar, bs = nVar * nVar;
+
+  /*--- Jacobi preconditioning where there are no linelets. ---*/
+  if (ll_n_jac > 0)
+    Kokkos::parallel_for(
+        "SU2::KokkosLineletJacobi", range_policy(exec, 0ul, ll_n_jac), KOKKOS_LAMBDA(const unsigned long k) {
+          const auto iPoint = jpts[k];
+          DeviceGemvLL(nv, inv + iPoint * bs, input + iPoint * nv, output + iPoint * nv);
+        });
+
+  /*--- Solve the tridiagonal systems for the linelets (one thread per linelet). ---*/
+  if (ll_n_linelets > 0)
+    Kokkos::parallel_for(
+        "SU2::KokkosLineletSolve", range_policy(exec, 0ul, ll_n_linelets), KOKKOS_LAMBDA(const unsigned long iLinelet) {
+          const auto p0 = lptr[iLinelet];
+          const auto nElem = lptr[iLinelet + 1] - p0;
+          if (nElem == 0) return;
+          ScalarType* lineletVector = work + p0 * nv;
+          ScalarType* lineletInvDiag = invdiag + p0 * bs;
+
+          /*--- Initialize the solution vector with the rhs ---*/
+          for (unsigned long iElem = 0; iElem < nElem; iElem++) {
+            const auto iPoint = lpts[p0 + iElem];
+            for (unsigned long iVar = 0; iVar < nv; iVar++) lineletVector[iElem * nv + iVar] = input[iPoint * nv + iVar];
+          }
+
+          /*--- Small temporaries. ---*/
+          ScalarType aux_block[MAXNVAR * MAXNVAR], aux_vector[MAXNVAR];
+
+          /*--- Copy diagonal block for first point in this linelet. ---*/
+          {
+            const auto* src = values + diag[lpts[p0]] * bs;
+            for (unsigned long k = 0; k < bs; ++k) lineletInvDiag[k] = src[k];
+          }
+
+          for (unsigned long iElem = 1; iElem < nElem; iElem++) {
+            const auto iPoint = lpts[p0 + iElem];
+            const auto* d = values + diag[iPoint] * bs;
+            const auto* l = values + lblk[p0 + iElem];
+            const auto* u = values + ublk[p0 + iElem];
+
+            auto* inv_dm1 = lineletInvDiag + (iElem - 1) * bs;
+            auto* d_prime = lineletInvDiag + iElem * bs;
+            auto* b_prime = lineletVector + iElem * nv;
+
+            /*--- Invert previous modified diagonal ---*/
+            for (unsigned long k = 0; k < bs; ++k) aux_block[k] = inv_dm1[k];
+            DeviceMatrixInverse(nv, aux_block, inv_dm1);
+
+            /*--- Left-multiply by lower block to obtain the weight ---*/
+            DeviceGemm(nv, l, inv_dm1, aux_block);
+
+            /*--- Multiply weight by upper block to modify current diagonal ---*/
+            DeviceGemm(nv, aux_block, u, d_prime);
+            for (unsigned long k = 0; k < bs; ++k) d_prime[k] = d[k] - d_prime[k];
+
+            /*--- Update the rhs ---*/
+            DeviceGemvLL(nv, aux_block, lineletVector + (iElem - 1) * nv, aux_vector);
+            for (unsigned long iVar = 0; iVar < nv; iVar++) b_prime[iVar] = b_prime[iVar] - aux_vector[iVar];
+          }
+
+          /*--- x_n = d_n^{-1} * b_n ---*/
+          DeviceGaussElimination(nv, lineletInvDiag + (nElem - 1) * bs, lineletVector + (nElem - 1) * nv);
+
+          /*--- x_i = d_i^{-1}*(b_i - u_i*x_{i+1}) ---*/
+          for (unsigned long iElem = nElem - 1; iElem > 0; --iElem) {
+            const auto* inv_dm1 = lineletInvDiag + (iElem - 1) * bs;
+            const auto* u = values + ublk[p0 + iElem];
+            DeviceGemvLL(nv, u, lineletVector + iElem * nv, aux_vector);
+            for (unsigned long iVar = 0; iVar < nv; iVar++)
+              aux_vector[iVar] = lineletVector[(iElem - 1) * nv + iVar] - aux_vector[iVar];
+            DeviceGemvLL(nv, inv_dm1, aux_vector, lineletVector + (iElem - 1) * nv);
+          }
+
+          /*--- Copy results to product vector ---*/
+          for (unsigned long iElem = 0; iElem < nElem; iElem++) {
+            const auto iPoint = lpts[p0 + iElem];
+            for (unsigned long iVar = 0; iVar < nv; iVar++) output[iPoint * nv + iVar] = lineletVector[iElem * nv + iVar];
+          }
+        });
+  exec.fence("SU2::Kokkos LINELET apply complete");
+
+  /*--- MPI Parallelization ---*/
+  if (config->GetKokkosGPUAwareMPI()) KokkosGPUAwareHaloExchange(prod, geometry, false);
+  else KokkosHostStagedHaloExchange(prod, geometry, false);
+
+  kokkos_linelet_applies++;
+
+  if (PrecondVerifyEnabled()) {
+    /*--- A/B: host apply on host copies of the device input and matrix values (debug only, full transfers). The host
+     *    invM is valid: under SU2_KOKKOS_PRECOND_VERIFY the device Jacobi build also rebuilds it on the host. ---*/
+    const auto n = prod.GetLocSize();
+    std::vector<ScalarType> dev(n);
+    Kokkos::deep_copy(HostView<ScalarType>(dev.data(), n), DeviceView<const ScalarType>(output, n));
+    if (nnz > 0) {
+      const auto count = nnz * nVar * nEqn;
+      Kokkos::deep_copy(HostView<ScalarType>(matrix, count), DeviceView<const ScalarType>(d_matrix, count));
+    }
+    vec.DtHTransfer();
+    CSysVector<ScalarType> hin(vec), hout(prod);
+    ComputeLineletPreconditioner(hin, hout, geometry, config);
+    kokkos_linelet_verify++;
+    kokkos_linelet_verify_nonbitwise += CountNonBitwise(&hout[0], dev.data(), n);
+  }
+  kokkos_linelet_seconds += timer.seconds();
+}
+
 template class CSysMatrix<su2mixedfloat>;
