@@ -83,6 +83,7 @@ export GXX=/opt/rh/gcc-toolset-12/root/usr/bin/g++ GCC=/opt/rh/gcc-toolset-12/ro
 Export them in every shell.
 
 ### Builds (meson + ninja; NOT cmake --build)
+- **Parallel jobs: always `-j10`** (Madan 2026-11-27: faster on the workstation). Use it for every ninja build, incl. new build scripts.
 `./meson.py` normally fetches submodules. If a submodule fetch fails (for example gitlab eigen), install the Eigen headers, copy them into `externals/eigen`, `touch su2preconfig.timestamp`, and use the system `meson`.
 
 ```bash
@@ -93,7 +94,7 @@ CXX=$GXX CC=$GCC meson setup build-kokkos-serial $COMMON -Dkokkos-backend=serial
 CXX=$GXX CC=$GCC meson setup build-kokkos-strict $COMMON -Dkokkos-backend=serial -Dkokkos-arch=none -Dwith-mpi=disabled -Denable-fast-math=false -Dcpp_args=-ffp-contract=off
 # strict MPI (2-rank gate)
 CXX=mpicxx CC=mpicc meson setup build-kokkos-strict-mpi $COMMON -Dkokkos-backend=serial -Dkokkos-arch=none -Dwith-mpi=enabled -Denable-fast-math=false -Dcpp_args=-ffp-contract=off
-ninja -C build-kokkos-serial -j4 SU2_CFD/src/SU2_CFD UnitTests/nemo_gas_kokkos_validation   # same for the others
+ninja -C build-kokkos-serial -j10 SU2_CFD/src/SU2_CFD UnitTests/nemo_gas_kokkos_validation   # same for the others
 ```
 
 ### CUDA V100 build
@@ -102,7 +103,7 @@ The `NVCC_WRAPPER_DEFAULT_COMPILER` line below is required. Without it, `subproj
 export SU2_KOKKOS_HOST_COMPILER=$GXX SU2_KOKKOS_CUDA_ARCH=sm_70 NVCC_WRAPPER_DEFAULT_COMPILER=$GXX
 CXX=$PWD/meson_scripts/kokkos_compiler_dispatcher CC=$GCC meson setup build-kokkos-cuda $COMMON \
   -Dkokkos-backend=cuda -Dkokkos-arch=VOLTA70 -Denable-cuda=false -Dwith-mpi=disabled
-ninja -C build-kokkos-cuda -j4 SU2_CFD/src/SU2_CFD      # export the 3 vars in every shell that runs ninja
+ninja -C build-kokkos-cuda -j10 SU2_CFD/src/SU2_CFD      # export the 3 vars in every shell that runs ninja
 ```
 - **If a TU fails:** run it at `-j1 -v`, capture the exit code, and run `bash -x meson_scripts/kokkos_compiler_dispatcher ...`.
 - **GPU memory:** check with `nvidia-smi`. The local LLM (ollama) uses about 17+ GB of the V100. That is fine for correctness runs, but **unload it (`ollama stop <model>`) before any timing/benchmark run**.
