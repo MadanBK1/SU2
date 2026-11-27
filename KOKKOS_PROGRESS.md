@@ -6,7 +6,7 @@
 - [~] 4.3 CUDA V100 build + GPU run — G5 PASS (build-kokkos-cuda 320/320, rc=0); G7 BLOCKED (no /dev/nvidia* in sandbox; dangerouslyDisableSandbox refused); nsys BLOCKED (not installed)
 - [ ] 4.4 Device schemes: Roe, MSW, LAX, AUSM+-up2
 - [ ] 4.5 BCs: subsonic inlet, Smoluchowski–Maxwell slip, catalytic heat-flux wall
-- [~] 4.6 Solver options: ILU(n>0) done (device-resident), LU-SGS merged, MG levels merged, **periodic markers ALL GATES PASS 2026-11-27 (merge requested)**, deforming grids pending
+- [~] 4.6 Solver options: ILU(n>0) done (device-resident), LU-SGS merged, MG levels merged, periodic markers MERGED (b8b11be), **periodic+NS ALL GATES PASS 2026-11-27 (merge requested, review 37)**, deforming grids pending
 - [ ] 4.7 Turbulence coupling (or documented host-only)
 - [ ] 4.8 Performance (after 4.3)
 - [ ] 4.9 Keep feature-coverage matrix accurate after every item
@@ -95,5 +95,10 @@ READY FOR REVIEW: MERGE: 4.6-Periodic — CPU sanity PASS; G1 strict invper_ausm
 - 2026-11-27 (round 173, 4.6-PeriodicNS per review 37):
   - Edits: check.sh +EXPECT key `viscper_ausm_pnsab` (= invper_ausm_perab string); check_noisefloor.sh +case `viscper_ausm` (HREL=0).
   - Queue: build strict+serial -> CPU sanity (21 it, strict, KOKKOS=NO) -> G1 strict viscper_ausm -> variants exp/muscl/nsoff -> A/B _pnsab -> poison -> 8-case+invper regress -> noise floor K=10 -> MERGE.
-  - Logs -> validation_logs/2026-11-27_4.6-PeriodicNS/ (build-pns-r1.log, build-pns-serial-r1.log, cpu-pns-r1.log, g1-pns-*.log, ab-pns-r1.log, poison-pns-r1.log, g1-pns-regress-r1.log, nf-pns-r1.log) + INDEX rows; `git add -f`.
-  - NEXT: builds now; then run queue in order, commit per gate.
+  - Results (all logs committed under validation_logs/2026-11-27_4.6-PeriodicNS/ + 12 INDEX rows; runner pns_queue.sh, code c4f21b5 on 5a12c86):
+    - build strict+serial rc=0 ([3/3] CNEMOEulerSolver.cpp + link); CPU sanity 21 iters PASS (rc=0).
+    - G1 strict viscper_ausm PASS bitwise; variants exp-r2/muscl/nsoff PASS; A/B _pnsab PASS; poison PASS; regress 9/9 bitwise (349s); NF PASS ratios 0.83/1.33 (K=10).
+    - g1-pns-exp-r1 FAIL was EXPECT-key form only (explicit prints "(CAvgGradCorrected_NEMO)" without ", residual + Jacobian"); added key `viscper_ausm_exp`, r2 PASS bitwise.
+  - NEXT: reviewer — MERGE 4.6-PeriodicNS. Then review-37 queue continues: periodic+MG, periodic+dual time, PERIODIC_SENSOR (AUSM+M/JST), periodic limiters.
+
+READY FOR REVIEW: MERGE: 4.6-PeriodicNS — CPU sanity PASS (21 iters, rc=0); G1 strict viscper_ausm bitwise PASS (max|dres|=0.00e+00, field diff=0.00e+00); variants EULER_EXPLICIT (r2, new EXPECT key viscper_ausm_exp) + MUSCL/VAN_ALBADA + NS-gate control (SU2_KOKKOS_NEMO_PERIODIC_NS=0) all bitwise PASS; A/B stage-verify bitwise PASS; poison PASS; 9/9-case regression (default 8 + invper_ausm) bitwise PASS (349s); noise floor PASS (ratios 0.83/1.33, K=10). 12 logs + runner scripts under validation_logs/2026-11-27_4.6-PeriodicNS/ (committed) + 12 INDEX rows.
