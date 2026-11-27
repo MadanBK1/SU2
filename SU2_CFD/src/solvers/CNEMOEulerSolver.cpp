@@ -4396,7 +4396,16 @@ std::string CNEMOEulerSolver::Device_PeriodicUnsupported(const CConfig *config) 
   if (config->GetnMarker_Periodic() == 0) return "";
   /*--- 4.6-Periodic step 1 scope: inviscid, single grid, steady / time stepping, no PERIODIC_SENSOR / limiter comms
    *    (BJ / Venkatakrishnan limiters and least squares stay gated by their own "periodic" reasons). ---*/
-  if (config->GetViscous()) return "periodic markers with NS (4.6-Periodic step 1: inviscid only)";
+  /*--- 4.6-PeriodicNS: NS is allowed. The NS-only periodic traffic is the PERIODIC_PRIM_GG(_R) rotation of the partial
+   *    Green-Gauss gradient (mass-fraction gradient of CNEMONSSolver::SetPrimitive_Gradient_GG; the device kernel computes
+   *    the same partial gradient and Device_PrimitiveGradient stages the periodic rows around the host comms), and
+   *    PERIODIC_MAX_EIG / PERIODIC_RESIDUAL / PERIODIC_IMPLICIT, already staged; the viscous edge residual has no
+   *    periodic special case on the CPU. Least squares (PERIODIC_PRIM_LS) and limiters stay gated by their own reasons.
+   *    SU2_KOKKOS_NEMO_PERIODIC_NS=0 restores the step-1 gate (A/B control). ---*/
+  if (config->GetViscous()) {
+    const char* e = std::getenv("SU2_KOKKOS_NEMO_PERIODIC_NS");
+    if (e != nullptr && std::string(e) == "0") return "periodic markers with NS (SU2_KOKKOS_NEMO_PERIODIC_NS=0)";
+  }
   if (config->GetnMGLevels() > 0) return "periodic markers with multigrid";
   if (config->GetKind_Upwind_Flow() == UPWIND::AUSMPLUSM && config->GetKind_ConvNumScheme_Flow() == SPACE_UPWIND)
     return "periodic markers with AUSM+M (pressure sensor periodic comms)";
