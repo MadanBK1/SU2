@@ -104,3 +104,9 @@ READY FOR REVIEW: MERGE: 4.6-Periodic — CPU sanity PASS; G1 strict invper_ausm
 READY FOR REVIEW: MERGE: 4.6-PeriodicNS — CPU sanity PASS (21 iters, rc=0); G1 strict viscper_ausm bitwise PASS (max|dres|=0.00e+00, field diff=0.00e+00); variants EULER_EXPLICIT (r2, new EXPECT key viscper_ausm_exp) + MUSCL/VAN_ALBADA + NS-gate control (SU2_KOKKOS_NEMO_PERIODIC_NS=0) all bitwise PASS; A/B stage-verify bitwise PASS; poison PASS; 9/9-case regression (default 8 + invper_ausm) bitwise PASS (349s); noise floor PASS (ratios 0.83/1.33, K=10). 12 logs + runner scripts under validation_logs/2026-11-27_4.6-PeriodicNS/ (committed) + 12 INDEX rows.
 
 - 2026-11-27T14:47:13-05:00 [loop] round 173 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_134638_173.log
+
+- 2026-11-27T15:52:14-05:00 [loop] round 174 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_144733_174.log
+- 2026-11-27 (round 175, review-39 queue A = finish 4.6-PeriodicDT):
+  - HEAD 60a160f26b has DT (b0008fc) + PeriodicNS + new dev code AUSMM/Lim (not yet built). Round-174 binaries predate AUSMM/Lim; DT queue never ran (pdt_queue.sh existed, no QUEUE_STATUS.txt).
+  - Plan: rebuild strict+serial at THIS head (logs build-pdt-r2*.log) -> launch pdt_queue.sh (steps: cpu-pdt-r1, g1-pdt-r1, variants 1st/muscl/off, ab, poison, 10-case regress incl. viscper_ausm, nf K=10) -> commit logs + INDEX. Then B (AUSMM), C (Lim), D (regress), E (one MERGE request per review 39).
+  - Loop hint 07:17 superseded by review-39 queue (test work, no code unless compile error).
