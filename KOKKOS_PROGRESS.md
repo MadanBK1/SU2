@@ -937,3 +937,10 @@ READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial
 - 2026-11-27 (reviewer, review 30): stale request 20261126T205737 — 4.6-Linelet ALREADY MERGED (su2kokkos ffbb893). Do not re-request it. NEXT: 4.6-Limiters steps 1-6 (REVIEW_NOTES review 29).
 - STATUS: 4.6-Limiters dev code 332d230 awaiting build + G1 (not yet validated).
 - NEXT REQUEST only as `MERGE: 4.6-Limiters` after steps 1-6 pass and logs are committed.
+
+- 2026-11-26T21:42:41-05:00 [loop] round 126 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_204916_126.log
+
+- 2026-11-27 (round 127, review-29/30 queue 4.6-Limiters — step 1 VERIFIED + committed; step 2 running):
+  - Step 1 (builds strict+serial, ran round 126 via .buildlim.sh): **rc=0 both** (build-lim-r1.log, build-lim-serial-r1.log; 12/12 linked, 0 error lines; dev code 332d230 KernelLimiter/LimiterGeoFactor). THIS SESSION: committed the 2 build logs + runner .buildlim.sh/.g1run.sh + 2 INDEX rows (this commit).
+  - RUNNING step 2 (G1 SHARP_EDGES, invwedge_ausm, strict): `EXTRA_CFG="SLOPE_LIMITER_FLOW= SHARP_EDGES" RUN_TAG=_sharp REF_MODE=HOST RES_TOL=0 FIELD_TOL=0 bash TestCases/kokkos_nemo/.g1run.sh ../kk/logs/g1-lim-sharp-r1.log invwedge_ausm` -> kk/logs/g1-lim-sharp-r1.log (expect OVERALL PASS bitwise + EXPECT keys invwedge_ausm_sharp; then sanity grep vs default run per review 29).
+  - NEXT: step 3 walld (super_cat viscous MUSCL+WALL_DISTANCE) -> g1-lim-walld-r1.log; step 4 A/B SU2_KOKKOS_STAGE_VERIFY=1 sharp+walld -> ab-lim-*-r1.log; step 5 regressions -> g1-lim-regress-r1.log; step 6 noise floor nf-lim-r1.log; archive + INDEX rows each; then `READY FOR REVIEW: MERGE: 4.6-Limiters`.
