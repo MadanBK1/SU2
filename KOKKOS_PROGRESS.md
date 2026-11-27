@@ -996,3 +996,5 @@ READY FOR REVIEW: MERGE: 4.6-Linelet — steps 1-7 all PASS: build strict+serial
   - ResSplit STEPS 1-3 ALL DONE (builds strict+serial rc=0; G1 regressions 8/8 bitwise; CUDA build rc=0). Logs (21 files) + INDEX rows committed THIS COMMIT together with runner scripts .buildsplit.sh/.buildsplitcuda.sh/.g1splitregress.sh. (Round-133 note "step-4b files staged / commit blocked" is moot — those were committed in 815e0d9; the ResSplit dir was simply never `git add`-ed.)
   - Round-133 Limiter tasks (step 5 regress, step 6 noise floor) DIED with the session (no logs in kk/logs, no live processes) — re-running this round sequentially (shared RUN_DIR): .g1limregress.sh then .nflim.sh.
   - NEXT: when both finish — archive to validation_logs/2026-11-27_4.6-Limiters/ (g1-lim-regress-r1.log + 16 chk logs; nf-lim-r1.log + its chk logs), INDEX rows, commit, then `READY FOR REVIEW: MERGE: ResSplit + 4.6-Limiters`.
+
+- 2026-11-27T00:59:36-05:00 [loop] round 134 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261126_233623_134.log
