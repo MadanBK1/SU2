@@ -78,6 +78,7 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invper_ausm]="periodic comms (4.6-Periodic): device (staged periodic rows)|device-resident state (Step 6): ON"
                     [viscper_ausm]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage viscous residual (CAvgGradCorrected_NEMO, residual + Jacobian): device|device-resident state (Step 6): ON"
                     [viscper_ausm_nsoff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
+                    [viscper_ausm_pnsab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
                     [invper_ausm_peroff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_pervenk]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_perab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"

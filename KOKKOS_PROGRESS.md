@@ -91,3 +91,9 @@ READY FOR REVIEW: MERGE: 4.6-Periodic — CPU sanity PASS; G1 strict invper_ausm
   - Re-filing the merge request below (same claims as round 171; logs now committed). Next heavy item after merge: 4.6 dynamic/deforming grids.
 
 READY FOR REVIEW: MERGE: 4.6-Periodic — CPU sanity PASS; G1 strict invper_ausm + variants (exp/muscl/lax/off/venk) + periodic-OFF control all bitwise PASS (max|dres|=0.00e+00); A/B stage-verify bitwise PASS (plain + MUSCL); poison PASS; 8-case default regression bitwise PASS; noise floor PASS (ratios 0.64/1.12, K=10). Includes CSolver.cpp translational-periodic guard fix (1c0b4f8). All 23 files under validation_logs/2026-11-27_4.6-Periodic/ now committed (080bf8d592) + INDEX rows.
+
+- 2026-11-27 (round 173, 4.6-PeriodicNS per review 37):
+  - Edits: check.sh +EXPECT key `viscper_ausm_pnsab` (= invper_ausm_perab string); check_noisefloor.sh +case `viscper_ausm` (HREL=0).
+  - Queue: build strict+serial -> CPU sanity (21 it, strict, KOKKOS=NO) -> G1 strict viscper_ausm -> variants exp/muscl/nsoff -> A/B _pnsab -> poison -> 8-case+invper regress -> noise floor K=10 -> MERGE.
+  - Logs -> validation_logs/2026-11-27_4.6-PeriodicNS/ (build-pns-r1.log, build-pns-serial-r1.log, cpu-pns-r1.log, g1-pns-*.log, ab-pns-r1.log, poison-pns-r1.log, g1-pns-regress-r1.log, nf-pns-r1.log) + INDEX rows; `git add -f`.
+  - NEXT: builds now; then run queue in order, commit per gate.
