@@ -233,3 +233,5 @@ READY FOR REVIEW: MERGE: 4.6-PeriodicLim — queue C+D (review 40) FINISHED at c
   - NEXT: read QUEUE_STATUS.txt; if all PASS (esp. g1-limfix-off-r1 now bitwise) -> commit logs + INDEX rows -> single `READY FOR REVIEW: MERGE: 4.6-PeriodicLim + limValid fix — <results>` (review-41 step 8). Then review-42 zc2a-bndsync queue B1-B7 (build-bnd-r1 logs + B2-B6 + combined MERGE per B7).
 
 - 2026-11-28T03:37:38-05:00 [loop] round 200 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261128_030752_200.log
+
+- 2026-11-28T03:51:02-05:00 [loop] round 201 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261128_033758_201.log
