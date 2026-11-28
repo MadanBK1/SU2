@@ -171,3 +171,11 @@ READY FOR REVIEW: MERGE: 4.6-PeriodicDT + 4.6-PeriodicAUSMM — DT: CPU sanity P
   - Found CUDA binary stale: build-kokkos-cuda/SU2_CFD 11-26 23:23, but solvers/CNEMOEulerSolver.cpp + kokkos/*.cpp changed 11-27 (DT/NS/AUSMM/Lim code never compiled under real nvcc).
   - THIS SESSION: rebuild build-kokkos-cuda at HEAD via TestCases/kokkos_nemo/.buildcuda.sh (bg task bbg2vy855), log validation_logs/2026-11-27_4.3-CUDA/build-cuda-r1.log. G7 still BLOCKED (no /dev/nvidia* in sandbox, re-confirmed).
   - NEXT: rc=0 -> INDEX row + commit (G5 PASS at this head); TU fail -> -j1 -v diagnose, smallest fix, rebuild.
+
+- 2026-11-27T23:11:25-05:00 [loop] round 190 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_225357_190.log
+
+- 2026-11-27 (round 191, 4.3 G5 rebuild resume):
+  - Round 190's bg build (bbg2vy855) never ran: log dir validation_logs/2026-11-27_4.3-CUDA/ absent, binary still Nov 26 23:23.
+  - THIS SESSION: ninja dry-run = 21 steps (5 NEMO TUs + link). Relaunching incremental build via .buildcuda.sh (bg task bipknb0qa), log validation_logs/2026-11-27_4.3-CUDA/build-cuda-r1.log.
+  - G7 still BLOCKED: no /dev/nvidia* in sandbox (re-confirmed this session). nvcc 12.9 present, sm_70 env set.
+  - NEXT: rc=0 -> INDEX row + commit (G5 PASS at this head); TU fail -> -j1 -v, bash -x dispatcher diagnose, smallest fix, rebuild.
