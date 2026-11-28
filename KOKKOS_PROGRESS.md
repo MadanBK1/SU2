@@ -156,3 +156,12 @@ LOOP HINT: 2026-11-27T20:48:35-05:00 no progress for 3 rounds on the current ite
 READY FOR REVIEW: MERGE: 4.6-PeriodicDT + 4.6-PeriodicAUSMM — DT: CPU sanity PASS, G1 invper_dt bitwise + dt1st/muscl/dtoff variants bitwise, A/B+poison bitwise, 10/10 regress bitwise (360s), NF ratio 0.46 (K=10). AUSMM: CPU sanity PASS, G1 invper_ausmm bitwise + exp variant bitwise + mmoff control bitwise, A/B+poison bitwise, NF ratios 0.60/0.93 (K=10). All logs committed under validation_logs/2026-11-27_4.6-PeriodicDT/ + /4.6-PeriodicAUSMM/ + INDEX rows. 4.6-PeriodicLim also staged: 11/12 gates PASS bitwise (g1/bj/wang/pervenk/ab/poison/nf + 10/10 regress) but limoff control FAIL (field 1.54e-01; mixed device-comms+host-limiter path — needs your decision, see progress).
 
 - 2026-11-27T22:02:48-05:00 [loop] round 187 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_212053_187.log
+
+- 2026-11-27T22:36:48-05:00 [loop] round 188 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_220308_188.log
+
+- 2026-11-27 (round 189, status check — review-39 queue done, holding for reviewer):
+  - Review-39 queue: A (DT) PASS, B (AUSMM) PASS, D (10/10 regress) PASS — all committed. C (Lim): 11/12 gates PASS bitwise; limoff control BLOCKED reviewer-decision (mixed device-comms+host-limiter path; the fix is a code change = reviewer's call, not mine).
+  - Review request (MERGE DT+AUSMM + limoff decision) already filed; loop pushed REVIEW_REQUEST (5eb67bf329). Newest REVIEW_NOTES.md section is still review 39 — review 40 not yet in.
+  - No new reviewer queue to execute. Next items (multigrid / PERIODIC_PRIM_LS / deforming grid) are reviewer-reserved "heavy items". Holding for review 40 rather than starting a competing dev track (would collide with the reviewer's next dev code).
+
+READY FOR REVIEW: MERGE: 4.6-PeriodicDT + 4.6-PeriodicAUSMM — DT: CPU sanity PASS, G1 invper_dt bitwise + dt1st/muscl/dtoff variants bitwise, A/B+poison bitwise, 10/10 regress bitwise (360s), NF ratio 0.46 (K=10). AUSMM: CPU sanity PASS, G1 invper_ausmm bitwise + exp variant bitwise + mmoff control bitwise, A/B+poison bitwise, NF ratios 0.60/0.93 (K=10). All logs committed under validation_logs/2026-11-27_4.6-PeriodicDT/ + /4.6-PeriodicAUSMM/ + INDEX rows. 4.6-PeriodicLim staged: 11/12 gates PASS bitwise (g1/bj/wang/pervenk/ab/poison/nf + 10/10 regress) but limoff control BLOCKED pending your decision (mixed device-comms+host-limiter path).
