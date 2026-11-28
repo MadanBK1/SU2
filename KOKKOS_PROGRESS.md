@@ -6,7 +6,7 @@
 - [~] 4.3 CUDA V100 build + GPU run — G5 PASS (build-kokkos-cuda 320/320, rc=0); G7 BLOCKED (no /dev/nvidia* in sandbox; dangerouslyDisableSandbox refused); nsys BLOCKED (not installed)
 - [ ] 4.4 Device schemes: Roe, MSW, LAX, AUSM+-up2
 - [ ] 4.5 BCs: subsonic inlet, Smoluchowski–Maxwell slip, catalytic heat-flux wall
-- [~] 4.6 Solver options: ILU(n>0) done (device-resident), LU-SGS merged, MG levels merged, periodic markers MERGED (b8b11be), **periodic+NS ALL GATES PASS 2026-11-27 (merge requested, review 37)**, deforming grids pending
+- [~] 4.6 Solver options: ILU(n>0) done (device-resident), LU-SGS merged, MG levels merged, periodic markers MERGED (b8b11be), periodic+NS MERGED (review 39), periodic+DT + periodic+AUSMM ALL GATES PASS 2026-11-27 (logs committed), **periodic+Lim: all PASS bitwise EXCEPT limoff A/B control (FAIL, mixed device-comms+host-limiter path) — needs reviewer decision (review 39 queue C/D)**, deforming grids pending
 - [ ] 4.7 Turbulence coupling (or documented host-only)
 - [ ] 4.8 Performance (after 4.3)
 - [ ] 4.9 Keep feature-coverage matrix accurate after every item
@@ -144,3 +144,13 @@ LOOP HINT: 2026-11-27T18:00:39-05:00 no progress for 3 rounds on the current ite
 - 2026-11-27T20:48:35-05:00 [loop] round 185 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_202417_185.log
 
 LOOP HINT: 2026-11-27T20:48:35-05:00 no progress for 3 rounds on the current item. No code changed (only the progress log). Stop planning: in THIS session write code immediately - the smallest compilable piece (e.g. one device function + its call site), build it, commit it. If you cannot, mark the item BLOCKED and move to the next unchecked item.
+
+- 2026-11-27T21:20:33-05:00 [loop] round 186 ended rc=1 with NO progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261127_205856_186.log
+
+- 2026-11-27 (review-39 queue C+D closed out — Lim + regress logs committed; limoff control localized):
+  - State found this session: queues A (DT, 25 logs committed) + B (AUSMM, 11 committed) DONE. Queue C (Lim) had RUN (logs on disk 16:43-16:49) but 0 committed; queue D (regress) PASS but uncommitted. Limoff-verify-r1.log (0 bytes) = a dead round-184 re-run, NOT part of the queue, left untracked.
+  - Lim gates (code 9af8641ec1): build strict+serial rc=0; CPU sanity PASS; g1-lim bitwise PASS; variants bj/wang/pervenk bitwise PASS; **g1-lim-off (SU2_KOKKOS_NEMO_PERIODIC_LIM=0) FAIL: max|dres|=3.95e-02, field diff=1.54e-01**; ab/poison/nf (ratios 1.22/0.49) PASS; regress 10/10 bitwise PASS (360s). 12 Lim INDEX rows + QUEUE_STATUS + lim_queue.sh committed this session (stray .claude/.cc-writes + 0-byte log excluded).
+  - ROOT CAUSE of limoff (localized, not a port bug): the PERIODIC_LIM=0 control only forces the limiter stage to host while leaving 4.6-Periodic device comms ON (check.sh EXPECT key: "limiter: host ... | device-resident OFF" — no "periodic comms: host"). Contrast the PASSING dtop/mmaoff controls whose EXPECT includes "periodic comms: host". So limoff is a mixed device-comms+host-limiter path that legitimately deviates from the full-host reference. Fix is reviewer's call (either gate comms to host too, or drop/waive this control); NOT something I may fix per ROLE (code change, not compile error).
+  - DT + AUSMM are fully green (all bitwise, controls incl. off, poison, NF, regress). Ready to merge.
+  - NEXT: reviewer — (a) MERGE 4.6-PeriodicDT + 4.6-PeriodicAUSMM (all logs committed, all gates PASS); (b) decide limoff control for 4.6-PeriodicLim (all other Lim gates + 10/10 regress already PASS bitwise, logs committed) — merge Lim with the control waived/fixed, or tell me to re-run after your fix.
+READY FOR REVIEW: MERGE: 4.6-PeriodicDT + 4.6-PeriodicAUSMM — DT: CPU sanity PASS, G1 invper_dt bitwise + dt1st/muscl/dtoff variants bitwise, A/B+poison bitwise, 10/10 regress bitwise (360s), NF ratio 0.46 (K=10). AUSMM: CPU sanity PASS, G1 invper_ausmm bitwise + exp variant bitwise + mmoff control bitwise, A/B+poison bitwise, NF ratios 0.60/0.93 (K=10). All logs committed under validation_logs/2026-11-27_4.6-PeriodicDT/ + /4.6-PeriodicAUSMM/ + INDEX rows. 4.6-PeriodicLim also staged: 11/12 gates PASS bitwise (g1/bj/wang/pervenk/ab/poison/nf + 10/10 regress) but limoff control FAIL (field 1.54e-01; mixed device-comms+host-limiter path — needs your decision, see progress).

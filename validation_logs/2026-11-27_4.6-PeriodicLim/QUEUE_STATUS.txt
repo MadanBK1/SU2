@@ -1,0 +1,25 @@
+2026-11-27T16:43:12-05:00 START build-lim-r1 (code 9af8641ec1)
+2026-11-27T16:43:12-05:00 END   build-lim-r1 rc=0 wall=0s :: OVERALL: BUILD PASS 
+2026-11-27T16:43:12-05:00 START build-lim-serial-r1 (code 9af8641ec1)
+2026-11-27T16:43:12-05:00 END   build-lim-serial-r1 rc=0 wall=0s :: OVERALL: ninja rc=0 
+2026-11-27T16:43:12-05:00 START cpu-lim-r1 (code 9af8641ec1)
+2026-11-27T16:43:13-05:00 END   cpu-lim-r1 rc=0 wall=1s :: OVERALL: CPU SANITY PASS 
+2026-11-27T16:43:13-05:00 START g1-lim-r1 (code 9af8641ec1)
+2026-11-27T16:43:16-05:00 END   g1-lim-r1 rc=0 wall=3s :: OVERALL: PASS 
+2026-11-27T16:43:16-05:00 START g1-lim-bj-r1 (code 9af8641ec1)
+2026-11-27T16:43:19-05:00 END   g1-lim-bj-r1 rc=0 wall=3s :: OVERALL: PASS 
+2026-11-27T16:43:19-05:00 START g1-lim-wang-r1 (code 9af8641ec1)
+2026-11-27T16:43:22-05:00 END   g1-lim-wang-r1 rc=0 wall=3s :: OVERALL: PASS 
+2026-11-27T16:43:22-05:00 START g1-lim-off-r1 (code 9af8641ec1)
+2026-11-27T16:43:25-05:00 END   g1-lim-off-r1 rc=1 wall=3s :: OVERALL: FAIL 
+2026-11-27T16:43:25-05:00 START g1-lim-pervenk-r1 (code 9af8641ec1)
+2026-11-27T16:43:28-05:00 END   g1-lim-pervenk-r1 rc=0 wall=3s :: OVERALL: PASS 
+2026-11-27T16:43:28-05:00 START ab-lim-r1 (code 9af8641ec1)
+2026-11-27T16:43:33-05:00 END   ab-lim-r1 rc=0 wall=5s :: OVERALL: PASS 
+2026-11-27T16:43:33-05:00 START poison-lim-r1 (code 9af8641ec1)
+2026-11-27T16:43:36-05:00 END   poison-lim-r1 rc=0 wall=3s :: OVERALL: PASS 
+2026-11-27T16:43:36-05:00 START nf-lim-r1 (code 9af8641ec1)
+2026-11-27T16:43:50-05:00 END   nf-lim-r1 rc=0 wall=14s :: NOISEFLOOR OVERALL: PASS 
+2026-11-27T16:43:50-05:00 START g1-regress-r1 (code 9af8641ec1)
+2026-11-27T16:49:50-05:00 END   g1-regress-r1 rc=0 wall=360s :: OVERALL: PASS 
+2026-11-27T16:49:50-05:00 QUEUE FINISHED
