@@ -123,7 +123,7 @@ for c in "${cases[@]}"; do
     if [ -n "${EXTRA_CFG:-}" ]; then echo "$EXTRA_CFG" | tr ';' '\n' | while read -r l; do
       [ -n "$l" ] && { sed -i "/^${l%%=*}[ =]/d" run.cfg; [ -n "${l#*=}" ] && echo "$l" >> run.cfg; }; done; fi  # "KEY=" (no value) deletes the line (e.g. ITER= when going unsteady)
     t0=$(date +%s.%N); runner=("$bin"); [ -n "${PYDRIVER:-}" ] && runner=(python3 "$PYDRIVER")  # 6b.b: pysu2 driver script (both runs)
-    SU2_KOKKOS_NEMO_HOST=$hostenv $(mpiprefix "$np") "${runner[@]}" run.cfg > log.txt 2>&1; rc=$?
+    SU2_KOKKOS_NEMO_HOST="${hostenv:-${SU2_KOKKOS_NEMO_HOST:-}}" $(mpiprefix "$np") "${runner[@]}" run.cfg > log.txt 2>&1; rc=$?  # hostenv (REF_MODE=HOST) wins; else inherit caller's value (e.g. =lim), else empty
     echo "$c $mode${hostenv:+ (REF_MODE=HOST: YES, all NEMO stages host)}${np:+ np=$np} exit=$rc wall=$(printf '%.2f' "$(echo "$(date +%s.%N)-$t0" | bc)")s"
     [ $rc -ne 0 ] && { status=1; tail -5 log.txt; }
     expkey=$c$RUN_TAG; [ -z "${EXPECT[$expkey]:-}" ] && expkey=$c   # per-RUN_TAG EXPECT key first, else plain case key (backward compatible)
