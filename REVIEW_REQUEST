@@ -1,3 +1,3 @@
-id: 20261127T220247-3423074e55
-head: 3423074e55e5d75f701b05307a8681367e1cb6ee
+id: 20261127T223648-f65c3875ba
+head: f65c3875ba65248d87aaa3258de1a67d89c7fd5d
 reason: READY FOR REVIEW: MERGE: 4.6-PeriodicDT + 4.6-PeriodicAUSMM — DT: CPU sanity PASS, G1 invper_dt bitwise + dt1st/muscl/dtoff variants bitwise, A/B+poison bitwise, 10/10 regress bitwise (360s), NF ratio 0.46 (K=10). AUSMM: CPU sanity PASS, G1 invper_ausmm bitwise + exp variant bitwise + mmoff control bitwise, A/B+poison bitwise, NF ratios 0.60/0.93 (K=10). All logs committed under validation_logs/2026-11-27_4.6-PeriodicDT/ + /4.6-PeriodicAUSMM/ + INDEX rows. 4.6-PeriodicLim also staged: 11/12 gates PASS bitwise (g1/bj/wang/pervenk/ab/poison/nf + 10/10 regress) but limoff control FAIL (field 1.54e-01; mixed device-comms+host-limiter path — needs your decision, see progress).
