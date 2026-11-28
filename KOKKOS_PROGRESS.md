@@ -224,3 +224,10 @@ READY FOR REVIEW: MERGE: 4.6-PeriodicLim — queue C+D (review 40) FINISHED at c
 - 2026-11-28 (round 199, review-41 queue RUNNING): HEAD 52527ec85c contains limValid fix (9054ef3b25) + zc2a-bndsync dev (0ec62f5abb); strict/serial binaries pre-date them -> rebuilding.
   - Queue (review 41): build S+serial; G1 S invper_lim limoff (must now PASS bitwise); invper_ausm MUSCL+Venkat limoff (new EXPECT invper_ausm_limoff); invwedge_roe hostlim control (new EXPECT); invper_lim device + A/B _limab; regress 13.
   - Then review-42 queue (zc2a-bndsync B2-B6) if time; combined MERGE per B7.
+
+- 2026-11-28T03:07:32-05:00 [loop] round 199 ended rc=1 with progress. Log: /home/mpr7366/software/AgenticTest/agent_logs/round_20261128_024928_199.log
+
+- 2026-11-28 (round 200, review-41 limfix queue — resuming round-199 setup; queue never ran):
+  - HEAD ce8832e395 (limValid fix 9054ef3b25 + zc2a-bndsync dev 0ec62f5abb, untested). Round-199 left: TestCases/kokkos_nemo/limfix_queue.sh (resumable, .done markers, steps 2-6) + .bld_limfix_r1.sh (build strict+serial). EXPECT keys invper_lim_limoff / invper_ausm_limoff / invwedge_roe_hostlim already in check.sh (committed). Strict bin Nov 28 01:53 (post-fix, pre-bndsync), serial bin Nov 27 16:05 (stale) -> rebuild both at HEAD.
+  - THIS SESSION: WIP commit (queue script + progress); rebuild strict+serial -> validation_logs/2026-11-28_4.6-PeriodicLim-fix/build-limfix-r1.log / build-limfix-serial-r1.log; then run limfix_queue.sh steps 2-6 in background (resumable).
+  - NEXT: read QUEUE_STATUS.txt; if all PASS (esp. g1-limfix-off-r1 now bitwise) -> commit logs + INDEX rows -> single `READY FOR REVIEW: MERGE: 4.6-PeriodicLim + limValid fix — <results>` (review-41 step 8). Then review-42 zc2a-bndsync queue B1-B7 (build-bnd-r1 logs + B2-B6 + combined MERGE per B7).
