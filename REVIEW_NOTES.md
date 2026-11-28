@@ -27,7 +27,7 @@ B5. Regress the 13 default cases (G1 S, no RUN_TAG) -> g1-bnd-regress-r1.log.
 B6. FAIL: rerun with SU2_KOKKOS_STAGE_VERIFY=1, paste <=20 StageCompare lines. A wrong EXPECT text = fix yourself.
 B7. Commit logs + INDEX rows, then ONE request: `MERGE: 4.6-PeriodicLim + limValid fix + zc2a-bndsync — <results>`
     (or two separate MERGE items if only one is green).
-Madan (optional, V100): after B5, `SU2_CFD -> TestCases/kokkos_nemo/check.sh` is CPU only; GPU timing of the
+Madan (optional, V100): after B5, GPU timing of the
 bndsync win: run axi_visccone with the CUDA build, RUN_TAG=_bnd and _bndall, archive both logs (ledger + timers) in
 validation_logs/2026-11-28_zc2a-bndsync/g7-bnd-v100-r1.log.
 
