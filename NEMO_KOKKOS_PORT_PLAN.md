@@ -268,7 +268,8 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | Convection | other upwind / centered (JST) | host fallback | not ported |
 | Reconstruction | MUSCL (GG, WLS), Venkatakrishnan, BJ, Venkat-Wang, van Albada, none | device-resident | |
 | Reconstruction | LEAST_SQUARES (unweighted) gradients | device (stage) / resident OFF | resident needs GG or WLS |
-| Reconstruction | other limiters, periodic LS / limiter | host fallback | |
+| Reconstruction | periodic limiter (BJ / Venkat / Venkat-Wang) | device-resident | 4.6-PeriodicLim (invper_lim: G1 strict bitwise + variants + A/B + poison + noise floor, 2026-11-27); limoff host control pending reviewer decision; merge requested (review 39) |
+| Reconstruction | other limiters, periodic weighted LS (PERIODIC_PRIM_LS) | host fallback | not ported (next reviewer heavy item) |
 | Viscous | laminar NS (CAvgGradCorrected_NEMO) | device-resident | |
 | Viscous | turbulence (SA/SST), wall functions | host fallback | eddy viscosity from the host turbulence solver |
 | Source | chemistry + V-T | device-resident | |
@@ -282,7 +283,8 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | BC | implicit partially catalytic, catalytic heat flux | unsupported | not available on the CPU |
 | BC | SMOLUCHOWSKI_MAXWELL (slip wall) | device-resident | `ComputeGasConstant` evaluated on the host once per call (gas-state dependent) and passed as a scalar; no Jacobian term, as on the CPU; ionization -> host |
 | BC | INLET_FLOW (BC_Inlet) | unsupported | not operational on the CPU (SU2_MPI::Error at entry) |
-| BC | periodic, turbomachinery / Giles, actuator disk, other kinds | host fallback | eager sync / not hooked |
+| BC | periodic (translational markers, inviscid + viscous) | device-resident | 4.6-Periodic: staged periodic rows + device halo; invper_ausm + viscper_ausm MERGED (3340824); invper_dt / invper_ausmm / invper_lim validated bitwise 2026-11-27, merge requested (review 39) |
+| BC | turbomachinery / Giles, actuator disk, other periodic kinds | host fallback | eager sync / not hooked |
 | Time | EULER_IMPLICIT (BCGSTAB, FGMRES, RESTARTED_FGMRES, CG; ILU(0), JACOBI) | device-resident | |
 | Time | ILU(n>0) | device-resident | host ILU build from downloaded values |
 | Time | LU_SGS (preconditioner apply) | device-resident (validated 2026-11-25: G1 strict invwedge_lusgs bitwise + viscous super_cat LU_SGS bitwise + regressions + A/B non-bitwise=0 + noise floor) | level-scheduled sweeps (ILU pattern), one persistent team per sweep, same accumulation order as gemv; gate cases invwedge_lusgs / super_cat+LU_SGS |
@@ -290,7 +292,7 @@ All five items make device-resident mode ON where it was OFF before; every new p
 | Time | EULER_EXPLICIT, RUNGE-KUTTA_EXPLICIT, CLASSICAL_RK4_EXPLICIT | device-resident | batch A (RK) |
 | Time | STEADY, TIME_STEPPING, DUAL_TIME_STEPPING-1ST/2ND (static mesh) | device-resident | batch A (dual time) |
 | Time | CFL_ADAPT | device-resident | batch A (no species solver) |
-| Time | multigrid (MGLEVEL > 0) | fine + coarse levels device-resident (step 2, `SU2_KOKKOS_NEMO_MG_DEVICE` default ON) | step 1 validated 2026-11-26 (G1 strict invwedge_mg bitwise + variants + viscous + poison + regressions + noise floor 0.71/1.00). Step 2 validated 2026-11-26 (same suite, coarse levels ON: `MG level 1|2 device-resident state: ON`, `MG device transfers=66`; control MG_DEVICE=0 bitwise via step-1 path; viscous super_cat coarse OFF; poison bitwise; noise floor 1.12/1.00; regressions 6/6 bitwise) — merge requested `MERGE: 4.6-MG2` |
+| Time | multigrid (MGLEVEL > 0) | fine + coarse levels device-resident (step 2, `SU2_KOKKOS_NEMO_MG_DEVICE` default ON) | step 1 validated 2026-11-26 (G1 strict invwedge_mg bitwise + variants + viscous + poison + regressions + noise floor 0.71/1.00). Step 2 validated 2026-11-26 (same suite, coarse levels ON: `MG level 1|2 device-resident state: ON`, `MG device transfers=66`; control MG_DEVICE=0 bitwise via step-1 path; viscous super_cat coarse OFF; poison bitwise; noise floor 1.12/1.00; regressions 6/6 bitwise) — MERGED into su2kokkos 800d75f |
 | Time | dynamic grid / mesh motion (GCL), wind gust | host fallback | |
 | Other | MPI (device halo exchange host-staged or GPU-aware) | device-resident | |
 | Other | MARKER_ANALYZE, inverse design, verification solutions, adjoint (cont./discrete), Newton-Krylov | host fallback | |
