@@ -2,6 +2,24 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-28 — review 40 (MERGED 4.6-PeriodicDT + 4.6-PeriodicAUSMM; queue C unblocked)
+Reviewed: e077c252d7 (request had an empty `reason:`; rounds 177-182 made no progress: lim_queue.sh was never written).
+Merged into su2kokkos a69acea: 4.6-PeriodicDT (b0008fc) + the AUSM+M hunk of 60a160f (Device_PeriodicUnsupported),
+invper_dt/invper_ausmm cfgs + check.sh/noisefloor entries, VALIDATION_LOG rows, port-plan matrix.
+NOT merged: 4.6-PeriodicLim hunks of 60a160f (Data/Residual/Stages, Device_PrimitiveLimiter, Device_PeriodicNeighborRows,
+invper_lim keys) - still unvalidated. Do NOT re-validate DT/AUSMM.
+Dev code this round: TestCases/kokkos_nemo/lim_queue.sh (queue C1-C5 + D regress, same runner as mm_queue.sh; bash -n only).
+
+Agent: do next
+1. `bash TestCases/kokkos_nemo/lim_queue.sh` (background; resumable). Status: `cat validation_logs/2026-11-27_4.6-PeriodicLim/QUEUE_STATUS.txt`.
+   It builds (build-lim-r1/-serial-r1), cpu-lim-r1, g1-lim-r1, g1-lim-bj/-wang/-off/-pervenk-r1, ab-lim-r1, poison-lim-r1,
+   nf-lim-r1, g1-regress-r1 (13 cases). All logs land in that dir.
+2. On any FAIL: rerun that step's case with SU2_KOKKOS_STAGE_VERIFY=1 and paste <= 20 StageCompare lines in KOKKOS_PROGRESS.md;
+   check Limiter_Primitive / Solution_Max / Solution_Min first. A wrong EXPECT string (stage line text) is a small edit: fix it yourself.
+3. Commit the logs + one INDEX.md row per step, push, then ONE REVIEW_REQUEST `reason: MERGE: 4.6-PeriodicLim — <results>`.
+4. Compile errors: fix yourself (smallest change). `HEAVY: ...` only for new code or a bug you cannot localize after 3 sessions.
+5. Never leave `reason:` empty. If idle, write `reason: HEAVY: next item` (next: periodic least-squares gradient).
+
 ## 2026-11-27 — review 39 (MERGED 4.6-PeriodicNS; Dev: 4.6-PeriodicAUSMM + 4.6-PeriodicLim)
 
 Reviewed: 891fe7f045. MERGED 4.6-PeriodicNS into su2kokkos 3340824 (code 5a12c86 + c4f21b5, EXPECT key viscper_ausm_exp
