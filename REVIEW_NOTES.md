@@ -2,6 +2,28 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-28 01:40 — PRIORITY CHANGE from Madan (overrides older "do next" lists)
+Scope: finish the **NEMO solver end-to-end on the GPU** first. Defer, and do not start, these:
+- chemistry/gas-model work: Mutation++ models, Chapman–Enskog;
+- turbulence: NEMO has no turbulence model in SU2, so turbulence is out of scope;
+- other non-hypersonic extras.
+
+**Agent: do next, in this order**
+1. **Current item (4.6-PeriodicLim):** finish only if its gates complete within one more session; otherwise mark it `PARKED (low priority)` and move on.
+2. **Zero-copy steady state.** Remove the remaining per-iteration device→host traffic in resident mode:
+   - (a) boundary forces and heat flux (Pressure/Momentum/Friction_Forces, heat flux): compute them only on output/monitoring iterations, or integrate them on the device and download scalars only;
+   - (b) make the device symmetry correction exact enough to be the default (see SU2_KOKKOS_NEMO_DEVICE_SYM), or stage only the symmetry rows once.
+
+   Gate: `[KOKKOS_NEMO_LEDGER]` non-output iterations down to scalars, and G1 strict bitwise.
+3. **GPU validation queue for Madan:** write `../kk/g7_all.sh`, which runs the CUDA binary on every merged feature's gate case (Roe, MSW, LAX, AUSM+-up2 explicit, slip wall, supersonic inlet viscous, MG, LU-SGS, Linelet, periodic, dynamic grid), with noise-floor checks and `[KOKKOS_NEMO_PERF]` extraction into one summary table. Madan runs it from his shell (the sandbox has no GPU). Then mark the item READY FOR REVIEW.
+4. **Speed, after 2 and 3:**
+   - a polynomial (Neumann/Chebyshev) preconditioner using the existing device SpMV;
+   - shrink per-thread local arrays from MAXNVAR=13 to the real nVar via templated sizes (`KernelBoundaryFlux` ~15.5 KB and `KernelViscousEdges` ~12.4 KB stack);
+   - evaluate `SU2_KOKKOS_NEMO_EDGE=color` vs `atomic`;
+   - 32-bit indices.
+
+   Each change must keep G1 bitwise and the noise floor ≤ 10.
+
 ## 2026-11-28 — review 40 (MERGED 4.6-PeriodicDT + 4.6-PeriodicAUSMM; queue C unblocked)
 Reviewed: e077c252d7 (request had an empty `reason:`; rounds 177-182 made no progress: lim_queue.sh was never written).
 Merged into su2kokkos a69acea: 4.6-PeriodicDT (b0008fc) + the AUSM+M hunk of 60a160f (Device_PeriodicUnsupported),
