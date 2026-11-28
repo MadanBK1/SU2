@@ -134,7 +134,7 @@ for ((r=1; r<=MAX_ROUNDS; r++)); do
   fi
   if [ $stuck -ge $MAX_STUCK ]; then
     echo "    no progress for $stuck rounds: backing off 10 min and steering the agent"
-    printf '\nLOOP HINT: %s no progress for %d rounds on the current item. No code changed (only the progress log). Stop planning: in THIS session write code immediately - the smallest compilable piece (e.g. one device function + its call site), build it, commit it. If you cannot, mark the item BLOCKED and move to the next unchecked item.\n' "$(date -Is)" "$stuck" >> "$REPO/KOKKOS_PROGRESS.md"
+    printf '\nLOOP HINT: %s no progress for %d rounds on the current item. No code changed (only the progress log). Do the FIRST unfinished step of "Agent: do next" in the newest REVIEW_NOTES.md section (head -45) - one step, then commit and end. A detached queue still running (pgrep -af queue) is NOT a stall: end the session. Never send a request with an empty reason.\n' "$(date -Is)" "$stuck" >> "$REPO/KOKKOS_PROGRESS.md"
     sleep 600; stuck=0
   fi
   sleep "$PAUSE"

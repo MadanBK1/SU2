@@ -22,3 +22,7 @@ if grep -q "strict rc=0" "$OUT/BUILD_HEAD.txt" && grep -q "serial rc=0" "$OUT/BU
 else
   echo "BUILD FAILED - queue NOT started (see build-limfix*.log)" | tee -a "$OUT/BUILD_HEAD.txt"
 fi
+# Review 44: chain the zc2a-bndsync queue (same HEAD; its own logs + QUEUE_STATUS in validation_logs/2026-11-28_zc2a-bndsync/).
+if grep -q "QUEUE FINISHED" "$OUT/QUEUE_STATUS.txt" 2>/dev/null; then
+  bash TestCases/kokkos_nemo/bnd_queue.sh
+fi
