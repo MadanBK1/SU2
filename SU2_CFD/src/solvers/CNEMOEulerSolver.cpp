@@ -313,6 +313,30 @@ CNEMOEulerSolver::CNEMOEulerSolver(CGeometry *geometry, CConfig *config,
             if (config->GetViscous_Wall(iMarker)) walls.push_back(iMarker);
           kokkosData->SetViscousWallMarkers(walls);
         }
+        /*--- Zero-copy 2(a) step 1: BOUNDARY sync only at the markers the host force / traction / analyze routines
+         *    read (Pressure_Forces: solid walls, near field, inlet/outlet, actuator disk, engine; Momentum_Forces:
+         *    inlet/outlet subset; Friction_Forces / ComputeVertexTractions: solid walls; SetAnalyzeSurface:
+         *    MARKER_ANALYZE). CUSTOM_OUTPUTS, MARKER_PYTHON_CUSTOM or SU2_KOKKOS_NEMO_BND_ALL=1 keep every marker. ---*/
+        {
+          bool all = !config->GetCustomOutputs().empty();
+          const char* envAll = std::getenv("SU2_KOKKOS_NEMO_BND_ALL");
+          if (envAll != nullptr && std::atoi(envAll) != 0) all = true;
+          for (unsigned short iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++)
+            if (config->GetMarker_All_PyCustom(iMarker) == YES) all = true;
+          std::vector<int> fm;
+          for (unsigned short iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
+            const auto bc = config->GetMarker_All_KindBC(iMarker);
+            if (all || config->GetSolid_Wall(iMarker) || bc == NEARFIELD_BOUNDARY || bc == INLET_FLOW ||
+                bc == OUTLET_FLOW || bc == ACTDISK_INLET || bc == ACTDISK_OUTLET || bc == ENGINE_INFLOW ||
+                bc == ENGINE_EXHAUST || config->GetMarker_All_Analyze(iMarker) == YES)
+              fm.push_back(iMarker);
+          }
+          kokkosData->SetForceMarkers(fm);
+          if (rank == MASTER_NODE && iMesh == MESH_0)
+            cout << "[KOKKOS_NEMO] stage boundary sync (force/analyze markers): device, "
+                 << kokkosData->NumBoundarySyncPoints() << " of " << kokkosData->NumBoundaryPointsAll()
+                 << " marker points" << (all ? " (all markers kept)" : "") << endl;
+        }
       }
       if (rank == MASTER_NODE && iMesh == MESH_0 && config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT &&
           config->GetKind_Linear_Solver_Prec() == LU_SGS)

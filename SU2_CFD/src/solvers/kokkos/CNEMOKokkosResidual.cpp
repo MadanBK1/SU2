@@ -966,6 +966,34 @@ void CNEMOKokkosData::MarkDeviceWritten(Group g) {
   if (poison) PoisonGroup(g);
 }
 
+void CNEMOKokkosData::SetForceMarkers(const std::vector<int>& markers) {
+  /*--- Zero-copy steady state 2(a) step 1: the per-iteration HostSyncScope::BOUNDARY sync (Pressure_Forces,
+   *    Momentum_Forces, Friction_Forces, ComputeVertexTractions, SetAnalyzeSurface) reads the Primitive rows only at
+   *    the points of these markers; the rows of the other marker points (far field, symmetry, supersonic outlet,
+   *    periodic, send/receive) are not read on the host between outputs (EnsureHostAll downloads everything).
+   *    Host arithmetic is unchanged (same values at the points that are read) -> bitwise. ---*/
+  if (h_markerPtr.empty()) {
+    auto hm = Kokkos::create_mirror_view_and_copy(HostSpace(), geo.marker_ptr);
+    h_markerPtr.assign(hm.data(), hm.data() + geo.nMarker + 1);
+  }
+  auto hn = Kokkos::create_mirror_view_and_copy(HostSpace(), geo.vtx_node);
+  std::vector<char> seen(nPoint, 0);
+  nBndPointsAll = h_bndPoints.size();
+  h_bndPoints.clear();
+  for (int m : markers)
+    for (auto k = h_markerPtr[m]; k < h_markerPtr[m + 1]; ++k)
+      if (!seen[hn(k)]) {
+        seen[hn(k)] = 1;
+        h_bndPoints.push_back(hn(k));
+      }
+  std::sort(h_bndPoints.begin(), h_bndPoints.end());
+  st.bndPoints = View1D<unsigned long>("NEMO::bndPoints", h_bndPoints.size());
+  st.bndStage = View2D<double>("NEMO::bndStage", h_bndPoints.size(), nPrimVar);
+  Kokkos::deep_copy(st.bndPoints, Kokkos::View<const unsigned long*, HostSpace, Unmanaged>(h_bndPoints.data(),
+                                                                                           h_bndPoints.size()));
+  bndPrimHost = false;
+}
+
 void CNEMOKokkosData::SetViscousWallMarkers(const std::vector<int>& markers) {
   if (!viscousVars) return;
   if (h_markerPtr.empty()) {

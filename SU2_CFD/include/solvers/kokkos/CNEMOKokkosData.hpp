@@ -535,6 +535,12 @@ class CNEMOKokkosData {
   void UploadTransport();
   /*! \brief Points of the viscous-wall markers whose gradient / transport rows Friction_Forces reads (resident). */
   void SetViscousWallMarkers(const std::vector<int>& markers);
+  /*! \brief Restrict the BOUNDARY-sync points to the markers the host force / traction / analyze routines read
+   *         (zero-copy steady state 2(a) step 1). Call after EnableResident. */
+  void SetForceMarkers(const std::vector<int>& markers);
+  /*! \brief Number of BOUNDARY-sync points (after SetForceMarkers) and of all marker-vertex points. */
+  size_t NumBoundarySyncPoints() const { return h_bndPoints.size(); }
+  size_t NumBoundaryPointsAll() const { return nBndPointsAll ? nBndPointsAll : h_bndPoints.size(); }
   /*! \brief The AUSM+M sensor on the device is stale (set false by SetPrimVar, true when uploaded). */
   bool SensorOnDevice() const { return sensorValid; }
   /*! \brief Copy of the host Non_Physical / Non_Physical_Counter (A/B snapshot), and restore. */
@@ -823,6 +829,7 @@ class CNEMOKokkosData {
   double* hostLinSysRes = nullptr;      /*!< host storage of LinSysRes / LinSysSol (resident mode) */
   double* hostLinSysSol = nullptr;
   std::vector<unsigned long> h_bndPoints;
+  size_t nBndPointsAll = 0;              /*!< all marker-vertex points (before SetForceMarkers) */
   /*--- 4.6-MG2 (MGSetupCoarse / MGSetupSmoothing). ---*/
   bool mgCoarseReady = false, mgSmoothReady = false;
   View1D<unsigned long> mgChildPtr, mgChildIdx;  /*!< coarse domain point -> fine children */

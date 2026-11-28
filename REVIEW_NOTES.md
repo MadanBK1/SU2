@@ -2,6 +2,35 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-28 — review 42 (request 20261128T015904 was STALE: re-sent the pre-review-41 reason; nothing merged)
+Reviewed: 9054ef3b25 (= my review-41 commit; no agent work since). Decision (a)/(b) is moot: review 41 FIXED the limoff
+bug in code (limValid). Run the review-41 queue below FIRST (unchanged), then this one. Never re-send an old reason.
+Dev code this round (zero-copy 2(a) step 1; g++ -fsyntax-only OK on Residual.cpp + CNEMOEulerSolver.cpp; not built/run):
+- CNEMOKokkosData::SetForceMarkers (Residual.cpp) + hpp decl/NumBoundarySyncPoints: the per-iteration BOUNDARY sync
+  downloads Primitive rows only at solid-wall / near-field / inlet / outlet / actdisk / engine / MARKER_ANALYZE markers
+  (the only markers Pressure/Momentum/Friction_Forces, ComputeVertexTractions, SetAnalyzeSurface read). Far field,
+  symmetry, supersonic outlet, periodic, send/receive rows no longer copied. CUSTOM_OUTPUTS, MARKER_PYTHON_CUSTOM or
+  SU2_KOKKOS_NEMO_BND_ALL=1 keep all markers. Print: "stage boundary sync (force/analyze markers): device, N of M ...".
+- check.sh EXPECT keys axi_visccone_bnd/_bndall, invwedge_lax_bnd/_bndall (RUN_TAG).
+NOTE: check.sh compares residuals + restart fields, NOT force/heat coefficients -> step B3 below compares history.
+
+Agent: do next (after review-41 queue; dir validation_logs/2026-11-28_zc2a-bndsync/, S = strict gate as before)
+B1. Build strict + serial -> build-bnd-r1.log, build-bnd-serial-r1.log (compile errors: fix yourself).
+B2. G1 S RUN_TAG=_bnd on axi_visccone and invwedge_lax -> g1-bnd-r1.log; controls SU2_KOKKOS_NEMO_BND_ALL=1
+    RUN_TAG=_bndall same cases -> g1-bndall-r1.log. Both must PASS bitwise; record "N of M marker points" lines.
+B3. Force/heat history bitwise: for both cases diff the history files (history.csv / .dat) of the HOST ref run and the
+    _bnd device run, every column except time/wall-clock (CD, CL, CMz, CFx/CFy, HF, MaxHF, ...). Must be identical.
+    Put the diff summary (or "identical, K columns x N rows") in g1-bnd-hist-r1.log.
+B4. Ledger: [KOKKOS_NEMO_LEDGER] "sync boundary Primitive" steady-iteration bytes for _bnd vs _bndall -> paste both
+    in KOKKOS_PROGRESS.md and in ledger-bnd-r1.log.
+B5. Regress the 13 default cases (G1 S, no RUN_TAG) -> g1-bnd-regress-r1.log.
+B6. FAIL: rerun with SU2_KOKKOS_STAGE_VERIFY=1, paste <=20 StageCompare lines. A wrong EXPECT text = fix yourself.
+B7. Commit logs + INDEX rows, then ONE request: `MERGE: 4.6-PeriodicLim + limValid fix + zc2a-bndsync — <results>`
+    (or two separate MERGE items if only one is green).
+Madan (optional, V100): after B5, `SU2_CFD -> TestCases/kokkos_nemo/check.sh` is CPU only; GPU timing of the
+bndsync win: run axi_visccone with the CUDA build, RUN_TAG=_bnd and _bndall, archive both logs (ledger + timers) in
+validation_logs/2026-11-28_zc2a-bndsync/g7-bnd-v100-r1.log.
+
 ## 2026-11-28 — review 41 (4.6-PeriodicLim NOT merged yet; limoff FAIL = real bug, FIXED in code)
 Reviewed: 527782188324d0f0f2a5106d395ae1d4bc6db717. Neither (a) nor (b): the limoff control was right to fail.
 Diagnosis: `limValid` (device limiter == host rows) was never cleared per iteration outside ActivateResident. With a
