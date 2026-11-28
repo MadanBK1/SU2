@@ -98,6 +98,8 @@ declare -A EXPECT=( [invwedge_lax]="stage centered residual (LAX-FRIEDRICH): dev
                     [invper_ausm_peroff]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF ("
                     [invper_ausm_pervenk]="periodic comms (4.6-Periodic): device (staged periodic rows)|stage limiter (VENKATAKRISHNAN): device|device-resident state (Step 6): ON"
                     [invper_ausm_perab]="periodic comms (4.6-Periodic): host|device-resident state (Step 6): OFF (SU2_KOKKOS_STAGE_VERIFY)"
+                    [invper_ausm_limoff]="stage limiter (VENKATAKRISHNAN): host (periodic (SU2_KOKKOS_NEMO_PERIODIC_LIM=0))|device-resident state (Step 6): OFF ("
+                    [invwedge_roe_hostlim]="stage limiter (VENKATAKRISHNAN): host (SU2_KOKKOS_NEMO_HOST)|stage upwind (ROE + MUSCL, residual + Jacobian): device"
                     [axi_visccone_bnd]="stage boundary sync (force/analyze markers): device,|device-resident state (Step 6): ON"
                     [axi_visccone_bndall]="marker points (all markers kept)|device-resident state (Step 6): ON"
                     [invwedge_lax_bnd]="stage boundary sync (force/analyze markers): device,|device-resident state (Step 6): ON"
