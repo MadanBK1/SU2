@@ -677,6 +677,11 @@ unsigned long CNEMOKokkosData::SetPrimVar() {
   consDeviceValid = true; /*--- device Solution (clipped / rolled back) == downloaded host Solution ---*/
   sensorValid = false;    /*--- SetPressureDiffusionSensor recomputes it on the host after SetPrimVar ---*/
   gradPrimValid = gradRecValid = false;
+  /*--- 4.6-PeriodicLim fix: the limiter depends on the new Primitive too. Without this, a HOST limiter (periodic
+   *    with SU2_KOKKOS_NEMO_PERIODIC_LIM=0, SU2_KOKKOS_NEMO_HOST=lim, unported kinds) left limValid = true after the
+   *    first upwind upload and the device upwind kept reading the iteration-1 domain limiter rows (only the halo rows
+   *    were re-uploaded). The device limiter sets it again in ComputeLimiter before the upwind stage. ---*/
+  limValid = false;
 
   return nonPhysical;
 }

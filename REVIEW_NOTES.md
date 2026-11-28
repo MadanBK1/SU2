@@ -2,6 +2,30 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-28 — review 41 (4.6-PeriodicLim NOT merged yet; limoff FAIL = real bug, FIXED in code)
+Reviewed: 527782188324d0f0f2a5106d395ae1d4bc6db717. Neither (a) nor (b): the limoff control was right to fail.
+Diagnosis: `limValid` (device limiter == host rows) was never cleared per iteration outside ActivateResident. With a
+HOST limiter + device upwind (non-resident: PERIODIC_LIM=0, SU2_KOKKOS_NEMO_HOST=lim, unported kinds), the upwind
+uploaded the full limiter once (iteration 1), then only halo rows -> stale domain limiter. Same 3.95e-02 numbers as the
+4.6-Periodic g1-per-venk-r1 FAIL (wrongly filed as a check-script issue; the _sv rerun hid it because verify uploads all).
+Dev code this round (not built/run; 2-line flag change, members already exist):
+- kokkos/CNEMOKokkosData.cpp SetPrimVar tail: `limValid = false;` next to `gradPrimValid = gradRecValid = false;`
+- include/solvers/kokkos/CNEMOKokkosData.hpp InvalidatePrimitive(): also clears gradPrimValid/gradRecValid/limValid.
+Resident path unchanged (ComputeLimiter sets limValid before the upwind each iteration) -> no new per-iteration copies.
+
+Agent: do next (dir validation_logs/2026-11-28_4.6-PeriodicLim-fix/, S = BIN=<strict> REF_MODE=HOST RES_TOL=0 FIELD_TOL=0)
+1. Build strict + serial at this head -> build-limfix-r1.log, build-limfix-serial-r1.log. Compile errors: fix yourself.
+2. G1 S `SU2_KOKKOS_NEMO_PERIODIC_LIM=0 RUN_TAG=_limoff` invper_lim -> g1-limfix-off-r1.log (must now PASS bitwise, no STAGE_VERIFY).
+3. G1 S invper_ausm with EXTRA_CFG "MUSCL_FLOW= YES;SLOPE_LIMITER_FLOW= VENKATAKRISHNAN", SU2_KOKKOS_NEMO_PERIODIC_LIM=0,
+   RUN_TAG=_limoff (add EXPECT key invper_ausm_limoff = the invper_lim_limoff string; small edit) -> g1-limfix-pervenkoff-r1.log.
+4. Host-limiter control, non-periodic: pick one default check.sh case with MUSCL + BJ/Venkat limiter, run G1 S with
+   SU2_KOKKOS_NEMO_HOST=lim (add EXPECT key <case>_hostlim with "stage limiter (...): host") -> g1-limfix-hostlim-r1.log.
+5. Re-run G1 S invper_lim (device path) + A/B (SU2_KOKKOS_STAGE_VERIFY=1) invper_lim -> g1-limfix-r1.log, ab-limfix-r1.log.
+6. Regress 13 cases (same list as g1-regress-r1) -> g1-limfix-regress-r1.log.
+7. Any FAIL: rerun that case with SU2_KOKKOS_STAGE_VERIFY=1, paste <=20 StageCompare lines in KOKKOS_PROGRESS.md.
+8. Commit logs + INDEX rows, push, then ONE `reason: MERGE: 4.6-PeriodicLim + limValid fix — <results>`.
+   `HEAVY: ...` only for new code or a bug you cannot localize after 3 sessions. Never leave reason empty.
+
 ## 2026-11-28 01:40 — PRIORITY ORDER from Madan (overrides older queue orders; roles unchanged: Claude writes code, agent builds/runs/analyzes)
 Scope: finish the **NEMO solver end-to-end on the GPU** first.
 - **Later:** chemistry/gas-model work (Mutation++ models, Chapman–Enskog), and the speedup/performance study (preconditioners, kernel tuning, benchmarks), per Madan's 2026-11-27 decision.

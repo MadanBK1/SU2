@@ -302,6 +302,9 @@ class CNEMOKokkosData {
     secDeviceValid = false;
     consDeviceValid = false;
     transportDeviceValid = false;
+    /*--- 4.6-PeriodicLim fix: gradient / limiter computed from the old Primitive are stale as well (host Cons2Prim
+     *    path); the device stages set them again, the host stages are re-uploaded by the upwind stage. ---*/
+    gradPrimValid = gradRecValid = limValid = false;
   }
   /*! \brief HtoD of the host Primitive only (no secondaries), marks it valid. */
   void UploadPrimitiveOnly();
