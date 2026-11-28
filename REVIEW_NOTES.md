@@ -2,6 +2,24 @@
 
 Newest section first. Do the **Agent: do next** items (tests/analysis), then write READY FOR REVIEW (see ROLE in LOCAL_AGENT_TASK.md).
 
+## 2026-11-28 — review 43 (request 20261128T051009 had an EMPTY reason; nothing to merge, no new dev code)
+Reviewed: 6bb09ca5a6 (only loop autosaves + limfix_queue.sh / limfix_build_and_run.sh + check.sh hostenv inherit; OK).
+No results exist yet for review 41 or 42: validation_logs/2026-11-28_4.6-PeriodicLim-fix/ is not committed, rounds
+202-205 made no progress. No new heavy code this round on purpose: 2 dev items (limValid fix 9054ef3b25, bndsync
+0ec62f5abb) are untested; clear them first. Your queue scripts look correct (SU2_KOKKOS_NEMO_HOST=lim is honoured).
+Agent: do next (in order; one step per session is fine; never send a request with an empty reason)
+1. `cat validation_logs/2026-11-28_4.6-PeriodicLim-fix/BUILD_HEAD.txt validation_logs/2026-11-28_4.6-PeriodicLim-fix/QUEUE_STATUS.txt; pgrep -af limfix`
+   - files missing and nothing running -> launch DETACHED (never in the foreground of your session; it outlives it):
+     `setsid nohup bash TestCases/kokkos_nemo/limfix_build_and_run.sh > /dev/null 2>&1 < /dev/null &` then end the session.
+   - running -> end the session (next session: step 1 again). Build FAILED -> fix the compile error (smallest change), commit, relaunch.
+   - "QUEUE FINISHED" -> step 2.
+2. `git add -f validation_logs/2026-11-28_4.6-PeriodicLim-fix/` (all *.log + BUILD_HEAD.txt + QUEUE_STATUS.txt), one INDEX row
+   per step, commit. Any FAIL: rerun that step with SU2_KOKKOS_STAGE_VERIFY=1 (log <name>-sv-r1.log), paste <=20 StageCompare lines.
+3. Review-42 B1-B6 (below) the same way: write a bnd_queue.sh copy of limfix_queue.sh (OUT=validation_logs/2026-11-28_zc2a-bndsync),
+   launch detached, commit logs + INDEX rows.
+4. Then ONE request with reason `MERGE: 4.6-PeriodicLim + limValid fix + zc2a-bndsync — <one-line results>` (B7), or
+   `MERGE: 4.6-PeriodicLim + limValid fix — …` if only that is green.
+
 ## 2026-11-28 — review 42 (request 20261128T015904 was STALE: re-sent the pre-review-41 reason; nothing merged)
 Reviewed: 9054ef3b25 (= my review-41 commit; no agent work since). Decision (a)/(b) is moot: review 41 FIXED the limoff
 bug in code (limValid). Run the review-41 queue below FIRST (unchanged), then this one. Never re-send an old reason.
