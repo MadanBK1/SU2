@@ -3,7 +3,7 @@
 ## Item status (mirrors section 4 of LOCAL_AGENT_TASK.md)
 - [x] 4.1 Script env-var paths (SU2_ROOT/MESH_DIR/RUN_DIR) — done 2026-11-24
 - [x] 4.2 Batch A gates: G1, G2, G3, G4, G6 all PASS after fix 4450650725 — done 2026-11-24 round 6
-- [~] 4.3 CUDA V100 build + GPU run — G5 PASS (build-kokkos-cuda 320/320, rc=0); G7 BLOCKED (no /dev/nvidia* in sandbox; dangerouslyDisableSandbox refused); nsys BLOCKED (not installed)
+- [~] 4.3 CUDA V100 build + GPU run — G5 PASS (build-kokkos-cuda 320/320, rc=0) but at OLD head (binary 11-26 23:23, predates periodic code); re-verifying G5 at current HEAD round 190; G7 BLOCKED (no /dev/nvidia* in sandbox, re-confirmed round 190); nsys BLOCKED (not installed)
 - [ ] 4.4 Device schemes: Roe, MSW, LAX, AUSM+-up2
 - [ ] 4.5 BCs: subsonic inlet, Smoluchowski–Maxwell slip, catalytic heat-flux wall
 - [~] 4.6 Solver options: ILU(n>0) done (device-resident), LU-SGS merged, MG levels merged, periodic markers MERGED (b8b11be), periodic+NS MERGED (review 39), periodic+DT + periodic+AUSMM ALL GATES PASS 2026-11-27 (logs committed), **periodic+Lim: all PASS bitwise EXCEPT limoff A/B control (FAIL, mixed device-comms+host-limiter path) — needs reviewer decision (review 39 queue C/D)**, deforming grids pending
@@ -165,3 +165,9 @@ READY FOR REVIEW: MERGE: 4.6-PeriodicDT + 4.6-PeriodicAUSMM — DT: CPU sanity P
   - No new reviewer queue to execute. Next items (multigrid / PERIODIC_PRIM_LS / deforming grid) are reviewer-reserved "heavy items". Holding for review 40 rather than starting a competing dev track (would collide with the reviewer's next dev code).
 
 READY FOR REVIEW: MERGE: 4.6-PeriodicDT + 4.6-PeriodicAUSMM — DT: CPU sanity PASS, G1 invper_dt bitwise + dt1st/muscl/dtoff variants bitwise, A/B+poison bitwise, 10/10 regress bitwise (360s), NF ratio 0.46 (K=10). AUSMM: CPU sanity PASS, G1 invper_ausmm bitwise + exp variant bitwise + mmoff control bitwise, A/B+poison bitwise, NF ratios 0.60/0.93 (K=10). All logs committed under validation_logs/2026-11-27_4.6-PeriodicDT/ + /4.6-PeriodicAUSMM/ + INDEX rows. 4.6-PeriodicLim staged: 11/12 gates PASS bitwise (g1/bj/wang/pervenk/ab/poison/nf + 10/10 regress) but limoff control BLOCKED pending your decision (mixed device-comms+host-limiter path).
+
+- 2026-11-27 (round 190, 4.3 G5 re-verify at current HEAD):
+  - Reviewer queue still on review 39 (MERGE DT+AUSMM + limoff decision pending; review 40 not yet in). No new dev code to test.
+  - Found CUDA binary stale: build-kokkos-cuda/SU2_CFD 11-26 23:23, but solvers/CNEMOEulerSolver.cpp + kokkos/*.cpp changed 11-27 (DT/NS/AUSMM/Lim code never compiled under real nvcc).
+  - THIS SESSION: rebuild build-kokkos-cuda at HEAD via TestCases/kokkos_nemo/.buildcuda.sh (bg task bbg2vy855), log validation_logs/2026-11-27_4.3-CUDA/build-cuda-r1.log. G7 still BLOCKED (no /dev/nvidia* in sandbox, re-confirmed).
+  - NEXT: rc=0 -> INDEX row + commit (G5 PASS at this head); TU fail -> -j1 -v diagnose, smallest fix, rebuild.
