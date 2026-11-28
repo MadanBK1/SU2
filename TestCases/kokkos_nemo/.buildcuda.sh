@@ -11,3 +11,4 @@ export NVCC_WRAPPER_DEFAULT_COMPILER=$GXX
 mkdir -p validation_logs/2026-11-27_4.3-CUDA
 ninja -C build-kokkos-cuda -j10 SU2_CFD/src/SU2_CFD > validation_logs/2026-11-27_4.3-CUDA/build-cuda-r1.log 2>&1
 echo "RC=$?" >> validation_logs/2026-11-27_4.3-CUDA/build-cuda-r1.log
+tail -5 validation_logs/2026-11-27_4.3-CUDA/build-cuda-r1.log
